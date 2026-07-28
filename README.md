@@ -8,22 +8,8 @@
 fkxz/
 ├── file_splitter.py      # 文件拆分器（GUI）
 ├── file_downloader.py    # 文件下载/合并器（GUI）
-└── worker.js             # Cloudflare Workers脚本
-```
-
-## 工作流程
-
-```
-大文件 → file_splitter.py → .fk 分片 + .wjx 信息文件
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-              本地模式                    远程模式
-          file_downloader.py         上传到云端获得直链
-          （直接读取本地分片）              │
-                                    worker.js / file_downloader.py
-                                          │
-                                    合并后的原始文件
+├── worker.js             # Cloudflare Workers 脚本
+└── index.html            # 网页端文件下载器
 ```
 
 ## 组件说明
@@ -54,7 +40,16 @@ Tkinter 图形界面，读取 `.wjx` 信息文件，获取所有分片并合并�
 - 使用 `FixedLengthStream` 流式合并
 - 自动设置 `Content-Disposition` 触发浏览器下载
 - 支持跨域（CORS）
-注：此脚本不适用于500MB以上大文件
+- 注：此脚本不适用于 500MB 以上大文件
+
+### index.html — 网页端文件下载器
+
+轻量级的浏览器端文件下载器，支持通过 URL 参数直接解析 `.wjx` 文件并下载合并后的完整文件。
+
+- 纯前端实现，无需后端支持
+- 支持流式下载和实时进度显示
+- 自动检测并使用 File System Access API（现代浏览器）
+- 支持回退到传统下载方式
 
 ## 使用方式
 
@@ -72,19 +67,40 @@ python file_splitter.py
 python file_downloader.py
 ```
 
-在输入框中填入 `.wjx` 文件的本地路径，选择输出目录，点击"开始下载"。
+在输入框中填入 `.wjx` 文件的本地路径，选择输出目录，点击"开始合并"。
 
 ### 合并文件（远程）
 
+#### 方式一：使用 Python 下载器
+
+```bash
+python file_downloader.py
+```
+
+在输入框中输入 `.wjx` 文件的完整 URL，选择输出目录，点击"开始下载"。
+
+#### 方式二：使用 Cloudflare Workers
+
 1. 将 `.fk` 分片和 `.wjx` 文件上传到 HTTP 服务器，保持相同目录结构
-2. 在 `file_downloader.py` 中输入 `.wjx` 文件的完整 URL
-3. 或通过 Cloudflare Workers 部署 `worker.js`，访问 `https://your-worker.workers.dev/?wjx=https://example.com/file.wjx`
+2. 部署 `worker.js` 到 Cloudflare Workers
+3. 访问 `https://your-worker.workers.dev/?wjx=https://example.com/file.wjx`
+
+#### 方式三：使用网页端下载器
+
+1. 将 `index.html` 部署到任意静态文件服务器或直接在浏览器中打开
+2. 通过 URL 参数提供 `.wjx` 文件地址：`https://your-domain.com/index.html?wjx=https://example.com/file.wjx`
 
 ## 环境要求
 
+### Python 工具
 - Python 3.6+
 - requests 库（`pip install requests`）
-- Cloudflare Workers 账户（可选，用于脚本部署）
+
+### Cloudflare Workers（可选）
+- Cloudflare Workers 账户
+
+### 网页端
+- 现代浏览器（推荐 Chrome 90+、Firefox 89+）
 
 ## 文件格式
 
