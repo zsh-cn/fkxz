@@ -1,15 +1,16 @@
 # 分块下载 - 大文件分片传输工具
 
-将大文件拆分为多个小分片，支持本地合并与远程 HTTP 流式合并，可用于绕过文件上传大小限制。
+将大文件拆分为多个小分片，支持本地合并与远程下载合并分块，可用于绕过文件上传大小限制。
 
 ## 项目结构
 
 ```
 fkxz/
-├── file_splitter.py      # 文件拆分器（GUI）
-├── file_downloader.py    # 文件下载/合并器（GUI）
-├── worker.js             # Cloudflare Workers 脚本
-└── index.html            # 网页端文件下载器
+├── file_splitter.py              # 文件拆分器（GUI）
+├── file_downloader.py            # 文件下载/合并器（GUI）
+├── file_downloader_Enhanced.py   # 增强版文件下载/合并器（GUI）
+├── worker.js                     # Cloudflare Workers 脚本
+└── index.html                    # 网页端文件下载器
 ```
 
 ## 组件说明
@@ -32,9 +33,18 @@ Tkinter 图形界面，读取 `.wjx` 信息文件，获取所有分片并合并�
 - MD5 完整性校验
 - 自动清理临时文件
 
+### file_downloader_Enhanced.py — 增强版文件下载/合并器
+
+基于 `file_downloader.py` 的增强版本，提供更强的反反爬虫能力。
+
+- 使用 `curl_cffi` 库模拟 Chrome 浏览器（版本 131）进行请求
+- 自动伪装浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-* 等）
+- 支持 Referer 头信息传递，部分网站必需
+- 其余功能与 `file_downloader.py` 相同（本地/远程模式、MD5 校验等）
+
 ### worker.js — Cloudflare Workers 后端
 
-部署在 Cloudflare Workers 上的 HTTP 服务，接收 `?wjx=` 参数，流式合并分片并提供下载。
+部署在 Cloudflare Workers 上的 HTTP 服务，接收 `?wjx=` 参数，流式合并分片并提供直链下载。
 
 - 自动解析 `.wjx` 文件获取分片列表
 - 使用 `FixedLengthStream` 流式合并
@@ -61,13 +71,15 @@ python file_splitter.py
 
 在 GUI 中选择要拆分的文件、输出目录和分片大小，点击"开始拆分"。
 
+拆分完成后可将 `.fk` 分片和 `.wjx` 文件上传到服务器，保持相同目录结构，使用.wjx文件信息URL以供分享、下载。
+
 ### 合并文件（本地）
 
 ```bash
 python file_downloader.py
 ```
 
-在输入框中填入 `.wjx` 文件的本地路径，选择输出目录，点击"开始合并"。
+在输入框中填入 `.wjx` 文件的本地路径，选择输出目录，点击"开始合并"。增强版下载器 `file_downloader_Enhanced.py` 同样支持本地模式。
 
 ### 合并文件（远程）
 
@@ -79,22 +91,31 @@ python file_downloader.py
 
 在输入框中输入 `.wjx` 文件的完整 URL，选择输出目录，点击"开始下载"。
 
+#### 方式一增强版：使用增强版下载器
+
+```bash
+python file_downloader_Enhanced.py
+```
+
+适用于启用了反爬虫保护的网站（如 Cloudflare验证、EdgeOne Pages、防盗链等），自动模拟 Chrome 浏览器请求以绕过检测，使用方式与标准版相同。
+
 #### 方式二：使用 Cloudflare Workers
 
-1. 将 `.fk` 分片和 `.wjx` 文件上传到 HTTP 服务器，保持相同目录结构
-2. 部署 `worker.js` 到 Cloudflare Workers
-3. 访问 `https://your-worker.workers.dev/?wjx=https://example.com/file.wjx`
+1. 部署 `worker.js` 到 Cloudflare Workers
+2. 访问 `https://your-worker.workers.dev/?wjx=https://example.com/file.wjx`
 
 #### 方式三：使用网页端下载器
 
-1. 将 `index.html` 部署到任意静态文件服务器或直接在浏览器中打开
+1. 将 `index.html` 部署到任意静态文件服务器
 2. 通过 URL 参数提供 `.wjx` 文件地址：`https://your-domain.com/index.html?wjx=https://example.com/file.wjx`
+- 使用时应注意浏览器跨域限制
 
 ## 环境要求
 
 ### Python 工具
 - Python 3.6+
 - requests 库（`pip install requests`）
+- curl_cffi 库（可选，用于增强版下载器的浏览器模拟，`pip install curl_cffi`）
 
 ### Cloudflare Workers（可选）
 - Cloudflare Workers 账户
