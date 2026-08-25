@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件下载器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.container { background: #fff; border-radius: 8px; padding: 24px; max-width: 500px; width: 100%; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
+.file-info { background: #e8f0fe; border-radius: 4px; padding: 12px; margin-bottom: 16px; display: none; }
+.file-info.show { display: block; }
+.info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+.info-label { color: #666; }
+.info-value { color: #1a73e8; font-weight: 500; }
+.progress-section { display: none; margin-bottom: 16px; }
+.progress-section.show { display: block; }
+.progress-bar { height: 6px; background: #e8f0fe; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+.progress-fill { height: 100%; background: #4285f4; width: 0%; }
+.progress-text { font-size: 12px; color: #666; text-align: center; }
+
+.btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; background: #4285f4; color: white; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>文件下载</h1>
+    <div class="file-info" id="fileInfo">
+        <div class="info-row"><span class="info-label">文件名：</span><span class="info-value" id="fileName">-</span></div>
+        <div class="info-row"><span class="info-label">文件大小：</span><span class="info-value" id="fileSize">-</span></div>
+    </div>
+    <div class="progress-section" id="progressSection">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText">准备中...</div>
+    </div>
+    
+    <button class="btn" id="downloadBtn" disabled>下载</button>
+</div>
+<script>
+let wjxInfo = null, baseUrl = '', isDownloading = false;
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+function getBaseUrl(url) {
+    const parsed = new URL(url);
+    return parsed.origin + parsed.pathname.replace(/[^/]+$/, '');
+}
+
+function parseWjx(content) {
+    const info = { chunks: [] };
+    for (const line of content.trim().split('\n')) {
+        const eqIdx = line.indexOf('=');
+        if (eqIdx < 0) continue;
+        const key = line.substring(0, eqIdx), value = line.substring(eqIdx + 1);
+        if (key.startsWith('chunk_')) {
+            const parts = value.split(',');
+            if (parts.length >= 2) info.chunks.push({
+                filename: parts[0].trim().replace(/^.*[\\/]/, ''),
+                size: parseInt(parts[1].trim()) || 0
+            });
+        } else info[key] = value.trim();
+    }
+    return info;
+}
+
+
+
+function showMessage(text) {
+    document.getElementById('progressSection').classList.add('show');
+    document.getElementById('progressText').textContent = text;
+}
+
+async function parseWjxUrl(url) {
+    const btn = document.getElementById('downloadBtn');
+    document.getElementById('fileInfo').classList.remove('show');
+    btn.disabled = true;
+    try {
+        showMessage('获取文件信息...');
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        wjxInfo = parseWjx(await res.text());
+        if (!wjxInfo.filename || !wjxInfo.chunks?.length) throw new Error('格式错误');
+        
+        baseUrl = getBaseUrl(url);
+        const totalSize = wjxInfo.chunks.reduce((s, c) => s + c.size, 0);
+        
+        document.getElementById('fileName').textContent = wjxInfo.filename;
+        document.getElementById('fileSize').textContent = formatSize(totalSize);
+        document.getElementById('fileInfo').classList.add('show');
+        btn.disabled = false;
+        showMessage('准备就绪');
+    } catch (e) {
+        showMessage('解析失败: ' + e.message);
+    }
+}
+
+async function startDownload() {
+    if (!wjxInfo?.chunks?.length || isDownloading) return;
+    isDownloading = true;
+    const btn = document.getElementById('downloadBtn');
+    btn.disabled = true;
+
+    const wjxParam = new URLSearchParams(window.location.search).get('wjx');
+    const wjxUrl = /^https?:\/\//i.test(wjxParam) ? wjxParam : new URL(wjxParam, window.location.href).href;
+    const sanitizedName = wjxInfo.filename.replace(/[<>:"/\\|?*]/g, '_');
+
+    showMessage('下载已开始，请查看浏览器下载栏');
+
+    const a = document.createElement('a');
+    a.href = './fkxz?wjx=' + encodeURIComponent(wjxUrl);
+    a.download = sanitizedName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => {
+        isDownloading = false;
+        btn.disabled = false;
+    }, 2000);
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+    if ('serviceWorker' in navigator) {
+        try {
+            const reg = await navigator.serviceWorker.register('./sw.js', { scope: '/' });
+            await navigator.serviceWorker.ready;
+            console.log('SW 已注册:', reg.scope);
+        } catch (e) {
+            showMessage('Service Worker 注册失败: ' + e.message);
+        }
+    }
+
+    const wjxParam = new URLSearchParams(window.location.search).get('wjx');
+    if (wjxParam) {
+        const wjxUrl = /^https?:\/\//i.test(wjxParam) ? wjxParam : new URL(wjxParam, window.location.href).href;
+        parseWjxUrl(wjxUrl);
+    } else showMessage('缺少文件参数');
+    document.getElementById('downloadBtn').addEventListener('click', startDownload);
+});
+</script>
+</body>
+</html>

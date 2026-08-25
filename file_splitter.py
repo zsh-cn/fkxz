@@ -90,8 +90,10 @@ class FileSplitterApp:
                 self.status_label.config(text="状态: 分片大小应在1-1024 MB之间", foreground="#cc0000")
             else:
                 self.status_label.config(text="状态: 就绪", foreground="#333333")
+            self._update_file_info()
         except ValueError:
             self.status_label.config(text="状态: 分片大小必须是数字", foreground="#cc0000")
+            self._update_file_info()
     
     def browse_file(self):
         file_path = filedialog.askopenfilename()
@@ -101,8 +103,7 @@ class FileSplitterApp:
             self.file_entry.insert(0, file_path)
             
             if os.path.exists(file_path):
-                file_size = os.path.getsize(file_path)
-                self.file_info_label.config(text=f"文件大小: {self.format_size(file_size)}")
+                self._update_file_info()
             else:
                 self.file_info_label.config(text="")
     
@@ -122,6 +123,27 @@ class FileSplitterApp:
             return f"{size / (1024 * 1024):.2f} MB"
         else:
             return f"{size / (1024 * 1024 * 1024):.2f} GB"
+    
+    def _update_file_info(self):
+        if not self.file_path or not os.path.exists(self.file_path):
+            self.file_info_label.config(text="")
+            return
+        try:
+            chunk_size_mb = int(self.chunk_size_var.get())
+            if chunk_size_mb < 1 or chunk_size_mb > 1024:
+                chunk_size_mb = None
+        except ValueError:
+            chunk_size_mb = None
+        
+        file_size = os.path.getsize(self.file_path)
+        size_text = f"文件大小: {self.format_size(file_size)}"
+        
+        if chunk_size_mb is not None:
+            chunk_size = chunk_size_mb * 1024 * 1024
+            num_chunks = (file_size + chunk_size - 1) // chunk_size
+            size_text += f" | 预计分块数: {num_chunks}"
+        
+        self.file_info_label.config(text=size_text)
     
     def calculate_sha256(self, file_path):
         sha256_hash = hashlib.sha256()
