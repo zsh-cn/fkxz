@@ -8,7 +8,7 @@ export default {
     }
     
     if (!wjxUrl.startsWith('http://') && !wjxUrl.startsWith('https://')) {
-      wjxUrl = 'https://' + wjxUrl;
+      wjxUrl = new URL(wjxUrl, request.url).href;
     }
     
     if (!wjxUrl.endsWith('.wjx')) {

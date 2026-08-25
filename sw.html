@@ -71,12 +71,6 @@ function parseWjx(content) {
 
 
 
-function updateProgress(current, total, text) {
-    document.getElementById('progressSection').classList.add('show');
-    document.getElementById('progressFill').style.width = total > 0 ? ((current / total) * 100).toFixed(1) + '%' : '0%';
-    document.getElementById('progressText').textContent = text || '';
-}
-
 function showMessage(text) {
     document.getElementById('progressSection').classList.add('show');
     document.getElementById('progressText').textContent = text;
@@ -106,85 +100,48 @@ async function parseWjxUrl(url) {
     }
 }
 
-async function downloadAndMerge() {
+async function startDownload() {
     if (!wjxInfo?.chunks?.length || isDownloading) return;
     isDownloading = true;
     const btn = document.getElementById('downloadBtn');
     btn.disabled = true;
-    
-    const totalSize = wjxInfo.chunks.reduce((s, c) => s + c.size, 0);
-    const useFileSystemAccess = 'showSaveFilePicker' in window;
-    let fileHandle = null, writer = null, blobParts = [], downloaded = 0;
-    
-    try {
-        const sanitizedName = wjxInfo.filename.replace(/[<>:"/\\|?*]/g, '_');
-        
-        if (useFileSystemAccess) {
-            try {
-                fileHandle = await window.showSaveFilePicker({ suggestedName: sanitizedName, types: [{ description: '所有文件', accept: { '*/*': [] } }] });
-                writer = await fileHandle.createWritable();
-            } catch (e) {
-                if (e.name === 'AbortError') { isDownloading = false; btn.disabled = false; return; }
-                throw new Error('无法获取文件写入权限: ' + e.message);
-            }
-        }
-        
-        for (let i = 0; i < wjxInfo.chunks.length; i++) {
-            const chunk = wjxInfo.chunks[i];
-            
-            const res = await fetch(baseUrl + chunk.filename);
-            if (!res.ok) throw new Error('下载失败: ' + chunk.filename);
-            
-            const reader = res.body.getReader();
-            const buffers = [];
-            let chunkLoaded = 0;
-            
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffers.push(value);
-                chunkLoaded += value.length;
-                updateProgress(downloaded + chunkLoaded, totalSize, `${formatSize(downloaded + chunkLoaded)}/${formatSize(totalSize)}`);
-            }
-            
-            const chunkBlob = new Blob(buffers);
-            if (useFileSystemAccess && writer) await writer.write(await chunkBlob.arrayBuffer());
-            else blobParts.push(chunkBlob);
-            downloaded += chunk.size;
-        }
-        
-        updateProgress(totalSize, totalSize, '合并中...');
-        
-        if (useFileSystemAccess && writer) {
-            await writer.close();
-        } else {
-            const merged = new Blob(blobParts);
-            const url = URL.createObjectURL(merged);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = sanitizedName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-        updateProgress(totalSize, totalSize, '下载完成');
-    } catch (e) {
-        showMessage('下载失败: ' + e.message);
-        if (writer) try { await writer.close(); } catch (e) {}
-    } finally {
+
+    const wjxParam = new URLSearchParams(window.location.search).get('wjx');
+    const wjxUrl = /^https?:\/\//i.test(wjxParam) ? wjxParam : new URL(wjxParam, window.location.href).href;
+    const sanitizedName = wjxInfo.filename.replace(/[<>:"/\\|?*]/g, '_');
+
+    showMessage('下载已开始，请查看浏览器下载栏');
+
+    const a = document.createElement('a');
+    a.href = './fkxz?wjx=' + encodeURIComponent(wjxUrl);
+    a.download = sanitizedName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => {
         isDownloading = false;
         btn.disabled = false;
-    }
+    }, 2000);
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+    if ('serviceWorker' in navigator) {
+        try {
+            const reg = await navigator.serviceWorker.register('./sw.js', { scope: '/' });
+            await navigator.serviceWorker.ready;
+            console.log('SW 已注册:', reg.scope);
+        } catch (e) {
+            showMessage('Service Worker 注册失败: ' + e.message);
+        }
+    }
+
     const wjxParam = new URLSearchParams(window.location.search).get('wjx');
     if (wjxParam) {
         const wjxUrl = /^https?:\/\//i.test(wjxParam) ? wjxParam : new URL(wjxParam, window.location.href).href;
         parseWjxUrl(wjxUrl);
     } else showMessage('缺少文件参数');
-    document.getElementById('downloadBtn').addEventListener('click', downloadAndMerge);
+    document.getElementById('downloadBtn').addEventListener('click', startDownload);
 });
 </script>
 </body>
