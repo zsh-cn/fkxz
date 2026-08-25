@@ -8,7 +8,8 @@ class FileSplitterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("文件拆分器")
-        self.root.geometry("650x450")
+        self.root.geometry("650x380")
+        self.root.minsize(650, 380)
         self.root.resizable(True, True)
         
         self.file_path = ""
@@ -19,6 +20,17 @@ class FileSplitterApp:
         
         self.create_widgets()
     
+    def _setup_context_menu(self, entry_widget):
+        menu = tk.Menu(entry_widget, tearoff=0)
+        menu.add_command(label="剪切", command=lambda: entry_widget.event_generate('<<Cut>>'))
+        menu.add_command(label="复制", command=lambda: entry_widget.event_generate('<<Copy>>'))
+        menu.add_command(label="粘贴", command=lambda: entry_widget.event_generate('<<Paste>>'))
+        menu.add_separator()
+        menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
+        menu.add_separator()
+        menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
+        entry_widget.bind('<Button-3>', lambda e: menu.tk_popup(e.x_root, e.y_root))
+    
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -26,22 +38,26 @@ class FileSplitterApp:
         input_frame = ttk.LabelFrame(main_frame, text="输入配置", padding="10")
         input_frame.pack(fill=tk.X, pady=5)
         input_frame.columnconfigure(1, weight=1)
+        input_frame.columnconfigure(2, minsize=130)
         
-        ttk.Label(input_frame, text="选择要拆分的文件:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(input_frame, text="选择要拆分的文件:").grid(row=0, column=0, sticky=tk.E, pady=5)
         self.file_entry = ttk.Entry(input_frame)
         self.file_entry.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
         ttk.Button(input_frame, text="浏览", command=self.browse_file).grid(row=0, column=2, pady=5)
+        self._setup_context_menu(self.file_entry)
         
-        ttk.Label(input_frame, text="输出目录:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(input_frame, text="输出目录:").grid(row=1, column=0, sticky=tk.E, pady=5)
         self.output_entry = ttk.Entry(input_frame)
         self.output_entry.grid(row=1, column=1, padx=10, pady=5, sticky=tk.EW)
         ttk.Button(input_frame, text="浏览", command=self.browse_output_dir).grid(row=1, column=2, pady=5)
+        self._setup_context_menu(self.output_entry)
         
-        ttk.Label(input_frame, text="每个分片大小(MB):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(input_frame, text="每个分片大小(MB):").grid(row=2, column=0, sticky=tk.E, pady=5)
         self.chunk_size_var = tk.StringVar(value="10")
-        chunk_entry = ttk.Entry(input_frame, textvariable=self.chunk_size_var, width=15)
-        chunk_entry.grid(row=2, column=1, sticky=tk.W, pady=5)
+        chunk_entry = ttk.Entry(input_frame, textvariable=self.chunk_size_var)
+        chunk_entry.grid(row=2, column=1, padx=10, pady=5, sticky=tk.EW)
         chunk_entry.bind('<KeyRelease>', self.validate_chunk_size)
+        self._setup_context_menu(chunk_entry)
         
         ttk.Label(input_frame, text="(范围: 1-1024 MB)").grid(row=2, column=2, sticky=tk.W, pady=5)
         
@@ -107,12 +123,12 @@ class FileSplitterApp:
         else:
             return f"{size / (1024 * 1024 * 1024):.2f} GB"
     
-    def calculate_md5(self, file_path):
-        md5_hash = hashlib.md5()
+    def calculate_sha256(self, file_path):
+        sha256_hash = hashlib.sha256()
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                md5_hash.update(chunk)
-        return md5_hash.hexdigest()
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
     
     def update_status(self, text):
         self.status_label.config(text=text)
@@ -190,14 +206,13 @@ class FileSplitterApp:
                         return
                     
                     chunk_data = f.read(self.chunk_size)
-                    chunk_filename = f"{file_name}-{i}.fk"
+                    chunk_filename = f"{file_name}-{i+1}.fk"
                     chunk_path = os.path.join(self.output_dir, chunk_filename)
                     
                     with open(chunk_path, 'wb') as chunk_file:
                         chunk_file.write(chunk_data)
                     
-                    chunk_md5 = hashlib.md5(chunk_data).hexdigest()
-                    wjxx_content.append(f"chunk_{i}={chunk_filename},{len(chunk_data)},{chunk_md5}")
+                    wjxx_content.append(f"chunk_{i+1}={chunk_filename},{len(chunk_data)}")
                     
                     self.progress['value'] = i + 1
                     self.update_status(f"状态: 正在拆分 {i+1}/{num_chunks}")
@@ -207,9 +222,9 @@ class FileSplitterApp:
                 self.reset_ui()
                 return
             
-            self.update_status("状态: 正在计算文件MD5...")
-            file_md5 = self.calculate_md5(self.file_path)
-            wjxx_content.append(f"md5={file_md5}")
+            self.update_status("状态: 正在计算文件SHA-256...")
+            file_sha256 = self.calculate_sha256(self.file_path)
+            wjxx_content.append(f"sha256={file_sha256}")
             
             wjxx_filename = f"{file_name}.wjx"
             wjxx_path = os.path.join(self.output_dir, wjxx_filename)
@@ -226,7 +241,7 @@ class FileSplitterApp:
             self.reset_ui()
     
     def cleanup_chunks(self, output_dir, file_name, count):
-        for i in range(count):
+        for i in range(1, count + 1):
             chunk_path = os.path.join(output_dir, f"{file_name}-{i}.fk")
             if os.path.exists(chunk_path):
                 try:

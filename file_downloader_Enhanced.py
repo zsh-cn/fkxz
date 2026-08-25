@@ -6,6 +6,7 @@ import threading
 from urllib.parse import urlparse, urljoin
 import time
 import shutil
+import ctypes
 
 try:
     from curl_cffi import requests
@@ -33,8 +34,18 @@ class FileDownloaderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("文件下载器")
-        self.root.geometry("650x550")
+        self.root.geometry("650x540")
+        self.root.minsize(650, 540)
         self.root.resizable(True, True)
+        
+        self.style = ttk.Style()
+        available_themes = self.style.theme_names()
+        if 'vista' in available_themes:
+            self.style.theme_use('vista')
+        elif 'xpnative' in available_themes:
+            self.style.theme_use('xpnative')
+        elif 'clam' in available_themes:
+            self.style.theme_use('clam')
         
         self.wjxx_path = ""
         self.output_dir = ""
@@ -55,9 +66,21 @@ class FileDownloaderApp:
         self.downloaded_size = 0
         self.download_start_time = 0
         self.chunk_dir = ""
+        self.safe_filename = ""
         self.base_referer = ""
         
         self.create_widgets()
+    
+    def _setup_context_menu(self, entry_widget):
+        menu = tk.Menu(entry_widget, tearoff=0)
+        menu.add_command(label="剪切", command=lambda: entry_widget.event_generate('<<Cut>>'))
+        menu.add_command(label="复制", command=lambda: entry_widget.event_generate('<<Copy>>'))
+        menu.add_command(label="粘贴", command=lambda: entry_widget.event_generate('<<Paste>>'))
+        menu.add_separator()
+        menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
+        menu.add_separator()
+        menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
+        entry_widget.bind('<Button-3>', lambda e: menu.tk_popup(e.x_root, e.y_root))
     
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="20")
@@ -71,12 +94,14 @@ class FileDownloaderApp:
         self.url_entry = ttk.Entry(url_frame)
         self.url_entry.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
         self.url_entry.bind('<KeyRelease>', self.validate_input)
+        self._setup_context_menu(self.url_entry)
         
         ttk.Label(url_frame, text="输出目录:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.output_entry = ttk.Entry(url_frame)
         self.output_entry.grid(row=1, column=1, padx=10, pady=5, sticky=tk.EW)
         self.browse_output_btn = ttk.Button(url_frame, text="浏览", command=self.browse_output_dir)
         self.browse_output_btn.grid(row=1, column=2, pady=5)
+        self._setup_context_menu(self.output_entry)
         
         self.browse_wjxx_btn = ttk.Button(url_frame, text="浏览", command=self.browse_wjxx_file)
         self.browse_wjxx_btn.grid(row=0, column=2, pady=5)
@@ -311,23 +336,31 @@ class FileDownloaderApp:
             headers["Referer"] = referer
         return headers
 
-    def download_with_retry(self, url, max_retries=5, timeout=120):
-        for attempt in range(max_retries):
-            try:
-                headers = self._get_request_headers()
-                if HAS_CURL_CFFI:
-                    response = self.session.get(url, timeout=timeout, headers=headers)
-                else:
-                    response = self.session.get(url, timeout=timeout, stream=True, headers=headers)
-                response.raise_for_status()
-                return response
-            except Exception as e:
-                self.update_status(f"状态: 网络错误 - {str(e)[:50]}")
-                if attempt < max_retries - 1:
-                    self.update_status(f"状态: 重试中 ({attempt + 1}/{max_retries})...")
-                    continue
-                else:
-                    return None
+    def download_single(self, url, timeout=120):
+        try:
+            headers = self._get_request_headers()
+            if HAS_CURL_CFFI:
+                response = self.session.get(url, timeout=timeout, headers=headers)
+            else:
+                response = self.session.get(url, timeout=timeout, stream=True, headers=headers)
+            response.raise_for_status()
+            return response
+        except Exception as e:
+            self.update_status(f"状态: 网络错误 - {str(e)[:50]}")
+            return None
+
+    def ask_retry(self, title, message):
+        result = [False]
+        event = threading.Event()
+
+        def show_dialog():
+            if messagebox.askretrycancel(title, message):
+                result[0] = True
+            event.set()
+
+        self.root.after(0, show_dialog)
+        event.wait()
+        return result[0]
     
     def read_local_wjxx(self, file_path):
         try:
@@ -353,8 +386,6 @@ class FileDownloaderApp:
                             'filename': chunk_filename,
                             'size': int(parts[1])
                         }
-                        if len(parts) >= 3:
-                            chunk_info['md5'] = parts[2].strip()
                         info['chunks'].append(chunk_info)
                 else:
                     info[key] = value.strip()
@@ -362,53 +393,57 @@ class FileDownloaderApp:
         return info
     
     def download_chunk_stream(self, url, chunk_path, chunk_size, progress_callback=None):
-        try:
-            headers = self._get_request_headers(referer=self.base_referer, is_chunk=True)
-            if HAS_CURL_CFFI:
-                downloaded_bytes = [0]
-                last_reported = [0]
+        while True:
+            try:
+                headers = self._get_request_headers(referer=self.base_referer, is_chunk=True)
+                if HAS_CURL_CFFI:
+                    downloaded_bytes = [0]
+                    last_reported = [0]
 
-                def content_callback(data):
-                    if self.is_cancelled:
-                        return -1
-                    f.write(data)
-                    downloaded_bytes[0] += len(data)
-                    d = downloaded_bytes[0]
-                    if d - last_reported[0] >= 65536 or d >= chunk_size:
-                        last_reported[0] = d
-                        if progress_callback:
-                            progress_callback(d, chunk_size, len(data))
-
-                with open(chunk_path, 'wb') as f:
-                    response = self.session.get(url, timeout=120, headers=headers, content_callback=content_callback)
-                response.raise_for_status()
-            else:
-                response = self.session.get(url, stream=True, timeout=120, headers=headers)
-                response.raise_for_status()
-                
-                downloaded = 0
-                with open(chunk_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=65536):
+                    def content_callback(data):
                         if self.is_cancelled:
-                            if os.path.exists(chunk_path):
-                                os.remove(chunk_path)
-                            return False
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if progress_callback:
-                            progress_callback(downloaded, chunk_size, len(chunk))
-            
-            if self.is_cancelled:
+                            return -1
+                        f.write(data)
+                        downloaded_bytes[0] += len(data)
+                        d = downloaded_bytes[0]
+                        if d - last_reported[0] >= 65536 or d >= chunk_size:
+                            last_reported[0] = d
+                            if progress_callback:
+                                progress_callback(d, chunk_size, len(data))
+
+                    with open(chunk_path, 'wb') as f:
+                        response = self.session.get(url, timeout=120, headers=headers, content_callback=content_callback)
+                    response.raise_for_status()
+                else:
+                    response = self.session.get(url, stream=True, timeout=120, headers=headers)
+                    response.raise_for_status()
+                    
+                    downloaded = 0
+                    with open(chunk_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=65536):
+                            if self.is_cancelled:
+                                if os.path.exists(chunk_path):
+                                    os.remove(chunk_path)
+                                return False
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if progress_callback:
+                                progress_callback(downloaded, chunk_size, len(chunk))
+                
+                if self.is_cancelled:
+                    if os.path.exists(chunk_path):
+                        os.remove(chunk_path)
+                    return False
+                
+                return True
+            except Exception as e:
                 if os.path.exists(chunk_path):
                     os.remove(chunk_path)
-                return False
-            
-            return True
-        except Exception as e:
-            if os.path.exists(chunk_path):
-                os.remove(chunk_path)
-            self.chunk_errors.append(f"下载失败: {str(e)}")
-            return False
+                if self.is_cancelled:
+                    return False
+                if not self.ask_retry("下载失败", f"分片下载失败: {str(e)[:100]}\n是否重试？"):
+                    self.chunk_errors.append(f"下载失败: {str(e)}")
+                    return False
     
     def download_chunk(self, base_url, chunk_info, chunk_index, output_dir, progress_callback=None):
         chunk_url = urljoin(base_url, chunk_info['filename'])
@@ -452,14 +487,16 @@ class FileDownloaderApp:
         return filename
     
     def get_chunk_dir(self, output_dir):
-        chunk_dir = os.path.join(output_dir, "fkwj")
+        dir_name = f"{self.safe_filename}-fkxz" if self.safe_filename else "fkwj"
+        chunk_dir = os.path.join(output_dir, dir_name)
         if os.path.exists(chunk_dir):
             shutil.rmtree(chunk_dir)
         os.makedirs(chunk_dir, exist_ok=True)
         return chunk_dir
     
     def cleanup_chunk_dir(self, output_dir):
-        chunk_dir = os.path.join(output_dir, "fkwj")
+        dir_name = f"{self.safe_filename}-fkxz" if self.safe_filename else "fkwj"
+        chunk_dir = os.path.join(output_dir, dir_name)
         if os.path.exists(chunk_dir):
             shutil.rmtree(chunk_dir)
     
@@ -529,8 +566,6 @@ class FileDownloaderApp:
             self.disable_all_widgets()
             self.cancel_button.config(state=tk.NORMAL)
             
-            downloaded_wjxx_path = ""
-            
             if self.file_info and 'chunks' in self.file_info:
                 wjxx_info = self.file_info
                 wjxx_content_parsed = True
@@ -561,10 +596,6 @@ class FileDownloaderApp:
                 wjxx_content = self.read_local_wjxx(wjxx_local_path)
             else:
                 wjxx_content = self.download_wjxx(self.wjxx_path)
-                if wjxx_content:
-                    downloaded_wjxx_path = os.path.join(self.output_dir, os.path.basename(self.wjxx_path))
-                    with open(downloaded_wjxx_path, 'w', encoding='utf-8') as f:
-                        f.write(wjxx_content)
             
             if self.is_cancelled:
                 if not self.is_local:
@@ -594,6 +625,7 @@ class FileDownloaderApp:
             self.chunks_label.config(text=str(num_chunks))
             
             self.file_info = wjxx_info
+            self.safe_filename = self.sanitize_filename(os.path.basename(wjxx_info['filename']))
             self.total_download_size = total_size
             
             self.progress_total['maximum'] = num_chunks
@@ -627,6 +659,9 @@ class FileDownloaderApp:
                 base_path = f"{parsed.scheme}://{parsed.netloc}{dir_path}/"
                 self.base_referer = base_path
                 self.chunk_dir = self.get_chunk_dir(self.output_dir)
+                wjxx_save_path = os.path.join(self.chunk_dir, os.path.basename(self.wjxx_path))
+                with open(wjxx_save_path, 'w', encoding='utf-8') as f:
+                    f.write(wjxx_content)
             
             if self.is_local:
                 for i, chunk_info in enumerate(wjxx_info['chunks']):
@@ -710,9 +745,9 @@ class FileDownloaderApp:
                         for chunk in iter(lambda: chunk_file.read(65536), b""):
                             f.write(chunk)
             
-            if 'md5' in wjxx_info:
-                self.update_status("状态: 正在校验MD5...")
-                actual_md5 = hashlib.md5()
+            if 'sha256' in wjxx_info:
+                self.update_status("状态: 正在校验SHA-256...")
+                actual_sha256 = hashlib.sha256()
                 with open(output_path, 'rb') as f:
                     for chunk in iter(lambda: f.read(65536), b""):
                         if self.is_cancelled:
@@ -722,10 +757,10 @@ class FileDownloaderApp:
                                 self.cleanup_chunk_dir(self.output_dir)
                             self.reset_ui("状态: 已取消下载")
                             return
-                        actual_md5.update(chunk)
+                        actual_sha256.update(chunk)
                 
-                if actual_md5.hexdigest() != wjxx_info['md5']:
-                    self.show_error("文件MD5校验失败")
+                if actual_sha256.hexdigest() != wjxx_info['sha256']:
+                    self.show_error("文件SHA-256校验失败")
                     if os.path.exists(output_path):
                         os.remove(output_path)
                     if not self.is_local:
@@ -735,8 +770,6 @@ class FileDownloaderApp:
             
             if not self.is_local:
                 self.cleanup_chunk_dir(self.output_dir)
-                if 'downloaded_wjxx_path' in dir() and downloaded_wjxx_path and os.path.exists(downloaded_wjxx_path):
-                    os.remove(downloaded_wjxx_path)
             
             self.progress_total['value'] = num_chunks
             self.progress_chunk['value'] = 100
@@ -757,13 +790,18 @@ class FileDownloaderApp:
             self.reset_ui()
     
     def download_wjxx(self, url):
-        response = self.download_with_retry(url)
-        if response:
-            try:
-                return response.text
-            except Exception as e:
-                self.show_error(f"无法解析文件信息: {str(e)}")
-        return None
+        while True:
+            response = self.download_single(url)
+            if response:
+                try:
+                    return response.text
+                except Exception as e:
+                    self.show_error(f"无法解析文件信息: {str(e)}")
+                    return None
+            if self.is_cancelled:
+                return None
+            if not self.ask_retry("下载失败", "无法下载文件信息，是否重试？"):
+                return None
     
     def start_download(self):
         self.download_thread = threading.Thread(target=self.download_and_merge)
@@ -784,6 +822,20 @@ class FileDownloaderApp:
         self.download_start_time = time.time()
 
 if __name__ == "__main__":
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+    
     root = tk.Tk()
+    
+    try:
+        user32 = ctypes.windll.user32
+        dpi = user32.GetDpiForWindow(root.winfo_id())
+        if dpi > 96:
+            root.tk.call('tk', 'scaling', dpi / 72.0)
+    except Exception:
+        pass
+    
     app = FileDownloaderApp(root)
     root.mainloop()
