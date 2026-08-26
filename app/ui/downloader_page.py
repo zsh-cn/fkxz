@@ -74,7 +74,7 @@ class DownloaderPage(BasePage):
         input_frame.pack(fill=tk.X)
         input_frame.columnconfigure(1, weight=1)
 
-        self._build_field(input_frame, '文件信息 URL (.fkx)', '_url_entry', self._browse_local_fkx, 0, 0)
+        self._build_field(input_frame, '文件信息 URL (.fkx)', '_url_entry', self._browse_local_fkx, 0, 0, show_browse=False)
         self._build_field(input_frame, '输出目录', '_output_entry', self._browse_output, 2, 0)
 
         enhanced_frame = tk.Frame(input_frame, bg=BG_CARD)
@@ -111,29 +111,29 @@ class DownloaderPage(BasePage):
 
         info_grid = tk.Frame(info_inner, bg=BG_CARD)
         info_grid.grid(row=1, column=0, columnspan=2, sticky='ew')
+        info_grid.columnconfigure(1, weight=1)
 
         labels = [
             ('文件名:', 'filename'),
             ('文件大小:', 'filesize'),
-            ('分块数:', 'chunks'),
+            ('分片数:', 'chunks'),
         ]
         for i, (label_text, key) in enumerate(labels):
-            col = i * 2
             tk.Label(info_grid, text=label_text, font=('Microsoft YaHei UI', 10),
-                     fg=FG_SECONDARY, bg=BG_CARD).grid(row=0, column=col, sticky='w', padx=(0, 6))
+                     fg=FG_SECONDARY, bg=BG_CARD).grid(row=i, column=0, sticky='e', padx=(0, 8), pady=(0, 6))
             val_label = tk.Label(info_grid, text='-', font=('Microsoft YaHei UI', 10, 'bold'),
-                                 fg=FG_PRIMARY, bg=BG_CARD)
-            val_label.grid(row=0, column=col + 1, sticky='w', padx=(0, 32))
+                                 fg=FG_PRIMARY, bg=BG_CARD, wraplength=500, justify='left', anchor='w')
+            val_label.grid(row=i, column=1, sticky='w', pady=(0, 6))
             setattr(self, f'_{key}_label', val_label)
 
         progress_card = tk.Frame(self, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
-        progress_card.grid(row=3, column=0, sticky='nsew', padx=32, pady=(0, 12))
+        progress_card.grid(row=3, column=0, sticky='ew', padx=32, pady=(0, 12))
 
-        progress_inner = tk.Frame(progress_card, bg=BG_CARD, padx=24, pady=20)
-        progress_inner.pack(fill=tk.BOTH, expand=True)
+        progress_inner = tk.Frame(progress_card, bg=BG_CARD, padx=24, pady=16)
+        progress_inner.pack(fill=tk.X)
         progress_inner.columnconfigure(0, weight=1)
 
-        self._progress_row(progress_inner, '分块进度', '_chunk_progress', 0)
+        self._progress_row(progress_inner, '分片进度', '_chunk_progress', 0)
         self._progress_row(progress_inner, '总进度', '_total_progress', 2)
 
         self._status_label = tk.Label(progress_inner, text='就绪', font=('Microsoft YaHei UI', 10),
@@ -244,6 +244,10 @@ class DownloaderPage(BasePage):
 
     def _cancel(self):
         self._downloader.cancel()
+        self._cancel_btn.config(state=tk.DISABLED)
+        self._on_status('正在取消...', ERROR)
+        self._chunk_progress['value'] = 0
+        self._total_progress['value'] = 0
 
     def _on_progress(self, value, maximum):
         self.after(0, lambda: self._total_progress.configure(value=value, maximum=maximum))
@@ -259,13 +263,15 @@ class DownloaderPage(BasePage):
         self.after(0, self._reset_ui)
 
     def _on_complete(self, result):
-        self.after(0, self._reset_ui)
-        self.after(0, lambda: messagebox.showinfo(
-            '完成',
-            f"文件下载完成！\n\n模式: {result['mode']}\n"
-            f"文件名: {result['file_name']}\n"
-            f"保存位置: {result['output_path']}"
-        ))
+        cancelled = result.get('cancelled', False) if result else False
+        self.after(0, lambda: self._finalize_ui(cancelled=cancelled))
+        if not cancelled:
+            self.after(0, lambda: messagebox.showinfo(
+                '完成',
+                f"文件下载完成！\n\n模式: {result['mode']}\n"
+                f"文件名: {result['file_name']}\n"
+                f"保存位置: {result['output_path']}"
+            ))
 
     def _on_file_info(self, info):
         self.after(0, lambda: self._filename_label.config(text=info.get('filename', '-')))
@@ -295,3 +301,13 @@ class DownloaderPage(BasePage):
         self._validate_input()
         self._cancel_btn.config(state=tk.DISABLED)
         self._download_detail.config(text='')
+        self._chunk_progress['value'] = 0
+        self._total_progress['value'] = 0
+
+    def _finalize_ui(self, cancelled=False):
+        self._cancel_btn.config(state=tk.DISABLED)
+        self._validate_input()
+        if cancelled:
+            self._download_detail.config(text='')
+            self._chunk_progress['value'] = 0
+            self._total_progress['value'] = 0

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="favicon.png" type="image/png">
-<title>文件下载器</title>
+<title>文件下载</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: system-ui, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -133,7 +133,7 @@ async function downloadAndMerge() {
     const progressBar = document.getElementById('progressFill').parentElement;
     if (!useFileSystemAccess) progressBar.classList.add('hidden');
     let fileHandle = null, writer = null, blobParts = [], downloaded = 0;
-    let speedLastTime = Date.now(), speedLastBytes = 0;
+    let speedLastTime = Date.now(), speedLastBytes = 0, speedStr = '';
     
     try {
         const sanitizedName = fkxInfo.filename.replace(/[<>:"/\\|?*]/g, '_');
@@ -166,7 +166,6 @@ async function downloadAndMerge() {
                 buffers.push(value);
                 chunkLoaded += value.length;
                 const now = Date.now();
-                let speedStr = '';
                 const currentBytes = downloaded + chunkLoaded;
                 if (now - speedLastTime > 500) {
                     const elapsed = (now - speedLastTime) / 1000;
@@ -201,8 +200,11 @@ async function downloadAndMerge() {
         updateProgress(totalSize, totalSize, '下载完成');
     } catch (e) {
         if (e.name === 'AbortError') {
-            showMessage('下载已取消');
-            if (writer) try { await writer.abort(); } catch (e) {}
+            if (writer) {
+                try { await writer.abort(); } catch (e) {}
+                try { await fileHandle.remove(); } catch (e) {}
+            }
+            updateProgress(0, totalSize, '下载已取消');
         } else {
             showMessage('下载失败: ' + e.message);
             if (writer) try { await writer.close(); } catch (e) {}

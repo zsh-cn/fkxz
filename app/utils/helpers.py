@@ -65,7 +65,14 @@ def setup_context_menu(entry_widget):
     menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
     menu.add_separator()
     menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
-    entry_widget.bind('<Button-3>', lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def _show_menu(event):
+        if entry_widget.focus_get() != entry_widget:
+            entry_widget.focus_set()
+            entry_widget.select_range(0, tk.END)
+        menu.tk_popup(event.x_root, event.y_root)
+
+    entry_widget.bind('<Button-3>', _show_menu)
 
 
 def _draw_rounded_rect(canvas, x1, y1, x2, y2, r, **kwargs):
@@ -171,8 +178,7 @@ class RoundedButton(tk.Canvas):
         self._bg = bg
         self._fg = fg
         self._bg_normal = bg
-        self._bg_hover = self._lighten(bg, 0.12)
-        self._bg_active = self._darken(bg, 0.08)
+        self._calc_hover_colors(bg)
         self._bg_disabled = '#E5E7EB'
         self._fg_disabled = '#9CA3AF'
         self._command = command
@@ -197,6 +203,20 @@ class RoundedButton(tk.Canvas):
         self.unbind('<Leave>')
         self.unbind('<Button-1>')
         self.unbind('<ButtonRelease-1>')
+
+    def _luminance(self, hex_color):
+        c = hex_color.lstrip('#')
+        r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+        return (r * 299 + g * 587 + b * 114) / 1000
+
+    def _calc_hover_colors(self, bg):
+        lum = self._luminance(bg)
+        if lum > 128:
+            self._bg_hover = self._darken(bg, 0.10)
+            self._bg_active = self._darken(bg, 0.18)
+        else:
+            self._bg_hover = self._lighten(bg, 0.12)
+            self._bg_active = self._darken(bg, 0.08)
 
     def _lighten(self, hex_color, factor):
         c = hex_color.lstrip('#')
@@ -260,8 +280,7 @@ class RoundedButton(tk.Canvas):
         if 'bg' in kwargs:
             self._bg_normal = kwargs.pop('bg')
             self._bg = self._bg_normal
-            self._bg_hover = self._lighten(self._bg_normal, 0.12)
-            self._bg_active = self._darken(self._bg_normal, 0.08)
+            self._calc_hover_colors(self._bg_normal)
         super().config(**kwargs)
         self._draw()
 

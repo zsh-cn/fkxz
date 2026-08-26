@@ -16,7 +16,8 @@ class SplitterPage(BasePage):
     _file_entry: ttk.Entry
     _output_entry: ttk.Entry
     _chunk_var: tk.StringVar
-    _file_info_label: tk.Label
+    _filesize_label: tk.Label
+    _chunkcount_label: tk.Label
     _progress: RoundedProgressBar
     _start_btn: RoundedButton
     _cancel_btn: RoundedButton
@@ -34,7 +35,7 @@ class SplitterPage(BasePage):
 
     def _build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
 
         header = tk.Frame(self, bg=BG_PAGE)
         header.grid(row=0, column=0, sticky='ew', padx=32, pady=(28, 16))
@@ -72,7 +73,6 @@ class SplitterPage(BasePage):
                  fg=FG_PRIMARY, bg=BG_CARD).pack(side=tk.LEFT)
 
         self._chunk_var = tk.StringVar(value='10')
-        self._chunk_var.trace_add('write', lambda *args: self._update_file_info())
         vcmd = (self.register(self._validate_chunk), '%P')
         chunk_entry = ttk.Entry(size_frame, textvariable=self._chunk_var, width=10,
                                 font=('Microsoft YaHei UI', 10),
@@ -83,15 +83,39 @@ class SplitterPage(BasePage):
         tk.Label(size_frame, text='范围 1 - 1024 MB', font=('Microsoft YaHei UI', 9),
                  fg=FG_TERTIARY, bg=BG_CARD).pack(side=tk.LEFT)
 
-        self._file_info_label = tk.Label(size_frame, text='', font=('Microsoft YaHei UI', 9),
-                                         fg=FG_SECONDARY, bg=BG_CARD)
-        self._file_info_label.pack(side=tk.RIGHT)
+        info_card = tk.Frame(self, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
+        info_card.grid(row=2, column=0, sticky='ew', padx=32, pady=(0, 12))
+
+        info_inner = tk.Frame(info_card, bg=BG_CARD, padx=24, pady=16)
+        info_inner.pack(fill=tk.X)
+        info_inner.columnconfigure(1, weight=1)
+
+        tk.Label(info_inner, text='分块信息', font=('Microsoft YaHei UI', 12, 'bold'),
+                 fg=FG_PRIMARY, bg=BG_CARD).grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 12))
+
+        info_grid = tk.Frame(info_inner, bg=BG_CARD)
+        info_grid.grid(row=1, column=0, columnspan=2, sticky='ew')
+        info_grid.columnconfigure(1, weight=1)
+
+        labels = [
+            ('文件大小:', 'filesize'),
+            ('分片数:', 'chunkcount'),
+        ]
+        for i, (label_text, key) in enumerate(labels):
+            tk.Label(info_grid, text=label_text, font=('Microsoft YaHei UI', 10),
+                     fg=FG_SECONDARY, bg=BG_CARD).grid(row=i, column=0, sticky='e', padx=(0, 8), pady=(0, 6))
+            val_label = tk.Label(info_grid, text='-', font=('Microsoft YaHei UI', 10, 'bold'),
+                                 fg=FG_PRIMARY, bg=BG_CARD, wraplength=500, justify='left', anchor='w')
+            val_label.grid(row=i, column=1, sticky='w', pady=(0, 6))
+            setattr(self, f'_{key}_label', val_label)
+
+        self._chunk_var.trace_add('write', lambda *args: self._update_file_info())
 
         progress_card = tk.Frame(self, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
-        progress_card.grid(row=2, column=0, sticky='nsew', padx=32, pady=(0, 12))
+        progress_card.grid(row=3, column=0, sticky='ew', padx=32, pady=(0, 12))
 
-        progress_inner = tk.Frame(progress_card, bg=BG_CARD, padx=24, pady=20)
-        progress_inner.pack(fill=tk.BOTH, expand=True)
+        progress_inner = tk.Frame(progress_card, bg=BG_CARD, padx=24, pady=16)
+        progress_inner.pack(fill=tk.X)
         progress_inner.columnconfigure(0, weight=1)
 
         tk.Label(progress_inner, text='拆分进度', font=('Microsoft YaHei UI', 10),
@@ -104,7 +128,7 @@ class SplitterPage(BasePage):
         self._status_label.grid(row=2, column=0, sticky='w')
 
         btn_frame = tk.Frame(self, bg=BG_PAGE)
-        btn_frame.grid(row=3, column=0, sticky='ew', padx=32, pady=(0, 28))
+        btn_frame.grid(row=4, column=0, sticky='ew', padx=32, pady=(0, 28))
 
         self._start_btn = RoundedButton(btn_frame, text='开始拆分', command=self._start, width=120, height=38,
                                         state='disabled')
@@ -124,9 +148,12 @@ class SplitterPage(BasePage):
             return False
 
     def _update_file_info(self):
+        if not hasattr(self, '_filesize_label'):
+            return
         file_path = self._file_entry.get().strip()
         if not file_path or not os.path.exists(file_path):
-            self._file_info_label.config(text='')
+            self._filesize_label.config(text='-')
+            self._chunkcount_label.config(text='-')
             return
         try:
             chunk_size_mb = int(self._chunk_var.get())
@@ -136,24 +163,21 @@ class SplitterPage(BasePage):
             chunk_size_mb = None
 
         file_size = os.path.getsize(file_path)
-        size_text = f'文件大小: {format_size(file_size)}'
+        self._filesize_label.config(text=format_size(file_size))
 
         if chunk_size_mb is not None:
             chunk_size = chunk_size_mb * 1024 * 1024
             num_chunks = (file_size + chunk_size - 1) // chunk_size
-            size_text += f' | 分块数: {num_chunks}'
-
-        self._file_info_label.config(text=size_text)
+            self._chunkcount_label.config(text=str(num_chunks))
+        else:
+            self._chunkcount_label.config(text='-')
 
     def _browse_file(self):
         path = filedialog.askopenfilename()
         if path:
             self._file_entry.delete(0, tk.END)
             self._file_entry.insert(0, path)
-            if os.path.exists(path):
-                self._update_file_info()
-            else:
-                self._file_info_label.config(text='')
+            self._update_file_info()
             self._validate_input()
 
     def _browse_output(self):
@@ -197,6 +221,9 @@ class SplitterPage(BasePage):
 
     def _cancel(self):
         self._splitter.cancel()
+        self._cancel_btn.config(state=tk.DISABLED)
+        self._on_status('正在取消...', ERROR)
+        self._progress['value'] = 0
 
     def _on_progress(self, value, maximum):
         self.after(0, lambda: self._progress.configure(value=value, maximum=maximum))
@@ -209,16 +236,25 @@ class SplitterPage(BasePage):
         self.after(0, self._reset_ui)
 
     def _on_complete(self, result):
-        self.after(0, self._reset_ui)
-        self.after(0, lambda: messagebox.showinfo(
-            '完成',
-            f"文件拆分完成！\n\n文件名: {result['file_name']}\n"
-            f"文件大小: {format_size(result['file_size'])}\n"
-            f"分片数: {result['num_chunks']}\n"
-            f"信息文件: {result['fkx_filename']}\n"
-            f"保存位置: {result['output_dir']}"
-        ))
+        cancelled = result.get('cancelled', False) if result else False
+        self.after(0, lambda: self._finalize_ui(cancelled=cancelled))
+        if not cancelled:
+            self.after(0, lambda: messagebox.showinfo(
+                '完成',
+                f"文件拆分完成！\n\n文件名: {result['file_name']}\n"
+                f"文件大小: {format_size(result['file_size'])}\n"
+                f"分片数: {result['num_chunks']}\n"
+                f"信息文件: {result['fkx_filename']}\n"
+                f"保存位置: {result['output_dir']}"
+            ))
 
     def _reset_ui(self):
         self._validate_input()
         self._cancel_btn.config(state=tk.DISABLED)
+        self._progress['value'] = 0
+
+    def _finalize_ui(self, cancelled=False):
+        self._cancel_btn.config(state=tk.DISABLED)
+        self._validate_input()
+        if cancelled:
+            self._progress['value'] = 0

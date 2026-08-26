@@ -65,6 +65,7 @@ class FileSplitter(BaseWorker):
                     if self._is_cancelled:
                         self._emit_status("拆分已取消", '#cc0000')
                         self._cleanup_chunks(output_dir, file_name, i)
+                        self._emit_complete({'cancelled': True})
                         return
 
                     chunk_data = f.read(chunk_size)
@@ -81,6 +82,7 @@ class FileSplitter(BaseWorker):
 
             if self._is_cancelled:
                 self._emit_status("拆分已取消", '#cc0000')
+                self._emit_complete({'cancelled': True})
                 return
 
             self._emit_status("正在计算文件SHA-256...")

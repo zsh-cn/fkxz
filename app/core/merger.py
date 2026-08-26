@@ -68,6 +68,7 @@ class FileMerger(BaseWorker):
             for i, chunk_info in enumerate(fkx_info['chunks']):
                 if self._is_cancelled:
                     self._emit_status("已取消合并", '#cc0000')
+                    self._emit_complete({'cancelled': True})
                     return
 
                 self._emit_status(f"正在读取分片 {i+1}/{num_chunks}")
@@ -90,6 +91,7 @@ class FileMerger(BaseWorker):
             output_path = os.path.join(output_dir, safe_filename)
             output_path = os.path.normpath(output_path)
 
+            merged_bytes = [0]
             with open(output_path, 'wb') as f:
                 for i in range(num_chunks):
                     if self._is_cancelled:
@@ -98,11 +100,17 @@ class FileMerger(BaseWorker):
                         except FileNotFoundError:
                             pass
                         self._emit_status("已取消合并", '#cc0000')
+                        self._emit_complete({'cancelled': True})
                         return
 
                     chunk_path = downloaded_chunks[i]
                     with open(chunk_path, 'rb') as chunk_file:
-                        shutil.copyfileobj(chunk_file, f, length=1024 * 1024)
+                        for chunk in iter(lambda: chunk_file.read(65536), b""):
+                            f.write(chunk)
+                            merged_bytes[0] += len(chunk)
+                            if total_size > 0:
+                                percentage = merged_bytes[0] / total_size
+                                self._emit_chunk_progress(percentage * 100, 100)
 
             if 'sha256' in fkx_info:
                 self._emit_status("正在校验SHA-256...")
@@ -115,6 +123,7 @@ class FileMerger(BaseWorker):
                             except FileNotFoundError:
                                 pass
                             self._emit_status("已取消合并", '#cc0000')
+                            self._emit_complete({'cancelled': True})
                             return
                         actual_sha256.update(chunk)
 

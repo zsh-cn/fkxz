@@ -3,7 +3,12 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.endsWith('/fkxz')) {
         const fkxUrl = url.searchParams.get('fkx');
         if (fkxUrl) {
-            event.respondWith(streamDownload(fkxUrl, event.request));
+            event.respondWith(
+                streamDownload(fkxUrl, event.request).catch(e => {
+                    console.error('下载失败:', e);
+                    return new Response('下载失败: ' + e.message, { status: 500 });
+                })
+            );
         }
     }
 });

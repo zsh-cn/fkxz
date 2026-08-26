@@ -8,7 +8,8 @@ def read_local_fkx(file_path):
         return f.read()
 
 
-def merge_chunks(chunk_sources, output_path, num_chunks):
+def merge_chunks(chunk_sources, output_path, num_chunks, total_size=0):
+    merged_bytes = [0]
     with open(output_path, 'wb') as out_f:
         for i in range(num_chunks):
             chunk_path = chunk_sources[i]
@@ -16,9 +17,15 @@ def merge_chunks(chunk_sources, output_path, num_chunks):
             with open(chunk_path, 'rb') as chunk_f:
                 for chunk in iter(lambda: chunk_f.read(65536), b""):
                     out_f.write(chunk)
-            print_progress(i + 1, num_chunks,
-                           prefix="合并: ",
-                           suffix=f"{i+1}/{num_chunks}")
+                    merged_bytes[0] += len(chunk)
+                    if total_size > 0:
+                        print_progress(merged_bytes[0], total_size,
+                                       prefix="合并: ",
+                                       suffix=f"{format_size(merged_bytes[0])}/{format_size(total_size)}")
+                    else:
+                        print_progress(i + 1, num_chunks,
+                                       prefix="合并: ",
+                                       suffix=f"{i+1}/{num_chunks}")
     sys.stdout.write("\n")
     sys.stdout.flush()
 
@@ -51,7 +58,7 @@ def cmd_merge(args):
 
     print(f"文件名: {fkx_info['filename']}")
     print(f"文件大小: {format_size(total_size)}")
-    print(f"分块数: {num_chunks}")
+    print(f"分片数: {num_chunks}")
     print()
 
     chunk_sources = {}
@@ -68,7 +75,7 @@ def cmd_merge(args):
     output_path = os.path.normpath(output_path)
 
     print("正在合并文件...")
-    merge_chunks(chunk_sources, output_path, num_chunks)
+    merge_chunks(chunk_sources, output_path, num_chunks, total_size)
 
     if 'sha256' in fkx_info:
         print("正在校验SHA-256...")

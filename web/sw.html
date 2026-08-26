@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="favicon.png" type="image/png">
-<title>文件下载器</title>
+<title>文件下载</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: system-ui, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -106,12 +106,17 @@ function startDownload() {
     const fkxParam = new URLSearchParams(window.location.search).get('fkx');
     const fkxUrl = /^https?:\/\//i.test(fkxParam) ? fkxParam : new URL(fkxParam, window.location.href).href;
 
-    showMessage('下载已开始，请查看浏览器下载栏');
-
     const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = './fkxz?fkx=' + encodeURIComponent(fkxUrl);
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;';
     document.body.appendChild(iframe);
+
+    const downloadUrl = './fkxz?fkx=' + encodeURIComponent(fkxUrl);
+    iframe.src = downloadUrl;
+
+    showMessage('下载已开始，请查看浏览器下载栏');
+    btn.disabled = false;
+
+    setTimeout(() => { if (iframe.parentNode) iframe.remove(); }, 60000);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {

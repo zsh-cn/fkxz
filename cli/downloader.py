@@ -39,7 +39,7 @@ def download_fkx(url, session, enhanced, timeout=120):
 def _report_download_progress(downloaded, chunk_size):
     pct = min(downloaded / chunk_size * 100, 100)
     sys.stdout.write(
-        f"\r    下载中... {format_size(downloaded)}/{format_size(chunk_size)} ({pct:.1f}%)"
+        f"\r    下载中... {format_size(downloaded)}/{format_size(chunk_size)} ({pct:.1f}%)" + " " * 20
     )
     sys.stdout.flush()
 
@@ -98,7 +98,7 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
         if not _validate_download_size(downloaded[0], chunk_size, chunk_path):
             return False
 
-        sys.stdout.write(f"\r    下载完成: {format_size(chunk_size)}\n")
+        sys.stdout.write(f"\r    下载完成: {format_size(chunk_size)}" + " " * 20 + "\n")
         sys.stdout.flush()
         return True
     except Exception as e:
@@ -204,7 +204,7 @@ def cmd_download(args):
 
     sys.stdout.write(f"文件名: {fkx_info['filename']}\n")
     sys.stdout.write(f"文件大小: {format_size(total_size)}\n")
-    sys.stdout.write(f"分块数: {num_chunks}\n")
+    sys.stdout.write(f"分片数: {num_chunks}\n")
     sys.stdout.write(f"临时目录: {chunk_dir}\n")
     sys.stdout.write("\n")
     sys.stdout.flush()
@@ -230,6 +230,7 @@ def cmd_download(args):
         print_progress(i + 1, num_chunks,
                        prefix=f"总进度: ",
                        suffix=f"{i+1}/{num_chunks} | {format_size(int(speed))}/s")
+        sys.stdout.write("\n")
     sys.stdout.write("\n")
     sys.stdout.flush()
 
@@ -239,35 +240,13 @@ def cmd_download(args):
         shutil.rmtree(chunk_dir)
         sys.exit(1)
 
-    sys.stdout.write("正在校验下载的分片...\n")
-    sys.stdout.flush()
-    for i in range(num_chunks):
-        chunk_path = downloaded_chunks[i]
-        expected_size = fkx_info['chunks'][i]['size']
-        if not os.path.exists(chunk_path):
-            sys.stdout.write(f"错误: 分片 {i+1} 文件缺失 - {chunk_path}\n")
-            sys.stdout.flush()
-            shutil.rmtree(chunk_dir)
-            sys.exit(1)
-        actual_size = os.path.getsize(chunk_path)
-        if actual_size != expected_size:
-            sys.stdout.write(
-                f"错误: 分片 {i+1} 大小不匹配 - "
-                f"期望 {format_size(expected_size)}, 实际 {format_size(actual_size)}\n"
-            )
-            sys.stdout.flush()
-            shutil.rmtree(chunk_dir)
-            sys.exit(1)
-    sys.stdout.write("  所有分片校验通过\n")
-    sys.stdout.flush()
-
     sys.stdout.write("正在合并文件...\n")
     sys.stdout.flush()
     output_path = os.path.join(output_dir, safe_filename)
     output_path = os.path.normpath(output_path)
 
     from cli.merger import merge_chunks
-    merge_chunks(downloaded_chunks, output_path, num_chunks)
+    merge_chunks(downloaded_chunks, output_path, num_chunks, total_size)
 
     if 'sha256' in fkx_info:
         sys.stdout.write("正在校验SHA-256...\n")

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import requests
 import hashlib
@@ -99,7 +99,14 @@ class FileDownloaderApp:
         menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
         menu.add_separator()
         menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
-        entry_widget.bind('<Button-3>', lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+        def _show_menu(event):
+            if entry_widget.focus_get() != entry_widget:
+                entry_widget.focus_set()
+                entry_widget.select_range(0, tk.END)
+            menu.tk_popup(event.x_root, event.y_root)
+
+        entry_widget.bind('<Button-3>', _show_menu)
     
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="20")
@@ -145,7 +152,7 @@ class FileDownloaderApp:
         self.filesize_label = ttk.Label(control_frame, text="-", foreground="#666666")
         self.filesize_label.grid(row=1, column=1, sticky=tk.W, padx=10, pady=5)
         
-        ttk.Label(control_frame, text="分块数:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(control_frame, text="分片数:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.chunks_label = ttk.Label(control_frame, text="-", foreground="#666666")
         self.chunks_label.grid(row=2, column=1, sticky=tk.W, padx=10, pady=5)
         
@@ -195,11 +202,14 @@ class FileDownloaderApp:
                     self.status_label.config(text="状态: 就绪 (远程模式)", foreground="#006600")
                     self.is_local = False
                     self.start_button.config(state=tk.DISABLED, text="开始下载")
+                    if HAS_CURL_CFFI:
+                        self.enhanced_checkbox.config(state=tk.NORMAL)
                     self.schedule_parse()
             elif path.endswith('.fkx'):
                 self.status_label.config(text="状态: 就绪 (本地模式)", foreground="#006600")
                 self.is_local = True
                 self.start_button.config(state=tk.DISABLED, text="开始合并")
+                self.enhanced_checkbox.config(state=tk.DISABLED)
                 self.schedule_parse()
             else:
                 self.status_label.config(text="状态: 输入必须是.fkx文件", foreground="#cc0000")
@@ -327,7 +337,12 @@ class FileDownloaderApp:
         self.output_entry.config(state=tk.NORMAL)
         self.browse_fkx_btn.config(state=tk.NORMAL)
         self.browse_output_btn.config(state=tk.NORMAL)
-        self.enhanced_checkbox.config(state=tk.NORMAL)
+        if self.is_local:
+            self.enhanced_checkbox.config(state=tk.DISABLED)
+        elif HAS_CURL_CFFI:
+            self.enhanced_checkbox.config(state=tk.NORMAL)
+        else:
+            self.enhanced_checkbox.config(state=tk.DISABLED)
         if self.file_info and 'chunks' in self.file_info:
             button_text = "开始合并" if self.is_local else "开始下载"
             self.start_button.config(state=tk.NORMAL, text=button_text)
@@ -562,7 +577,7 @@ class FileDownloaderApp:
             self.root.update_idletasks()
         self.root.after(0, update)
     
-    def chunk_progress_callback(self, downloaded, chunk_size):
+    def chunk_progress_callback(self, downloaded, chunk_size, chunk_len=0):
         total_downloaded = self._downloaded_before_chunk + downloaded
         
         elapsed = time.time() - self.download_start_time
@@ -716,6 +731,7 @@ class FileDownloaderApp:
         output_path = os.path.normpath(output_path)
         
         self.update_status("状态: 正在合并文件...")
+        merged_bytes = [0]
         with open(output_path, 'wb') as f:
             for i in range(num_chunks):
                 if self.is_cancelled:
@@ -727,6 +743,16 @@ class FileDownloaderApp:
                 with open(chunk_path, 'rb') as chunk_file:
                     for chunk in iter(lambda: chunk_file.read(65536), b""):
                         f.write(chunk)
+                        merged_bytes[0] += len(chunk)
+                        if self.total_download_size > 0:
+                            def update_progress():
+                                percentage = merged_bytes[0] / self.total_download_size
+                                self.progress_chunk['value'] = percentage * 100
+                                self.download_detail_label.config(
+                                    text=f"合并中: {self.format_size(merged_bytes[0])} / {self.format_size(self.total_download_size)}"
+                                )
+                                self.root.update_idletasks()
+                            self.root.after(0, update_progress)
         return output_path
 
     def _verify_sha256(self, output_path, expected_sha256):

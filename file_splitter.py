@@ -44,7 +44,14 @@ class FileSplitterApp:
         menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
         menu.add_separator()
         menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
-        entry_widget.bind('<Button-3>', lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+        def _show_menu(event):
+            if entry_widget.focus_get() != entry_widget:
+                entry_widget.focus_set()
+                entry_widget.select_range(0, tk.END)
+            menu.tk_popup(event.x_root, event.y_root)
+
+        entry_widget.bind('<Button-3>', _show_menu)
     
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="20")
@@ -121,7 +128,7 @@ class FileSplitterApp:
         if chunk_size_mb is not None:
             chunk_size = chunk_size_mb * 1024 * 1024
             num_chunks = (file_size + chunk_size - 1) // chunk_size
-            size_text += f" | 分块数: {num_chunks}"
+            size_text += f" | 分片数: {num_chunks}"
         
         self.file_info_label.config(text=size_text)
     
@@ -154,18 +161,13 @@ class FileSplitterApp:
         else:
             return f"{size / (1024 * 1024 * 1024):.2f} GB"
     
-    def calculate_sha256(self, file_path, progress_callback=None, cancel_check=None):
+    def calculate_sha256(self, file_path, cancel_check=None):
         sha256_hash = hashlib.sha256()
-        file_size = os.path.getsize(file_path)
-        processed = 0
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 if cancel_check and cancel_check():
                     return None
                 sha256_hash.update(chunk)
-                processed += len(chunk)
-                if progress_callback:
-                    progress_callback(processed, file_size)
         return sha256_hash.hexdigest()
     
     def update_status(self, text):
@@ -240,19 +242,15 @@ class FileSplitterApp:
     def _finalize_split(self, file_name, file_size, num_chunks, fkx_content):
         self.update_status("状态: 正在计算文件SHA-256...")
         
-        def sha256_progress(processed, total):
-            pct = processed / total if total > 0 else 0
-            self.progress['value'] = num_chunks + pct
-            self.update_status(f"状态: 正在计算SHA-256... {self.format_size(processed)}/{self.format_size(total)}")
-        
         file_sha256 = self.calculate_sha256(
             self.file_path,
-            progress_callback=sha256_progress,
             cancel_check=lambda: self.is_cancelled
         )
         
         if self.is_cancelled or file_sha256 is None:
             self.update_status("状态: 拆分已取消")
+            self.progress['value'] = 0
+            self.reset_ui()
             return
         
         fkx_content.append(f"sha256={file_sha256}")
@@ -291,6 +289,7 @@ class FileSplitterApp:
         
         chunk_results = self._do_split_chunks(file_name, num_chunks)
         if chunk_results is None:
+            self.progress['value'] = 0
             self.reset_ui()
             return
         

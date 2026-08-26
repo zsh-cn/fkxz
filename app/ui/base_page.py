@@ -11,7 +11,7 @@ class BasePage(ttk.Frame):
     _start_btn: tk.Canvas
     _status_label: tk.Label
 
-    def _build_field(self, parent, label, attr, browse_cb, row, col):
+    def _build_field(self, parent, label, attr, browse_cb, row, col, show_browse=True):
         tk.Label(parent, text=label, font=('Microsoft YaHei UI', 10),
                  fg=FG_PRIMARY, bg=BG_CARD, anchor='w').grid(row=row, column=col, sticky='w', pady=(0, 6))
         entry_row = tk.Frame(parent, bg=BG_CARD)
@@ -24,8 +24,9 @@ class BasePage(ttk.Frame):
         setup_context_menu(entry)
         setattr(self, attr, entry)
 
-        RoundedButton(entry_row, text='浏览', command=browse_cb, width=80, height=34,
-                      bg='#F3F4F6', fg=FG_PRIMARY).grid(row=0, column=1)
+        if show_browse:
+            RoundedButton(entry_row, text='浏览', command=browse_cb, width=80, height=34,
+                          bg='#F3F4F6', fg=FG_PRIMARY).grid(row=0, column=1)
 
     def _progress_row(self, parent, label, attr, row):
         tk.Label(parent, text=label, font=('Microsoft YaHei UI', 10),

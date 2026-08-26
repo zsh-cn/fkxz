@@ -29,7 +29,7 @@ class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("文件分块下载")
-        self.root.geometry("1160x700")
+        self.root.geometry("1100x800")
         self.root.minsize(960, 600)
         self.root.configure(bg=BG_PAGE)
 

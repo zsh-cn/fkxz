@@ -1,5 +1,8 @@
+import os
 import sys
 import argparse
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cli.splitter import cmd_split
 from cli.merger import cmd_merge
@@ -22,13 +25,13 @@ def main():
 
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
-    parser_split = subparsers.add_parser('split', help='拆分文件为分块')
+    parser_split = subparsers.add_parser('split', help='拆分文件为分片')
     parser_split.add_argument('-i', '--input', required=True, help='要拆分的文件路径')
     parser_split.add_argument('-o', '--output', required=True, help='输出目录')
     parser_split.add_argument('-c', '--chunk-size', type=int, default=10,
                               help='每个分片大小(MB), 范围1-1024, 默认10')
 
-    parser_merge = subparsers.add_parser('merge', help='本地合并分块文件')
+    parser_merge = subparsers.add_parser('merge', help='本地合并分片文件')
     parser_merge.add_argument('-i', '--input', required=True, help='.fkx信息文件路径')
     parser_merge.add_argument('-o', '--output', required=True, help='输出目录')
 
