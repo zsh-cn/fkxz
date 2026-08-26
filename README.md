@@ -626,4 +626,4 @@ pyinstaller --onefile --windowed --name file_downloader --icon icon/wjxz.ico --a
 
 ## 许可证
 
-本项目采用 [GNU General Public License v3.0](LICENSE) 许可证。
+本项目采用 [Mozilla Public License Version 2.0 (MPL-2.0)](LICENSE) 许可证。

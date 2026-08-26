@@ -14,13 +14,13 @@
     <div class="container">
         <a class="logo" href="index.html">
             <img src="favicon.png" alt="fkxz">
-            fkxz
+            文件分块下载
         </a>
         <nav class="nav-links">
             <a href="index.html" class="active">首页</a>
             <a href="download.html">下载</a>
             <a href="wjxz/experience.html">体验</a>
-            <a href="dev.html">开发文档</a>
+            <a href="dev.html">文档</a>
             <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                 GitHub
@@ -64,15 +64,15 @@
             </div>
             <div class="feature-card">
                 <h3>远程下载</h3>
-                <p>从远程服务器下载分片，自动合并还原，支持 SHA-256 完整性校验</p>
+                <p>从远程服务器下载 <code>.fkx</code> 信息文件及所有 <code>.fk</code> 分片，自动合并还原，支持 SHA-256 完整性校验</p>
             </div>
             <div class="feature-card">
                 <h3>增强模式</h3>
-                <p>集成 curl_cffi 浏览器指纹模拟，伪装 Chrome 请求头，绕过反爬虫保护</p>
+                <p>集成 <code>curl_cffi</code> 浏览器指纹模拟，可伪装 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</p>
             </div>
             <div class="feature-card">
                 <h3>多端支持</h3>
-                <p>CLI 命令行、新版 GUI、旧版独立 GUI、网页端工具，多种使用方式</p>
+                <p>提供命令行工具（CLI）、新版 GUI 应用（集成侧边栏）、旧版独立 GUI 工具、网页端工具等多种使用方式</p>
             </div>
             <div class="feature-card">
                 <h3>跨平台</h3>
@@ -146,7 +146,7 @@
 <section class="section">
     <div class="container">
         <h2 class="section-title">快速开始</h2>
-        <p class="section-subtitle">三种方式，任选其一</p>
+        <p class="section-subtitle">pip 安装、源码运行或直接下载，三种方式任选其一</p>
 
         <div class="tab-container">
             <div class="tabs">
@@ -202,43 +202,20 @@
             </div>
 
             <div class="tab-panel" data-tab="exe">
-                <p style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">前往 <a href="download.html" style="color:var(--primary);">下载页面</a> 获取最新版本的已打包 <code>.exe</code> 程序，下载后直接双击运行即可，无需安装 Python 环境。</p>
-                <div class="download-grid">
-                    <div class="download-card">
-                        <div class="download-icon"><img src="icons/wjfkxz-cli.ico" alt="cli"></div>
-                        <h3>命令行工具</h3>
-                        <span class="file-name">cli.exe</span>
-                        <p class="card-desc">split / merge / download 命令</p>
-                        <a class="download-btn" href="download.html">查看详情</a>
-                    </div>
-                    <div class="download-card">
-                        <div class="download-icon"><img src="icons/wjfkxz.ico" alt="main"></div>
-                        <h3>新版 GUI</h3>
-                        <span class="file-name">main.exe</span>
-                        <p class="card-desc">集成侧边栏，三大功能合一</p>
-                        <a class="download-btn" href="download.html">查看详情</a>
-                    </div>
-                    <div class="download-card">
-                        <div class="download-icon"><img src="icons/wjfk.ico" alt="splitter"></div>
-                        <h3>文件拆分器</h3>
-                        <span class="file-name">file_splitter.exe</span>
-                        <p class="card-desc">独立 GUI，专注于文件拆分</p>
-                        <a class="download-btn" href="download.html">查看详情</a>
-                    </div>
-                    <div class="download-card">
-                        <div class="download-icon"><img src="icons/wjxz.ico" alt="downloader"></div>
-                        <h3>文件下载器</h3>
-                        <span class="file-name">file_downloader.exe</span>
-                        <p class="card-desc">本地合并 + 远程下载 + 增强模式</p>
-                        <a class="download-btn" href="download.html">查看详情</a>
-                    </div>
+                <div class="web-experience-grid">
+                    <a href="download.html" class="web-exp-card">
+                        <div class="web-exp-icon"></div>
+                        <h3>直接下载 exe</h3>
+                        <p>无需安装 Python 环境，下载已打包程序后直接运行。支持 Windows 系统，开箱即用。</p>
+                        <span class="web-exp-link">前往下载页 →</span>
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<section class="section section-alt">
+<section class="section">
     <div class="container">
         <h2 class="section-title">Web 在线体验</h2>
         <p class="section-subtitle">无需安装任何软件，浏览器直接使用</p>
@@ -255,16 +232,64 @@
 
 <section class="section">
     <div class="container">
-        <h2 class="section-title">开发文档</h2>
+        <h2 class="section-title">文档</h2>
         <p class="section-subtitle">了解项目结构、文件格式、环境要求及自行打包指南</p>
         <div class="web-experience-grid">
             <a href="dev.html" class="web-exp-card">
                 <div class="web-exp-icon"></div>
-                <h3>查看开发文档</h3>
+                <h3>查看文档</h3>
                 <p>包含项目结构、文件格式说明、环境要求、网页端工具详情和 PyInstaller 打包指南，帮助开发者快速上手。</p>
                 <span class="web-exp-link">查看详情 →</span>
             </a>
         </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">问题反馈</h2>
+        <p class="section-subtitle">如遇到问题或有功能建议，请通过以下方式反馈</p>
+        <div class="web-experience-grid">
+            <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener" class="web-exp-card">
+                <div class="web-exp-icon"></div>
+                <h3>GitHub Issues</h3>
+                <p style="margin-bottom:4px;">提交 Issue 时请尽量提供以下信息：</p>
+                <ul style="list-style:none;padding:0;font-size:13px;color:var(--text-secondary);line-height:2;">
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / main.exe / file_splitter.exe / file_downloader.exe 或源码运行）</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统版本</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>问题的详细描述和复现步骤</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>相关的错误信息或截图</li>
+                </ul>
+                <span class="web-exp-link">提交 Issue →</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">免责声明</h2>
+        <p class="section-subtitle">使用前请仔细阅读</p>
+        <div class="usage-detail">
+            <p style="font-size:14px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">本工具仅供学习、研究和个人合法用途。使用者应遵守所在国家/地区的法律法规，不得将本工具用于任何违法或侵权活动。</p>
+            <ul>
+                <li>使用本工具下载文件时，请确保您拥有合法的下载权限，遵守目标网站的服务条款和 robots.txt 协议</li>
+                <li>增强模式（浏览器指纹模拟）功能仅用于研究和学习浏览器指纹技术，请勿用于绕过网站的安全防护措施进行未授权访问</li>
+                <li>本项目开发者不对使用者的任何不当行为承担责任，使用者需自行承担使用本工具所产生的一切后果和风险</li>
+                <li>本工具不提供任何形式的担保，使用过程中可能产生的数据丢失、文件损坏等问题，开发者不承担任何责任</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container" style="text-align:center;">
+        <h2 class="section-title">许可证</h2>
+        <p class="section-subtitle">本项目采用 Mozilla Public License Version 2.0 (MPL-2.0) 许可证</p>
+        <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener" class="btn btn-outline" style="margin-top:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            查看完整许可证
+        </a>
     </div>
 </section>
 
@@ -276,7 +301,7 @@
             <a href="index.html">首页</a>
             <a href="download.html">下载</a>
             <a href="wjxz/experience.html">体验</a>
-            <a href="dev.html">开发文档</a>
+            <a href="dev.html">文档</a>
             <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">GitHub 仓库</a>
             <a href="https://github.com/zsh-cn/fkxz/releases/latest" target="_blank" rel="noopener">Releases</a>
             <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener">问题反馈</a>

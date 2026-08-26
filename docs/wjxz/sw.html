@@ -122,7 +122,7 @@ function startDownload() {
 window.addEventListener('DOMContentLoaded', async () => {
     if ('serviceWorker' in navigator) {
         try {
-        const reg = await navigator.serviceWorker.register('./sw.js', { scope: '/fkxz/wjxz/' });
+            const reg = await navigator.serviceWorker.register('./sw.js', { scope: '/' });
             await navigator.serviceWorker.ready;
             console.log('SW 已注册:', reg.scope);
         } catch (e) {

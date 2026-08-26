@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>开发文档</title>
-<meta name="description" content="fkxz 开发文档，包含环境要求、项目结构、文件格式说明、网页端工具和打包说明">
+<title>文档</title>
+<meta name="description" content="fkxz 文档，包含使用方式、环境要求、项目结构、文件格式说明、网页端工具和打包说明">
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -14,13 +14,13 @@
     <div class="container">
         <a class="logo" href="index.html">
             <img src="favicon.png" alt="fkxz">
-            fkxz
+            文件分块下载
         </a>
         <nav class="nav-links">
             <a href="index.html">首页</a>
             <a href="download.html">下载</a>
             <a href="wjxz/experience.html">体验</a>
-            <a href="dev.html" class="active">开发文档</a>
+            <a href="dev.html" class="active">文档</a>
             <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                 GitHub
@@ -33,8 +33,129 @@
 
 <section class="page-header">
     <div class="container">
-        <h1>开发文档</h1>
+        <h1>文档</h1>
         <p style="color:var(--text-secondary);margin-top:8px;">了解项目结构、文件格式、环境要求及自行打包指南</p>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">使用方式</h2>
+        <p class="section-subtitle">多种使用方式，满足不同场景需求</p>
+
+        <div class="usage-detail">
+            <h3>命令行工具 (CLI)</h3>
+            <p class="detail-subtitle">安装后可使用 <code>fkxz</code> 命令，也可以直接运行源码</p>
+
+            <h4>拆分文件</h4>
+            <div class="code-block">
+<pre><span class="comment"># 安装后使用 fkxz 命令</span>
+<span class="cmd">fkxz</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
+
+<span class="comment"># 或直接运行源码</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10</pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
+            <ul>
+                <li><code>-i, --input</code>：要拆分的文件路径（必填）</li>
+                <li><code>-o, --output</code>：输出目录（必填）</li>
+                <li><code>-c, --chunk-size</code>：分片大小（MB），范围 1-1024，默认 10</li>
+            </ul>
+
+            <h4>本地合并</h4>
+            <div class="code-block">
+<pre><span class="comment"># 安装后使用 fkxz 命令</span>
+<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+
+<span class="comment"># 或直接运行源码</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span></pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
+            <ul>
+                <li><code>-i, --input</code>：<code>.fkx</code> 信息文件路径（必填）</li>
+                <li><code>-o, --output</code>：输出目录（必填）</li>
+            </ul>
+
+            <h4>远程下载</h4>
+            <div class="code-block">
+<pre><span class="comment"># 安装后使用 fkxz 命令</span>
+<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
+<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300
+
+<span class="comment"># 或直接运行源码</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300</pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
+            <ul>
+                <li><code>-u, --url</code>：<code>.fkx</code> 信息文件的 URL（必填）</li>
+                <li><code>-o, --output</code>：输出目录（必填）</li>
+                <li><code>-e, --enhanced</code>：启用增强模式（可选，需安装 curl_cffi）</li>
+                <li><code>-t, --timeout</code>：请求超时时间（秒），默认 120（可选）</li>
+            </ul>
+        </div>
+
+        <div class="usage-detail">
+            <h3>新版 GUI 应用</h3>
+            <div class="code-block">
+<pre><span class="cmd">python</span> <span class="path">app/main.py</span></pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:12px;">启动后通过左侧导航栏切换功能：</p>
+            <ul>
+                <li><strong>文件分块</strong>：选择文件、输出目录和分片大小，点击"开始拆分"</li>
+                <li><strong>本地合并</strong>：选择 <code>.fkx</code> 信息文件、输出目录，点击"开始合并"</li>
+                <li><strong>远程下载</strong>：输入 <code>.fkx</code> 文件 URL、选择输出目录，可选启用增强模式，点击"开始下载"</li>
+            </ul>
+        </div>
+
+        <div class="usage-detail">
+            <h3>旧版 GUI 工具</h3>
+
+            <h4>拆分文件</h4>
+            <div class="code-block">
+<pre><span class="cmd">python</span> <span class="path">file_splitter.py</span></pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">在 GUI 中选择要拆分的文件、输出目录和分片大小，点击"开始拆分"。</p>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:4px;">拆分完成后可将 <code>.fk</code> 分片和 <code>.fkx</code> 文件上传到服务器，保持相同目录结构，使用 <code>.fkx</code> 文件信息 URL 以供分享、下载。</p>
+
+            <h4>合并文件（本地/远程）</h4>
+            <div class="code-block">
+<pre><span class="cmd">python</span> <span class="path">file_downloader.py</span></pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">在输入框中填入 <code>.fkx</code> 文件的本地路径或完整 URL，选择输出目录。界面默认勾选<strong>增强模式</strong>（使用 curl_cffi 浏览器指纹模拟以绕过反爬虫），可根据需要取消勾选切换为标准模式。点击"开始合并"（本地）或"开始下载"（远程）。</p>
+        </div>
+
+        <div class="usage-detail">
+            <h3>网页端方式</h3>
+
+            <h4>方式一：使用 Cloudflare Workers</h4>
+            <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
+                <li>部署 <code>web/worker.js</code> 到 Cloudflare Workers</li>
+                <li>访问 <code>https://your-worker.workers.dev/?fkx=https://example.com/file.fkx</code></li>
+            </ol>
+
+            <h4>方式二：使用网页端下载器</h4>
+            <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
+                <li>将 <code>web/index.html</code> 部署到任意静态文件服务器</li>
+                <li>通过 URL 参数提供 <code>.fkx</code> 文件地址：<br><code>https://your-domain.com/index.html?fkx=https://example.com/file.fkx</code></li>
+            </ol>
+            <ul>
+                <li>使用时应注意浏览器跨域限制</li>
+            </ul>
+
+            <h4>方式三：使用 Service Worker 下载器</h4>
+            <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
+                <li>将 <code>web/sw.html</code> 和 <code>web/sw.js</code> 部署到同一目录下的静态文件服务器</li>
+                <li>通过 URL 参数提供 <code>.fkx</code> 文件地址：<br><code>https://your-domain.com/sw.html?fkx=https://example.com/file.fkx</code></li>
+                <li>页面自动解析文件信息，点击"下载"按钮即可触发 SW 流式合并下载</li>
+            </ol>
+            <ul>
+                <li>要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）</li>
+                <li><code>sw.js</code> 必须与 <code>sw.html</code> 同源部署</li>
+            </ul>
+        </div>
     </div>
 </section>
 
@@ -81,6 +202,31 @@
             </table>
         </div>
         <p style="font-size:13px;color:var(--text-muted);margin-top:8px;">Linux 系统使用 GUI 需额外安装 <code>python3-tk</code>：<code>apt install python3-tk</code></p>
+
+        <h3 style="font-size:18px;font-weight:600;margin:24px 0 12px;">安装依赖</h3>
+        <div class="code-block">
+<pre><span class="comment"># 使用 pyproject.toml（推荐）</span>
+<span class="cmd">pip install</span> <span class="path">.</span>              <span class="comment"># 基础安装</span>
+<span class="cmd">pip install</span> <span class="path">".[enhanced]"</span>  <span class="comment"># 含增强模式（curl_cffi）</span>
+
+<span class="comment"># 或使用 requirements.txt（传统方式）</span>
+<span class="cmd">pip install -r</span> <span class="path">requirements.txt</span></pre>
+        </div>
+        <ul>
+            <li><code>requests</code>：HTTP 请求库（必需）</li>
+            <li><code>curl_cffi</code>：浏览器指纹模拟库（可选，用于增强模式绕过反爬虫）</li>
+        </ul>
+
+        <div class="table-wrap" style="margin-top:24px;">
+            <table>
+                <thead><tr><th>其他组件</th><th>要求</th></tr></thead>
+                <tbody>
+                    <tr><td>Cloudflare Workers（可选）</td><td>Cloudflare Workers 账户</td></tr>
+                    <tr><td>网页端</td><td>现代浏览器（推荐 Chrome 90+、Firefox 89+）</td></tr>
+                    <tr><td>Service Worker 下载器</td><td>浏览器支持 Service Worker API（Chrome 45+、Firefox 44+）</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </section>
 
@@ -91,39 +237,188 @@
         <div class="code-block">
 <pre><span class="comment">fkxz/</span>
 ├── <span class="cmd">cli/</span>                           <span class="comment"># 命令行工具 (CLI)</span>
+│   ├── __init__.py
 │   ├── main.py                    <span class="comment"># CLI 入口，argparse 参数解析</span>
-│   ├── utils.py                   <span class="comment"># 公共工具函数</span>
+│   ├── utils.py                   <span class="comment"># 公共工具函数（格式化、校验、解析）</span>
 │   ├── splitter.py                <span class="comment"># split 命令实现</span>
 │   ├── merger.py                  <span class="comment"># merge 命令实现</span>
 │   └── downloader.py              <span class="comment"># download 命令实现</span>
 │
-├── <span class="cmd">app/</span>                           <span class="comment"># 新版 GUI 应用 (Tkinter, 侧边栏导航)</span>
-│   ├── main.py                    <span class="comment"># GUI 入口</span>
+├── <span class="cmd">app/</span>                           <span class="comment"># 新版 GUI 应用 (Tkinter, 带侧边栏导航)</span>
+│   ├── main.py                    <span class="comment"># GUI 入口，集成三大功能页面</span>
 │   ├── theme.py                   <span class="comment"># 主题配色常量</span>
 │   ├── <span class="cmd">core/</span>                      <span class="comment"># 核心业务逻辑</span>
+│   │   ├── __init__.py
+│   │   ├── base_worker.py         <span class="comment"># Worker 基类（线程管理）</span>
+│   │   ├── splitter.py            <span class="comment"># 文件拆分核心逻辑</span>
+│   │   ├── downloader.py          <span class="comment"># 远程下载核心逻辑</span>
+│   │   └── merger.py              <span class="comment"># 本地合并核心逻辑</span>
 │   ├── <span class="cmd">ui/</span>                        <span class="comment"># 图形界面组件</span>
+│   │   ├── __init__.py
+│   │   ├── base_page.py           <span class="comment"># 页面基类（通用 UI 布局）</span>
+│   │   ├── sidebar.py             <span class="comment"># 侧边栏导航</span>
+│   │   ├── splitter_page.py       <span class="comment"># 文件分块页面</span>
+│   │   ├── merger_page.py         <span class="comment"># 本地合并页面</span>
+│   │   └── downloader_page.py     <span class="comment"># 远程下载页面</span>
 │   └── <span class="cmd">utils/</span>                     <span class="comment"># 工具函数</span>
+│       ├── __init__.py
+│       └── helpers.py             <span class="comment"># 文件格式化、校验、FKX 解析、自定义组件</span>
 │
 ├── <span class="cmd">icon/</span>                          <span class="comment"># 图标资源</span>
+│   ├── wjfk.ico                   <span class="comment"># 文件分块图标（.ico）</span>
+│   ├── wjfk.png                   <span class="comment"># 文件分块图标（.png）</span>
+│   ├── wjfkxz.ico                 <span class="comment"># 应用主图标（.ico）</span>
+│   ├── wjfkxz.png                 <span class="comment"># 应用主图标（.png）</span>
+│   ├── wjfkxz-cli.ico             <span class="comment"># CLI 命令行工具图标（.ico）</span>
+│   ├── wjxz.ico                   <span class="comment"># 文件下载图标（.ico）</span>
+│   └── wjxz.png                   <span class="comment"># 文件下载图标（.png）</span>
+│
 ├── <span class="cmd">web/</span>                           <span class="comment"># 网页端工具</span>
+│   ├── favicon.png                <span class="comment"># 网站图标</span>
+│   ├── index.html                 <span class="comment"># 网页端文件下载器</span>
+│   ├── sw.html                    <span class="comment"># Service Worker 下载器页面</span>
+│   ├── sw.js                      <span class="comment"># Service Worker 脚本</span>
+│   └── worker.js                  <span class="comment"># Cloudflare Workers 脚本</span>
+│
 ├── <span class="cmd">docs/</span>                          <span class="comment"># 项目官网 (GitHub Pages)</span>
 │   ├── index.html                 <span class="comment"># 官网主页</span>
 │   ├── download.html              <span class="comment"># 下载页面</span>
-│   ├── dev.html                   <span class="comment"># 开发文档</span>
+│   ├── favicon.png                <span class="comment"># 官网图标</span>
 │   ├── <span class="cmd">css/</span>                       <span class="comment"># 样式文件</span>
+│   │   └── style.css
 │   ├── <span class="cmd">js/</span>                        <span class="comment"># 公共脚本</span>
-│   ├── <span class="cmd">icons/</span>                     <span class="comment"># 官网图标</span>
+│   │   └── main.js
+│   ├── <span class="cmd">icons/</span>                     <span class="comment"># 程序图标</span>
+│   │   ├── wjfk.ico
+│   │   ├── wjfkxz.ico
+│   │   ├── wjfkxz-cli.ico
+│   │   └── wjxz.ico
 │   └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线体验工具</span>
+│       ├── index.html
+│       ├── sw.html
+│       ├── sw.js
+│       └── favicon.png
+│
 ├── file_splitter.py               <span class="comment"># 旧版独立拆分器 (GUI)</span>
-├── file_downloader.py             <span class="comment"># 旧版独立下载/合并器 (GUI)</span>
+├── file_downloader.py             <span class="comment"># 旧版独立下载/合并器 (GUI, 支持增强模式)</span>
 ├── pyproject.toml                 <span class="comment"># 项目元数据与构建配置</span>
-├── requirements.txt               <span class="comment"># Python 依赖</span>
-└── LICENSE                        <span class="comment"># MPL 2.0 许可证</span></pre>
+├── requirements.txt               <span class="comment"># Python 依赖（兼容传统 pip install -r）</span>
+├── LICENSE                        <span class="comment"># MPL 2.0 许可证</span>
+└── .gitignore</pre>
         </div>
     </div>
 </section>
 
 <section class="section">
+    <div class="container">
+        <h2 class="section-title">组件说明</h2>
+        <p class="section-subtitle">各核心组件的功能与特性</p>
+
+        <div class="usage-detail">
+            <h3>命令行工具 — cli/main.py</h3>
+            <p class="detail-subtitle">基于 argparse 的统一命令行入口，提供三大命令</p>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>命令</th><th>说明</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>split</code></td><td>将大文件拆分为 .fk 分片和 .fkx 信息文件</td></tr>
+                        <tr><td><code>merge</code></td><td>读取本地 .fkx 和 .fk 文件合并还原</td></tr>
+                        <tr><td><code>download</code></td><td>从远程 URL 下载 .fkx 和 .fk 分片后合并</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <ul>
+                <li>支持 SHA-256 完整性校验</li>
+                <li>支持 --enhanced 增强模式（curl_cffi 浏览器指纹模拟）</li>
+                <li>支持 --timeout 自定义请求超时时间（默认 120 秒）</li>
+                <li>终端实时进度条显示</li>
+                <li>下载完成后自动清理临时文件</li>
+            </ul>
+        </div>
+
+        <div class="usage-detail">
+            <h3>新版 GUI 应用 — app/main.py</h3>
+            <p class="detail-subtitle">Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体</p>
+            <ul>
+                <li><strong>文件分块</strong>：选择文件 → 设置分片大小 → 一键拆分，生成 .fk 分片和 .fkx 信息文件</li>
+                <li><strong>本地合并</strong>：选择 .fkx 信息文件 → 自动读取同目录分片 → 合并还原</li>
+                <li><strong>远程下载</strong>：输入 .fkx 文件 URL → 可选增强模式 → 下载分片并合并</li>
+            </ul>
+            <p style="margin-top:12px;font-weight:600;">特性：</p>
+            <ul>
+                <li>侧边栏导航，三页无缝切换</li>
+                <li>自定义圆角进度条和按钮组件，现代化视觉风格</li>
+                <li>HiDPI 高 DPI 自适应（Windows）</li>
+                <li>多线程异步处理，界面不阻塞</li>
+                <li>实时分块进度 + 总进度 + 下载速度显示</li>
+                <li>远程模式支持 curl_cffi 浏览器指纹模拟（绕过反爬虫）</li>
+                <li>文件信息预览（文件名、大小、分片数）</li>
+                <li>支持取消操作</li>
+                <li>右键上下文菜单（剪切/复制/粘贴/全选）</li>
+            </ul>
+        </div>
+
+        <div class="usage-detail">
+            <h3>旧版独立 GUI 工具</h3>
+            <div style="margin-bottom:16px;">
+                <h4>file_splitter.py — 文件拆分器</h4>
+                <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，将大文件拆分为多个 .fk 分片，并生成 .fkx 信息文件。</p>
+                <ul>
+                    <li>支持自定义分片大小（1-1024 MB）</li>
+                    <li>每个分片及原始文件均计算 SHA-256 校验值</li>
+                    <li>支持取消拆分操作</li>
+                </ul>
+            </div>
+            <div>
+                <h4>file_downloader.py — 文件下载/合并器</h4>
+                <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，读取 .fkx 信息文件，获取所有分片并合并还原。</p>
+                <ul>
+                    <li><strong>本地模式</strong>：从本地目录读取 .fkx 和 .fk 文件直接合并</li>
+                    <li><strong>远程模式</strong>：从 URL 下载 .fkx 文件，逐个下载 .fk 分片后合并</li>
+                    <li>实时进度显示（分块进度 / 总进度 / 下载速度）</li>
+                    <li>SHA-256 完整性校验</li>
+                    <li>自动清理临时文件</li>
+                    <li><strong>增强模式</strong>（默认启用）：界面提供复选框，勾选后使用 curl_cffi 模拟 Chrome 浏览器指纹，自动伪装浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-* 等），支持 Referer 头信息传递，可绕过反爬虫保护（如 Cloudflare 验证、EdgeOne Pages、防盗链等）。取消勾选则使用标准请求模式</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="usage-detail">
+            <h3>网页端工具 — web/</h3>
+            <div style="margin-bottom:16px;">
+                <h4>worker.js — Cloudflare Workers 后端</h4>
+                <p style="font-size:14px;color:var(--text-secondary);">部署在 Cloudflare Workers 上的 HTTP 服务，接收 ?fkx= 参数，流式合并分片并提供直链下载。</p>
+                <ul>
+                    <li>自动解析 .fkx 文件获取分片列表</li>
+                    <li>使用 FixedLengthStream 流式合并</li>
+                    <li>自动设置 Content-Disposition 触发浏览器下载</li>
+                    <li>支持跨域（CORS）</li>
+                </ul>
+            </div>
+            <div style="margin-bottom:16px;">
+                <h4>index.html — 网页端文件下载器</h4>
+                <p style="font-size:14px;color:var(--text-secondary);">轻量级的浏览器端文件下载器，支持通过 URL 参数直接解析 .fkx 文件并下载合并后的完整文件。</p>
+                <ul>
+                    <li>纯前端实现，无需后端支持</li>
+                    <li>支持流式下载和实时进度显示</li>
+                    <li>自动检测并使用 File System Access API（现代浏览器）</li>
+                    <li>支持回退到传统下载方式</li>
+                </ul>
+            </div>
+            <div>
+                <h4>sw.js + sw.html — Service Worker 下载器</h4>
+                <p style="font-size:14px;color:var(--text-secondary);">基于 Service Worker 的浏览器端文件下载器，通过 SW 拦截请求并在浏览器端流式合并分片后返回完整文件。</p>
+                <ul>
+                    <li><strong>sw.js</strong>：Service Worker 脚本，拦截 /fkxz 路径的请求，解析 .fkx 文件获取分片列表，逐个抓取 .fk 分片并通过 ReadableStream 流式合并，最终以单个文件形式返回给浏览器下载。</li>
+                    <li><strong>sw.html</strong>：配套前端页面，自动注册 Service Worker，解析 .fkx 文件并展示文件信息，点击下载按钮后通过 SW 代理完成流式合并下载。</li>
+                </ul>
+                <p style="font-size:13px;color:var(--text-secondary);margin-top:8px;">相比 index.html，Service Worker 方案的优势在于：无需 File System Access API，兼容性更好；合并过程在 SW 后台线程完成，不阻塞主线程；直接触发浏览器原生下载行为，用户体验更流畅；同样支持跨域资源（通过 SW 代理绕过 CORS 限制）。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
     <div class="container">
         <h2 class="section-title">文件格式说明</h2>
         <p class="section-subtitle">了解 .fkx 和 .fk 文件的格式定义</p>
@@ -160,6 +455,7 @@
                     <li>FixedLengthStream 流式合并</li>
                     <li>自动设置 Content-Disposition 触发浏览器下载</li>
                     <li>支持跨域（CORS）</li>
+                    <li>注：此脚本不适用于大文件</li>
                 </ul>
                 <div class="code-block" style="margin-top:12px;">
 <pre><span class="comment"># 访问格式</span>
@@ -180,6 +476,7 @@
 <pre><span class="comment"># 访问格式</span>
 <span class="path">https://your-domain.com/index.html?fkx=https://example.com/file.fkx</span></pre>
                 </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">使用时应注意浏览器跨域限制</p>
             </div>
 
             <div class="platform-card">
@@ -195,6 +492,7 @@
 <pre><span class="comment"># 访问格式</span>
 <span class="path">https://your-domain.com/sw.html?fkx=https://example.com/file.fkx</span></pre>
                 </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）。sw.js 必须与 sw.html 同源部署。</p>
             </div>
         </div>
     </div>
@@ -282,13 +580,13 @@
             <a href="index.html">首页</a>
             <a href="download.html">下载</a>
             <a href="wjxz/experience.html">体验</a>
-            <a href="dev.html">开发文档</a>
+            <a href="dev.html">文档</a>
             <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">GitHub 仓库</a>
             <a href="https://github.com/zsh-cn/fkxz/releases/latest" target="_blank" rel="noopener">Releases</a>
             <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener">问题反馈</a>
             <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener">MPL-2.0</a>
         </div>
-        <p class="copyright">&copy; 2025 fkxz. All rights reserved.</p>
+        <p class="copyright">&copy; 2025 zhshh. All rights reserved.</p>
     </div>
 </footer>
 
