@@ -61,6 +61,25 @@ fkxz/
 │   ├── sw.js                      # Service Worker 脚本
 │   └── worker.js                  # Cloudflare Workers 脚本
 │
+├── docx/                          # 项目官网 (GitHub Pages)
+│   ├── index.html                 # 官网主页
+│   ├── download.html              # 下载页面
+│   ├── favicon.png                # 官网图标
+│   ├── css/                       # 样式文件
+│   │   └── style.css
+│   ├── js/                        # 公共脚本
+│   │   └── main.js
+│   ├── icons/                     # 程序图标
+│   │   ├── wjfk.ico
+│   │   ├── wjfkxz.ico
+│   │   ├── wjfkxz-cli.ico
+│   │   └── wjxz.ico
+│   └── wjxz/                      # Web 在线体验工具
+│       ├── index.html
+│       ├── sw.html
+│       ├── sw.js
+│       └── favicon.png
+│
 ├── file_splitter.py               # 旧版独立拆分器 (GUI)
 ├── file_downloader.py             # 旧版独立下载/合并器 (GUI, 支持增强模式)
 ├── pyproject.toml                 # 项目元数据与构建配置
@@ -73,7 +92,7 @@ fkxz/
 
 如果您不想安装 Python 环境，可以直接下载已打包好的 Windows 可执行程序（`.exe`），开箱即用。
 
-前往 [Releases 页面](https://github.com/zsh-cn/fkxz/releases) 下载最新版本，提供以下四个独立的可执行程序：
+前往 [Releases 页面](https://github.com/zsh-cn/fkxz/releases) 下载最新版本，或访问 [项目官网](https://zsh-cn.github.io/fkxz/) 查看各版本信息和在线体验。提供以下四个独立的可执行程序：
 
 | 程序 | 文件名 | 说明 |
 |------|--------|------|
