@@ -61,7 +61,7 @@ fkxz/
 │   ├── sw.js                      # Service Worker 脚本
 │   └── worker.js                  # Cloudflare Workers 脚本
 │
-├── docx/                          # 项目官网 (GitHub Pages)
+├── docs/                          # 项目官网 (GitHub Pages)
 │   ├── index.html                 # 官网主页
 │   ├── download.html              # 下载页面
 │   ├── favicon.png                # 官网图标

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线体验 - fkxz 文件分块下载</title>
+<meta name="description" content="在线体验 fkxz 文件下载，支持标准模式和 Service Worker 模式">
+<link rel="icon" href="../favicon.png" type="image/png">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+
+.exp-section {
+    padding: 48px 0;
+}
+
+.exp-title {
+    font-size: 32px;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.exp-subtitle {
+    font-size: 15px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+/* URL Input */
+.url-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+}
+
+.url-box label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.url-input-row {
+    display: flex;
+    gap: 10px;
+}
+
+.url-input-row input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.url-input-row input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.url-input-row input::placeholder {
+    color: var(--text-muted);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.url-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+/* Mode Cards */
+.mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.mode-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    text-decoration: none;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.mode-card:hover {
+    border-color: var(--primary-border);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.mode-card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.mode-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+.mode-card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.mode-card .mode-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 16px;
+    flex: 1;
+}
+
+.mode-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.mode-badge.standard {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.mode-badge.sw {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.mode-tag {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 14px;
+}
+
+.mode-tag span {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.mode-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+    padding: 8px 20px;
+    border-radius: 6px;
+    background: var(--primary-light);
+    transition: background 0.2s;
+}
+
+.mode-card:hover .mode-action {
+    background: #dbeafe;
+}
+
+/* CORS Notice */
+.cors-notice {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+}
+
+.cors-notice h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ea580c;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cors-notice p {
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.7;
+    margin-bottom: 6px;
+}
+
+.cors-notice ul {
+    font-size: 13px;
+    color: #92400e;
+    padding-left: 20px;
+    line-height: 1.8;
+}
+
+.cors-notice code {
+    background: #fed7aa;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.cors-notice a {
+    color: #ea580c;
+    font-weight: 600;
+}
+
+@media (max-width: 600px) {
+    .mode-grid { grid-template-columns: 1fr; }
+    .url-input-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <a class="logo" href="../index.html">
+            <img src="../favicon.png" alt="fkxz">
+            fkxz
+        </a>
+        <nav class="nav-links">
+            <a href="../index.html">首页</a>
+            <a href="../download.html">下载</a>
+            <a href="experience.html" class="active">体验</a>
+            <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <section class="exp-section">
+        <div class="container">
+            <h1 class="exp-title">在线体验</h1>
+            <p class="exp-subtitle">选择一种模式，体验浏览器端文件下载</p>
+
+            <div class="url-box">
+                <label for="fkxUrl">请输入 .fkx 文件地址</label>
+                <div class="url-input-row">
+                    <input type="text" id="fkxUrl" placeholder="https://example.com/files/video.mp4.fkx" autocomplete="off">
+                </div>
+                <p class="url-hint">输入一个 .fkx 信息文件的完整 URL，然后选择下方的下载模式开始体验</p>
+            </div>
+
+            <div class="mode-grid">
+                <a class="mode-card" id="standardMode" href="#" target="_blank" rel="noopener">
+                    <div class="mode-icon"></div>
+                    <span class="mode-badge standard">推荐</span>
+                    <h3>标准模式</h3>
+                    <p class="mode-desc">纯前端实现，支持流式下载和实时进度显示。自动检测 File System Access API，支持取消下载。</p>
+                    <div class="mode-tag">
+                        <span>流式下载</span>
+                        <span>实时进度</span>
+                        <span>取消支持</span>
+                    </div>
+                    <span class="mode-action">开始体验 →</span>
+                </a>
+
+                <a class="mode-card" id="swMode" href="#" target="_blank" rel="noopener">
+                    <div class="mode-icon"></div>
+                    <span class="mode-badge sw">实验性</span>
+                    <h3>Service Worker 模式</h3>
+                    <p class="mode-desc">基于 Service Worker 拦截请求并流式合并分片。兼容性更好，不阻塞主线程，直接触发浏览器原生下载。</p>
+                    <div class="mode-tag">
+                        <span>SW 代理</span>
+                        <span>绕过 CORS</span>
+                        <span>原生下载</span>
+                    </div>
+                    <span class="mode-action">开始体验 →</span>
+                </a>
+            </div>
+
+            <div class="cors-notice">
+                <h3>跨域限制说明</h3>
+                <p>由于浏览器安全策略，两种模式对跨域资源有不同的限制：</p>
+                <ul>
+                    <li><strong>标准模式</strong>：需要目标服务器返回 <code>Access-Control-Allow-Origin</code> 响应头。如果服务器未配置 CORS，将无法获取 .fkx 文件和分片数据。</li>
+                    <li><strong>Service Worker 模式</strong>：通过 SW 代理请求，可以绕过部分 CORS 限制。但 <strong>首次访问</strong> 时 SW 可能尚未激活，可能需要刷新页面后重试。</li>
+                    <li><strong>HTTPS 要求</strong>：Service Worker 模式必须在 HTTPS 环境下使用（localhost 除外）。</li>
+                    <li><strong>解决方案</strong>：如果遇到跨域问题，建议使用 <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">桌面版程序</a> 或部署 <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a> 作为代理。</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <div class="container">
+        <div class="links">
+            <a href="../index.html">首页</a>
+            <a href="../download.html">下载</a>
+            <a href="experience.html">体验</a>
+            <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">GitHub 仓库</a>
+            <a href="https://github.com/zsh-cn/fkxz/releases/latest" target="_blank" rel="noopener">Releases</a>
+            <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener">问题反馈</a>
+            <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a>
+        </div>
+        <p class="copyright">&copy; 2025 fkxz. All rights reserved.</p>
+    </div>
+</footer>
+
+<script>
+(function() {
+    var urlInput = document.getElementById('fkxUrl');
+    var standardMode = document.getElementById('standardMode');
+    var swMode = document.getElementById('swMode');
+
+    function getFkxUrl() {
+        var val = urlInput.value.trim();
+        if (!val) return null;
+        if (!/^https?:\/\//i.test(val)) {
+            val = 'https://' + val;
+        }
+        return val;
+    }
+
+    function updateLinks() {
+        var fkxUrl = getFkxUrl();
+        if (fkxUrl) {
+            standardMode.href = 'index.html?fkx=' + encodeURIComponent(fkxUrl);
+            swMode.href = 'sw.html?fkx=' + encodeURIComponent(fkxUrl);
+            standardMode.classList.remove('disabled');
+            swMode.classList.remove('disabled');
+        } else {
+            standardMode.href = '#';
+            swMode.href = '#';
+            standardMode.classList.add('disabled');
+            swMode.classList.add('disabled');
+        }
+    }
+
+    urlInput.addEventListener('input', updateLinks);
+
+    var saved = sessionStorage.getItem('fkxz_experience_url');
+    if (saved) {
+        urlInput.value = saved;
+    }
+    urlInput.addEventListener('input', function() {
+        sessionStorage.setItem('fkxz_experience_url', urlInput.value);
+    });
+
+    updateLinks();
+})();
+</script>
+
+</body>
+</html>
