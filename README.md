@@ -84,7 +84,7 @@ fkxz/
 ├── file_downloader.py             # 旧版独立下载/合并器 (GUI, 支持增强模式)
 ├── pyproject.toml                 # 项目元数据与构建配置
 ├── requirements.txt               # Python 依赖（兼容传统 pip install -r）
-├── LICENSE                        # GPL v3 许可证
+├── LICENSE                        # MPL 2.0 许可证
 └── .gitignore
 ```
 
@@ -275,7 +275,7 @@ fkxz download -u https://example.com/files/video.mp4.fkx -o ./output --enhanced
 ```bash
 git clone https://github.com/zsh-cn/fkxz.git
 cd fkxz
-python -m venv .venv
+python -m venv .venv        # 创建虚拟环境（可选）
 .venv\Scripts\activate      # Windows
 # source .venv/bin/activate  # Linux / macOS
 pip install -r requirements.txt

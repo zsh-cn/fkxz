@@ -7,7 +7,7 @@ name = "fkxz"
 version = "0.1.0"
 description = "文件分块下载 - 大文件分片传输工具，将大文件拆分为多个小分片，支持本地合并与远程下载合并"
 readme = "README.md"
-license = { text = "GPL-3.0" }
+license = { text = "MPL-2.0" }
 requires-python = ">=3.8"
 authors = [
     { name = "zsh-cn" },
@@ -22,7 +22,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",

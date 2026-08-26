@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>开发文档</title>
+<meta name="description" content="fkxz 开发文档，包含环境要求、项目结构、文件格式说明、网页端工具和打包说明">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <a class="logo" href="index.html">
+            <img src="favicon.png" alt="fkxz">
+            fkxz
+        </a>
+        <nav class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="download.html">下载</a>
+            <a href="wjxz/experience.html">体验</a>
+            <a href="dev.html" class="active">开发文档</a>
+            <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<section class="page-header">
+    <div class="container">
+        <h1>开发文档</h1>
+        <p style="color:var(--text-secondary);margin-top:8px;">了解项目结构、文件格式、环境要求及自行打包指南</p>
+    </div>
+</section>
+
+<section class="section" style="padding-top:24px;">
+    <div class="container">
+        <h2 class="section-title">环境要求</h2>
+        <p class="section-subtitle">各组件运行环境与依赖</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>组件</th>
+                        <th>最低版本</th>
+                        <th>依赖</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>CLI 工具</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code></td>
+                    </tr>
+                    <tr>
+                        <td>新版 GUI</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code>、<code>tkinter</code></td>
+                    </tr>
+                    <tr>
+                        <td>旧版 GUI</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code>、<code>tkinter</code></td>
+                    </tr>
+                    <tr>
+                        <td>增强模式</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code> + <code>curl_cffi</code></td>
+                    </tr>
+                    <tr>
+                        <td>网页端</td>
+                        <td>现代浏览器</td>
+                        <td>Chrome 90+ / Firefox 89+</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:8px;">Linux 系统使用 GUI 需额外安装 <code>python3-tk</code>：<code>apt install python3-tk</code></p>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">项目结构</h2>
+        <p class="section-subtitle">清晰的项目目录组织</p>
+        <div class="code-block">
+<pre><span class="comment">fkxz/</span>
+├── <span class="cmd">cli/</span>                           <span class="comment"># 命令行工具 (CLI)</span>
+│   ├── main.py                    <span class="comment"># CLI 入口，argparse 参数解析</span>
+│   ├── utils.py                   <span class="comment"># 公共工具函数</span>
+│   ├── splitter.py                <span class="comment"># split 命令实现</span>
+│   ├── merger.py                  <span class="comment"># merge 命令实现</span>
+│   └── downloader.py              <span class="comment"># download 命令实现</span>
+│
+├── <span class="cmd">app/</span>                           <span class="comment"># 新版 GUI 应用 (Tkinter, 侧边栏导航)</span>
+│   ├── main.py                    <span class="comment"># GUI 入口</span>
+│   ├── theme.py                   <span class="comment"># 主题配色常量</span>
+│   ├── <span class="cmd">core/</span>                      <span class="comment"># 核心业务逻辑</span>
+│   ├── <span class="cmd">ui/</span>                        <span class="comment"># 图形界面组件</span>
+│   └── <span class="cmd">utils/</span>                     <span class="comment"># 工具函数</span>
+│
+├── <span class="cmd">icon/</span>                          <span class="comment"># 图标资源</span>
+├── <span class="cmd">web/</span>                           <span class="comment"># 网页端工具</span>
+├── <span class="cmd">docs/</span>                          <span class="comment"># 项目官网 (GitHub Pages)</span>
+│   ├── index.html                 <span class="comment"># 官网主页</span>
+│   ├── download.html              <span class="comment"># 下载页面</span>
+│   ├── dev.html                   <span class="comment"># 开发文档</span>
+│   ├── <span class="cmd">css/</span>                       <span class="comment"># 样式文件</span>
+│   ├── <span class="cmd">js/</span>                        <span class="comment"># 公共脚本</span>
+│   ├── <span class="cmd">icons/</span>                     <span class="comment"># 官网图标</span>
+│   └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线体验工具</span>
+├── file_splitter.py               <span class="comment"># 旧版独立拆分器 (GUI)</span>
+├── file_downloader.py             <span class="comment"># 旧版独立下载/合并器 (GUI)</span>
+├── pyproject.toml                 <span class="comment"># 项目元数据与构建配置</span>
+├── requirements.txt               <span class="comment"># Python 依赖</span>
+└── LICENSE                        <span class="comment"># MPL 2.0 许可证</span></pre>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">文件格式说明</h2>
+        <p class="section-subtitle">了解 .fkx 和 .fk 文件的格式定义</p>
+
+        <h3 style="font-size:18px;font-weight:600;margin-bottom:12px;">.fkx 信息文件</h3>
+        <p style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">命名格式：<code>{原文件名}.fkx</code>（如 <code>video.mp4.fkx</code>）</p>
+        <div class="code-block">
+<pre><span class="comment">filename</span>=原始文件名
+<span class="comment">total_size</span>=文件总字节数
+<span class="comment">chunk_size</span>=分片字节数
+<span class="comment">num_chunks</span>=分片总数
+<span class="comment">chunk_0</span>=分片文件名,分片大小
+<span class="comment">chunk_1</span>=分片文件名,分片大小
+...
+<span class="comment">sha256</span>=原始文件SHA-256值</pre>
+        </div>
+
+        <h3 style="font-size:18px;font-weight:600;margin:24px 0 12px;">.fk 分片文件</h3>
+        <p style="font-size:14px;color:var(--text-secondary);">命名格式：<code>{原文件名}-{索引}.fk</code></p>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">网页端工具</h2>
+        <p class="section-subtitle">无需安装，浏览器直接使用</p>
+
+        <div class="platform-grid">
+            <div class="platform-card">
+                <h3>Cloudflare Workers</h3>
+                <p style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">部署 worker.js 到 Cloudflare Workers，流式合并分片并提供直链下载。</p>
+                <ul>
+                    <li>自动解析 .fkx 文件获取分片列表</li>
+                    <li>FixedLengthStream 流式合并</li>
+                    <li>自动设置 Content-Disposition 触发浏览器下载</li>
+                    <li>支持跨域（CORS）</li>
+                </ul>
+                <div class="code-block" style="margin-top:12px;">
+<pre><span class="comment"># 访问格式</span>
+<span class="path">https://your-worker.workers.dev/?fkx=https://example.com/file.fkx</span></pre>
+                </div>
+            </div>
+
+            <div class="platform-card">
+                <h3>网页端下载器</h3>
+                <p style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">纯前端实现的浏览器端文件下载器，支持流式下载和实时进度显示。</p>
+                <ul>
+                    <li>纯前端实现，无需后端支持</li>
+                    <li>支持流式下载和实时进度显示</li>
+                    <li>自动检测并使用 File System Access API</li>
+                    <li>支持回退到传统下载方式</li>
+                </ul>
+                <div class="code-block" style="margin-top:12px;">
+<pre><span class="comment"># 访问格式</span>
+<span class="path">https://your-domain.com/index.html?fkx=https://example.com/file.fkx</span></pre>
+                </div>
+            </div>
+
+            <div class="platform-card">
+                <h3>Service Worker 下载器</h3>
+                <p style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">基于 Service Worker 的浏览器端下载器，SW 拦截请求并流式合并分片。</p>
+                <ul>
+                    <li>无需 File System Access API，兼容性更好</li>
+                    <li>合并过程不阻塞主线程</li>
+                    <li>直接触发浏览器原生下载</li>
+                    <li>通过 SW 代理绕过 CORS 限制</li>
+                </ul>
+                <div class="code-block" style="margin-top:12px;">
+<pre><span class="comment"># 访问格式</span>
+<span class="path">https://your-domain.com/sw.html?fkx=https://example.com/file.fkx</span></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">PyInstaller 打包说明</h2>
+        <p class="section-subtitle">如果你想自行从源码打包为 .exe 可执行程序</p>
+
+        <div class="code-block">
+<pre><span class="comment"># 安装 PyInstaller</span>
+<span class="cmd">pip install</span> <span class="opt">pyinstaller</span></pre>
+        </div>
+
+        <div class="tab-container">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="pkg-cli">cli.exe</button>
+                <button class="tab-btn" data-tab="pkg-main">main.exe</button>
+                <button class="tab-btn" data-tab="pkg-splitter">file_splitter.exe</button>
+                <button class="tab-btn" data-tab="pkg-downloader">file_downloader.exe</button>
+            </div>
+
+            <div class="tab-panel active" data-tab="pkg-cli">
+                <div class="code-block">
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--console</span> <span class="arg">--name</span> <span class="opt">cli</span> <span class="arg">--icon</span> <span class="path">icon/wjfkxz-cli.ico</span> <span class="path">cli/main.py</span></pre>
+                </div>
+                <ul>
+                    <li><code>--onefile</code>：打包为单个 exe 文件</li>
+                    <li><code>--console</code>：控制台程序（显示命令行窗口）</li>
+                    <li><code>--name cli</code>：输出文件名为 cli.exe</li>
+                    <li><code>--icon icon/wjfkxz-cli.ico</code>：设置 exe 程序图标</li>
+                </ul>
+            </div>
+
+            <div class="tab-panel" data-tab="pkg-main">
+                <div class="code-block">
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">main</span> <span class="arg">--icon</span> <span class="path">icon/wjfkxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="arg">--add-data</span> <span class="path">"app;app"</span> <span class="path">app/main.py</span></pre>
+                </div>
+                <ul>
+                    <li><code>--windowed</code>：窗口程序（不显示命令行窗口）</li>
+                    <li><code>--icon icon/wjfkxz.ico</code>：设置 exe 程序图标</li>
+                    <li><code>--add-data "app;app"</code>：将 app 模块打包进去</li>
+                    <li>任务栏/窗口图标：icon/wjfkxz.png</li>
+                </ul>
+            </div>
+
+            <div class="tab-panel" data-tab="pkg-splitter">
+                <div class="code-block">
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">file_splitter</span> <span class="arg">--icon</span> <span class="path">icon/wjfk.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="path">file_splitter.py</span></pre>
+                </div>
+                <ul>
+                    <li><code>--icon icon/wjfk.ico</code>：设置 exe 程序图标</li>
+                    <li>任务栏/窗口图标：icon/wjfk.png</li>
+                </ul>
+            </div>
+
+            <div class="tab-panel" data-tab="pkg-downloader">
+                <div class="code-block">
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">file_downloader</span> <span class="arg">--icon</span> <span class="path">icon/wjxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="arg">--hidden-import</span> <span class="opt">curl_cffi</span> <span class="path">file_downloader.py</span></pre>
+                </div>
+                <ul>
+                    <li><code>--icon icon/wjxz.ico</code>：设置 exe 程序图标</li>
+                    <li><code>--hidden-import curl_cffi</code>：显式包含 curl_cffi 模块</li>
+                    <li>任务栏/窗口图标：icon/wjxz.png</li>
+                </ul>
+            </div>
+        </div>
+
+        <h4 style="margin-top:24px;">打包说明</h4>
+        <ul>
+            <li>打包后的 exe 文件位于 <code>dist/</code> 目录下</li>
+            <li>如果增强模式打包失败或运行时不可用，程序会自动回退到标准 requests 模式</li>
+            <li>建议在打包前先执行 <code>pip install -r requirements.txt</code> 和 <code>pip install ".[enhanced]"</code> 确保所有依赖已安装</li>
+            <li>对于 main.exe，请确保 app/ 目录及其子模块（core/、ui/、utils/）均被正确包含</li>
+        </ul>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="container">
+        <div class="links">
+            <a href="index.html">首页</a>
+            <a href="download.html">下载</a>
+            <a href="wjxz/experience.html">体验</a>
+            <a href="dev.html">开发文档</a>
+            <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">GitHub 仓库</a>
+            <a href="https://github.com/zsh-cn/fkxz/releases/latest" target="_blank" rel="noopener">Releases</a>
+            <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener">问题反馈</a>
+            <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener">MPL-2.0</a>
+        </div>
+        <p class="copyright">&copy; 2025 fkxz. All rights reserved.</p>
+    </div>
+</footer>
+
+<script src="js/main.js"></script>
+<script>
+Fkxz.initTabs();
+</script>
+
+</body>
+</html>
