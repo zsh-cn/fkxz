@@ -300,7 +300,12 @@ header .container {
 
 .platform-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.platform-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
 }
 
@@ -308,8 +313,9 @@ header .container {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 24px;
+    padding: 16px;
     transition: all 0.2s;
+    overflow: hidden;
 }
 
 .platform-card:hover {
@@ -317,12 +323,19 @@ header .container {
 }
 
 .platform-card h3 {
-    font-size: 17px;
+    font-size: 14px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.platform-card p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    line-height: 1.5;
 }
 
 .platform-card ul {
@@ -331,10 +344,10 @@ header .container {
 }
 
 .platform-card li {
-    font-size: 14px;
+    font-size: 12px;
     color: var(--text-secondary);
-    padding: 4px 0;
-    padding-left: 20px;
+    padding: 3px 0;
+    padding-left: 18px;
     position: relative;
 }
 
@@ -415,15 +428,15 @@ header .container {
 
 .download-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
 }
 
 .download-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 28px 24px;
+    padding: 20px 16px;
     text-align: center;
     transition: all 0.2s;
     display: flex;
@@ -437,15 +450,15 @@ header .container {
 }
 
 .download-icon {
-    width: 52px;
-    height: 52px;
+    width: 40px;
+    height: 40px;
     background: var(--primary-light);
-    border-radius: 12px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
-    font-size: 26px;
+    margin-bottom: 10px;
+    font-size: 20px;
 }
 
 .download-icon img {
@@ -455,26 +468,26 @@ header .container {
 }
 
 .download-card h3 {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .download-card .file-name {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
     background: #f1f5f9;
-    padding: 3px 10px;
+    padding: 2px 8px;
     border-radius: 4px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     word-break: break-all;
 }
 
 .download-card .card-desc {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
-    margin-bottom: 20px;
+    margin-bottom: 14px;
     flex: 1;
     line-height: 1.5;
 }
@@ -486,9 +499,9 @@ header .container {
     background: var(--primary);
     color: #fff;
     text-decoration: none;
-    padding: 10px 24px;
+    padding: 8px 16px;
     border-radius: var(--radius-sm);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     transition: all 0.2s;
     width: 100%;
@@ -692,6 +705,10 @@ footer .copyright {
     font-weight: 800;
 }
 
+.page-header .section-subtitle {
+    margin-bottom: 4px;
+}
+
 .page-header .version-row {
     margin-top: 16px;
 }
@@ -757,9 +774,9 @@ footer .copyright {
     .hero .desc { font-size: 15px; }
     .section-title { font-size: 22px; }
     .section { padding: 40px 0; }
-    .download-grid { grid-template-columns: 1fr; }
+    .download-grid { grid-template-columns: 1fr 1fr; }
+    .platform-grid { grid-template-columns: 1fr 1fr; }
     .features { grid-template-columns: 1fr 1fr; }
-    .platform-grid { grid-template-columns: 1fr; }
     .usage-detail { padding: 20px; }
 
     header .container { height: auto; padding: 10px 24px; flex-wrap: wrap; justify-content: center; gap: 8px; }
@@ -767,6 +784,8 @@ footer .copyright {
 
 @media (max-width: 480px) {
     .features { grid-template-columns: 1fr; }
+    .platform-grid { grid-template-columns: 1fr; }
+    .download-grid { grid-template-columns: 1fr; }
     .hero-actions { flex-direction: column; align-items: center; }
     .btn { width: 100%; justify-content: center; }
 }

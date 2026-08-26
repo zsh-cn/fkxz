@@ -34,11 +34,82 @@
 <section class="page-header">
     <div class="container">
         <h1>文档</h1>
-        <p style="color:var(--text-secondary);margin-top:8px;">了解项目结构、文件格式、环境要求及自行打包指南</p>
+        <p class="section-subtitle">从使用方式、环境要求到项目结构、组件说明、文件格式与打包指南的完整技术文档</p>
     </div>
 </section>
 
-<section class="section section-alt">
+<section class="section section-alt" style="padding-top:24px;">
+    <div class="container">
+        <h2 class="section-title">环境要求</h2>
+        <p class="section-subtitle">各组件运行环境与依赖</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>组件</th>
+                        <th>最低版本</th>
+                        <th>依赖</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>CLI 工具</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code></td>
+                    </tr>
+                    <tr>
+                        <td>新版 GUI</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code>、<code>tkinter</code></td>
+                    </tr>
+                    <tr>
+                        <td>旧版 GUI</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code>、<code>tkinter</code></td>
+                    </tr>
+                    <tr>
+                        <td>增强模式</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code> + <code>curl_cffi</code></td>
+                    </tr>
+                    <tr>
+                        <td>网页端</td>
+                        <td>现代浏览器</td>
+                        <td>Chrome 90+ / Firefox 89+</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:8px;">Linux 系统使用 GUI 需额外安装 <code>python3-tk</code>：<code>apt install python3-tk</code></p>
+
+        <h3 style="font-size:18px;font-weight:600;margin:24px 0 12px;">安装依赖</h3>
+        <div class="code-block">
+<pre><span class="comment"># 使用 pyproject.toml（推荐）</span>
+<span class="cmd">pip install</span> <span class="path">.</span>              <span class="comment"># 基础安装</span>
+<span class="cmd">pip install</span> <span class="path">".[enhanced]"</span>  <span class="comment"># 含增强模式（curl_cffi）</span>
+
+<span class="comment"># 或使用 requirements.txt（传统方式）</span>
+<span class="cmd">pip install -r</span> <span class="path">requirements.txt</span></pre>
+        </div>
+        <ul>
+            <li><code>requests</code>：HTTP 请求库（必需）</li>
+            <li><code>curl_cffi</code>：浏览器指纹模拟库（可选，用于增强模式绕过反爬虫）</li>
+        </ul>
+
+        <div class="table-wrap" style="margin-top:24px;">
+            <table>
+                <thead><tr><th>其他组件</th><th>要求</th></tr></thead>
+                <tbody>
+                    <tr><td>Cloudflare Workers（可选）</td><td>Cloudflare Workers 账户</td></tr>
+                    <tr><td>网页端</td><td>现代浏览器（推荐 Chrome 90+、Firefox 89+）</td></tr>
+                    <tr><td>Service Worker 下载器</td><td>浏览器支持 Service Worker API（Chrome 45+、Firefox 44+）</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="section">
     <div class="container">
         <h2 class="section-title">使用方式</h2>
         <p class="section-subtitle">多种使用方式，满足不同场景需求</p>
@@ -155,77 +226,6 @@
                 <li>要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）</li>
                 <li><code>sw.js</code> 必须与 <code>sw.html</code> 同源部署</li>
             </ul>
-        </div>
-    </div>
-</section>
-
-<section class="section" style="padding-top:24px;">
-    <div class="container">
-        <h2 class="section-title">环境要求</h2>
-        <p class="section-subtitle">各组件运行环境与依赖</p>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>组件</th>
-                        <th>最低版本</th>
-                        <th>依赖</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>CLI 工具</td>
-                        <td>Python 3.8+</td>
-                        <td><code>requests</code></td>
-                    </tr>
-                    <tr>
-                        <td>新版 GUI</td>
-                        <td>Python 3.8+</td>
-                        <td><code>requests</code>、<code>tkinter</code></td>
-                    </tr>
-                    <tr>
-                        <td>旧版 GUI</td>
-                        <td>Python 3.8+</td>
-                        <td><code>requests</code>、<code>tkinter</code></td>
-                    </tr>
-                    <tr>
-                        <td>增强模式</td>
-                        <td>Python 3.8+</td>
-                        <td><code>requests</code> + <code>curl_cffi</code></td>
-                    </tr>
-                    <tr>
-                        <td>网页端</td>
-                        <td>现代浏览器</td>
-                        <td>Chrome 90+ / Firefox 89+</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <p style="font-size:13px;color:var(--text-muted);margin-top:8px;">Linux 系统使用 GUI 需额外安装 <code>python3-tk</code>：<code>apt install python3-tk</code></p>
-
-        <h3 style="font-size:18px;font-weight:600;margin:24px 0 12px;">安装依赖</h3>
-        <div class="code-block">
-<pre><span class="comment"># 使用 pyproject.toml（推荐）</span>
-<span class="cmd">pip install</span> <span class="path">.</span>              <span class="comment"># 基础安装</span>
-<span class="cmd">pip install</span> <span class="path">".[enhanced]"</span>  <span class="comment"># 含增强模式（curl_cffi）</span>
-
-<span class="comment"># 或使用 requirements.txt（传统方式）</span>
-<span class="cmd">pip install -r</span> <span class="path">requirements.txt</span></pre>
-        </div>
-        <ul>
-            <li><code>requests</code>：HTTP 请求库（必需）</li>
-            <li><code>curl_cffi</code>：浏览器指纹模拟库（可选，用于增强模式绕过反爬虫）</li>
-        </ul>
-
-        <div class="table-wrap" style="margin-top:24px;">
-            <table>
-                <thead><tr><th>其他组件</th><th>要求</th></tr></thead>
-                <tbody>
-                    <tr><td>Cloudflare Workers（可选）</td><td>Cloudflare Workers 账户</td></tr>
-                    <tr><td>网页端</td><td>现代浏览器（推荐 Chrome 90+、Firefox 89+）</td></tr>
-                    <tr><td>Service Worker 下载器</td><td>浏览器支持 Service Worker API（Chrome 45+、Firefox 44+）</td></tr>
-                </tbody>
-            </table>
         </div>
     </div>
 </section>
@@ -446,7 +446,7 @@
         <h2 class="section-title">网页端工具</h2>
         <p class="section-subtitle">无需安装，浏览器直接使用</p>
 
-        <div class="platform-grid">
+        <div class="platform-grid platform-grid-3">
             <div class="platform-card">
                 <h3>Cloudflare Workers</h3>
                 <p style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">部署 worker.js 到 Cloudflare Workers，流式合并分片并提供直链下载。</p>
@@ -457,8 +457,8 @@
                     <li>支持跨域（CORS）</li>
                     <li>注：此脚本不适用于大文件</li>
                 </ul>
-                <div class="code-block" style="margin-top:12px;">
-<pre><span class="comment"># 访问格式</span>
+                <div class="code-block" style="margin-top:12px;overflow-x:auto;">
+<pre style="white-space:pre-wrap;word-break:break-all;margin:0;"><span class="comment"># 访问格式</span>
 <span class="path">https://your-worker.workers.dev/?fkx=https://example.com/file.fkx</span></pre>
                 </div>
             </div>
@@ -472,8 +472,8 @@
                     <li>自动检测并使用 File System Access API</li>
                     <li>支持回退到传统下载方式</li>
                 </ul>
-                <div class="code-block" style="margin-top:12px;">
-<pre><span class="comment"># 访问格式</span>
+                <div class="code-block" style="margin-top:12px;overflow-x:auto;">
+<pre style="white-space:pre-wrap;word-break:break-all;margin:0;"><span class="comment"># 访问格式</span>
 <span class="path">https://your-domain.com/index.html?fkx=https://example.com/file.fkx</span></pre>
                 </div>
                 <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">使用时应注意浏览器跨域限制</p>
@@ -488,8 +488,8 @@
                     <li>直接触发浏览器原生下载</li>
                     <li>通过 SW 代理绕过 CORS 限制</li>
                 </ul>
-                <div class="code-block" style="margin-top:12px;">
-<pre><span class="comment"># 访问格式</span>
+                <div class="code-block" style="margin-top:12px;overflow-x:auto;">
+<pre style="white-space:pre-wrap;word-break:break-all;margin:0;"><span class="comment"># 访问格式</span>
 <span class="path">https://your-domain.com/sw.html?fkx=https://example.com/file.fkx</span></pre>
                 </div>
                 <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）。sw.js 必须与 sw.html 同源部署。</p>
