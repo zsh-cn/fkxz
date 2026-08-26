@@ -1,16 +1,31 @@
-﻿import os
+import os
+import sys
 import hashlib
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import threading
+import ctypes
+
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('fkxz.splitter')
+except Exception:
+    pass
 
 class FileSplitterApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("文件拆分器")
+        self.root.title("文件分块")
         self.root.geometry("650x380")
         self.root.minsize(650, 380)
         self.root.resizable(True, True)
+
+        if getattr(sys, 'frozen', False):
+            icon_path = os.path.join(getattr(sys, '_MEIPASS', ''), 'icon', 'wjfk.png')
+        else:
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon', 'wjfk.png')
+        if os.path.exists(icon_path):
+            self._icon = tk.PhotoImage(file=icon_path)
+            self.root.iconphoto(True, self._icon)
         
         self.file_path = ""
         self.output_dir = ""
@@ -53,11 +68,12 @@ class FileSplitterApp:
         self._setup_context_menu(self.output_entry)
         
         ttk.Label(input_frame, text="每个分片大小(MB):").grid(row=2, column=0, sticky=tk.E, pady=5)
-        self.chunk_size_var = tk.StringVar(value="10")
-        chunk_entry = ttk.Entry(input_frame, textvariable=self.chunk_size_var)
-        chunk_entry.grid(row=2, column=1, padx=10, pady=5, sticky=tk.EW)
-        chunk_entry.bind('<KeyRelease>', self.validate_chunk_size)
-        self._setup_context_menu(chunk_entry)
+        self.chunk_size_var = tk.IntVar(value=10)
+        chunk_spinbox = ttk.Spinbox(input_frame, from_=1, to=1024, textvariable=self.chunk_size_var, width=10)
+        chunk_spinbox.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
+        chunk_spinbox.bind('<KeyRelease>', self._schedule_file_info_update)
+        chunk_spinbox.bind('<<Increment>>', self._schedule_file_info_update)
+        chunk_spinbox.bind('<<Decrement>>', self._schedule_file_info_update)
         
         ttk.Label(input_frame, text="(范围: 1-1024 MB)").grid(row=2, column=2, sticky=tk.W, pady=5)
         
@@ -83,15 +99,31 @@ class FileSplitterApp:
         self.cancel_button = ttk.Button(button_frame, text="取消拆分", command=self.cancel_split, width=15, state=tk.DISABLED)
         self.cancel_button.pack(side=tk.LEFT, padx=5)
     
-    def validate_chunk_size(self, event=None):
+    def _schedule_file_info_update(self, event=None):
+        if hasattr(self, '_update_after_id'):
+            self.root.after_cancel(self._update_after_id)
+        self._update_after_id = self.root.after(300, self._update_file_info)
+
+    def _update_file_info(self):
+        if not self.file_path or not os.path.exists(self.file_path):
+            self.file_info_label.config(text="")
+            return
         try:
-            size = int(self.chunk_size_var.get())
-            if size < 1 or size > 1024:
-                self.status_label.config(text="状态: 分片大小应在1-1024 MB之间", foreground="#cc0000")
-            else:
-                self.status_label.config(text="状态: 就绪", foreground="#333333")
-        except ValueError:
-            self.status_label.config(text="状态: 分片大小必须是数字", foreground="#cc0000")
+            chunk_size_mb = self.chunk_size_var.get()
+            if chunk_size_mb < 1 or chunk_size_mb > 1024:
+                chunk_size_mb = None
+        except (ValueError, tk.TclError):
+            chunk_size_mb = None
+        
+        file_size = os.path.getsize(self.file_path)
+        size_text = f"文件大小: {self.format_size(file_size)}"
+        
+        if chunk_size_mb is not None:
+            chunk_size = chunk_size_mb * 1024 * 1024
+            num_chunks = (file_size + chunk_size - 1) // chunk_size
+            size_text += f" | 分块数: {num_chunks}"
+        
+        self.file_info_label.config(text=size_text)
     
     def browse_file(self):
         file_path = filedialog.askopenfilename()
@@ -101,8 +133,7 @@ class FileSplitterApp:
             self.file_entry.insert(0, file_path)
             
             if os.path.exists(file_path):
-                file_size = os.path.getsize(file_path)
-                self.file_info_label.config(text=f"文件大小: {self.format_size(file_size)}")
+                self._update_file_info()
             else:
                 self.file_info_label.config(text="")
     
@@ -123,11 +154,18 @@ class FileSplitterApp:
         else:
             return f"{size / (1024 * 1024 * 1024):.2f} GB"
     
-    def calculate_sha256(self, file_path):
+    def calculate_sha256(self, file_path, progress_callback=None, cancel_check=None):
         sha256_hash = hashlib.sha256()
+        file_size = os.path.getsize(file_path)
+        processed = 0
         with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b""):
+            for chunk in iter(lambda: f.read(65536), b""):
+                if cancel_check and cancel_check():
+                    return None
                 sha256_hash.update(chunk)
+                processed += len(chunk)
+                if progress_callback:
+                    progress_callback(processed, file_size)
         return sha256_hash.hexdigest()
     
     def update_status(self, text):
@@ -137,73 +175,51 @@ class FileSplitterApp:
     def show_error(self, message):
         messagebox.showerror("错误", message)
     
-    def split_file(self):
+    def _validate_split_inputs(self):
         if not self.file_path:
             self.show_error("请选择要拆分的文件")
-            self.reset_ui()
-            return
-        
+            return None
         if not os.path.exists(self.file_path):
             self.show_error("所选文件不存在")
-            self.reset_ui()
-            return
-        
+            return None
         if not os.path.isfile(self.file_path):
             self.show_error("所选路径不是文件")
-            self.reset_ui()
-            return
-        
+            return None
         if not self.output_dir:
             self.show_error("请选择输出目录")
-            self.reset_ui()
-            return
+            return None
         
         try:
-            chunk_size_mb = int(self.chunk_size_var.get())
+            chunk_size_mb = self.chunk_size_var.get()
             if chunk_size_mb < 1 or chunk_size_mb > 1024:
                 self.show_error("分片大小应在1-1024 MB之间")
-                self.reset_ui()
-                return
+                return None
             self.chunk_size = chunk_size_mb * 1024 * 1024
-        except ValueError:
+        except (ValueError, tk.TclError):
             self.show_error("分片大小必须是数字")
-            self.reset_ui()
-            return
+            return None
         
         if not os.path.exists(self.output_dir):
             try:
                 os.makedirs(self.output_dir)
             except Exception as e:
                 self.show_error(f"无法创建输出目录: {str(e)}")
-                self.reset_ui()
-                return
-        
-        self.start_button.config(state=tk.DISABLED)
-        self.cancel_button.config(state=tk.NORMAL)
-        self.is_cancelled = False
+                return None
         
         file_name = os.path.basename(self.file_path)
         file_size = os.path.getsize(self.file_path)
         num_chunks = (file_size + self.chunk_size - 1) // self.chunk_size
-        
-        self.progress['maximum'] = num_chunks
-        self.progress['value'] = 0
-        
-        wjxx_content = [
-            f"filename={file_name}",
-            f"total_size={file_size}",
-            f"chunk_size={self.chunk_size}",
-            f"num_chunks={num_chunks}"
-        ]
-        
+        return (file_name, file_size, num_chunks)
+
+    def _do_split_chunks(self, file_name, num_chunks):
+        fkx_content = []
         try:
             with open(self.file_path, 'rb') as f:
                 for i in range(num_chunks):
                     if self.is_cancelled:
                         self.update_status("状态: 拆分已取消")
                         self.cleanup_chunks(self.output_dir, file_name, i)
-                        self.reset_ui()
-                        return
+                        return None
                     
                     chunk_data = f.read(self.chunk_size)
                     chunk_filename = f"{file_name}-{i+1}.fk"
@@ -212,33 +228,74 @@ class FileSplitterApp:
                     with open(chunk_path, 'wb') as chunk_file:
                         chunk_file.write(chunk_data)
                     
-                    wjxx_content.append(f"chunk_{i+1}={chunk_filename},{len(chunk_data)}")
+                    fkx_content.append(f"chunk_{i+1}={chunk_filename},{len(chunk_data)}")
                     
                     self.progress['value'] = i + 1
                     self.update_status(f"状态: 正在拆分 {i+1}/{num_chunks}")
-            
-            if self.is_cancelled:
-                self.update_status("状态: 拆分已取消")
-                self.reset_ui()
-                return
-            
-            self.update_status("状态: 正在计算文件SHA-256...")
-            file_sha256 = self.calculate_sha256(self.file_path)
-            wjxx_content.append(f"sha256={file_sha256}")
-            
-            wjxx_filename = f"{file_name}.wjx"
-            wjxx_path = os.path.join(self.output_dir, wjxx_filename)
-            with open(wjxx_path, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(wjxx_content))
-            
-            self.progress['value'] = num_chunks
-            self.update_status(f"状态: 拆分完成！已生成 {num_chunks} 个分片")
-            self.reset_ui()
-            messagebox.showinfo("完成", f"文件拆分完成！\n文件名: {file_name}\n文件大小: {self.format_size(file_size)}\n分片数: {num_chunks}\n信息文件: {wjxx_filename}\n保存位置: {self.output_dir}")
-        
+            return fkx_content
         except Exception as e:
             self.show_error(f"拆分过程发生错误: {str(e)}")
+            return None
+
+    def _finalize_split(self, file_name, file_size, num_chunks, fkx_content):
+        self.update_status("状态: 正在计算文件SHA-256...")
+        
+        def sha256_progress(processed, total):
+            pct = processed / total if total > 0 else 0
+            self.progress['value'] = num_chunks + pct
+            self.update_status(f"状态: 正在计算SHA-256... {self.format_size(processed)}/{self.format_size(total)}")
+        
+        file_sha256 = self.calculate_sha256(
+            self.file_path,
+            progress_callback=sha256_progress,
+            cancel_check=lambda: self.is_cancelled
+        )
+        
+        if self.is_cancelled or file_sha256 is None:
+            self.update_status("状态: 拆分已取消")
+            return
+        
+        fkx_content.append(f"sha256={file_sha256}")
+        
+        fkx_filename = f"{file_name}.fkx"
+        fkx_path = os.path.join(self.output_dir, fkx_filename)
+        with open(fkx_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(fkx_content))
+        
+        self.progress['value'] = num_chunks
+        self.update_status(f"状态: 拆分完成！已生成 {num_chunks} 个分片")
+        self.reset_ui()
+        messagebox.showinfo("完成", f"文件拆分完成！\n文件名: {file_name}\n文件大小: {self.format_size(file_size)}\n分片数: {num_chunks}\n信息文件: {fkx_filename}\n保存位置: {self.output_dir}")
+
+    def split_file(self):
+        inputs = self._validate_split_inputs()
+        if inputs is None:
             self.reset_ui()
+            return
+        
+        file_name, file_size, num_chunks = inputs
+        
+        self.start_button.config(state=tk.DISABLED)
+        self.cancel_button.config(state=tk.NORMAL)
+        self.is_cancelled = False
+        
+        self.progress['maximum'] = num_chunks
+        self.progress['value'] = 0
+        
+        fkx_content = [
+            f"filename={file_name}",
+            f"total_size={file_size}",
+            f"chunk_size={self.chunk_size}",
+            f"num_chunks={num_chunks}"
+        ]
+        
+        chunk_results = self._do_split_chunks(file_name, num_chunks)
+        if chunk_results is None:
+            self.reset_ui()
+            return
+        
+        fkx_content.extend(chunk_results)
+        self._finalize_split(file_name, file_size, num_chunks, fkx_content)
     
     def cleanup_chunks(self, output_dir, file_name, count):
         for i in range(1, count + 1):
@@ -261,6 +318,19 @@ class FileSplitterApp:
         self.cancel_button.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+    
     root = tk.Tk()
+    
+    try:
+        from tkinter import font
+        default_font = font.nametofont("TkDefaultFont")
+        default_font.configure(size=10)
+    except Exception:
+        pass
+    
     app = FileSplitterApp(root)
     root.mainloop()
