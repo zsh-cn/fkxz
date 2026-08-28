@@ -32,6 +32,8 @@ class DownloaderPage(BasePage):
     _download_detail: tk.Label
     _enhanced_var: tk.BooleanVar
     _enhanced_cb: ttk.Checkbutton
+    _verify_sha256_var: tk.BooleanVar
+    _verify_sha256_cb: ttk.Checkbutton
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -60,7 +62,7 @@ class DownloaderPage(BasePage):
 
         tk.Label(
             header,
-            text='远程下载',
+            text='文件下载',
             font=('Microsoft YaHei UI', 20, 'bold'),
             fg=FG_PRIMARY,
             bg=BG_PAGE,
@@ -68,7 +70,7 @@ class DownloaderPage(BasePage):
 
         tk.Label(
             header,
-            text='从远程 URL 下载 .fkx 和 .fk 分片，合并还原为原始文件',
+            text='支持本地 .fkx 合并与远程 URL 下载分片，自动合并还原为原始文件',
             font=('Microsoft YaHei UI', 10),
             fg=FG_SECONDARY,
             bg=BG_PAGE,
@@ -105,6 +107,17 @@ class DownloaderPage(BasePage):
                 fg=ERROR,
                 bg=BG_CARD,
             ).pack(side=tk.LEFT, padx=(12, 0))
+
+        verify_frame = tk.Frame(input_frame, bg=BG_CARD)
+        verify_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(4, 0))
+
+        self._verify_sha256_var = tk.BooleanVar(value=True)
+        self._verify_sha256_cb = ttk.Checkbutton(
+            verify_frame,
+            text='启用SHA-256校验',
+            variable=self._verify_sha256_var,
+        )
+        self._verify_sha256_cb.pack(side=tk.LEFT)
 
         info_card = tk.Frame(self, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
         info_card.grid(row=2, column=0, sticky='ew', padx=32, pady=(0, 12))
@@ -304,6 +317,7 @@ class DownloaderPage(BasePage):
             text,
             output,
             enhanced=self._enhanced_var.get(),
+            verify_sha256=self._verify_sha256_var.get(),
         )
 
     def _cancel(self):

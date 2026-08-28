@@ -7,17 +7,20 @@ from utils.helpers import parse_fkx, sanitize_filename, format_size
 
 
 class FileMerger(BaseWorker):
-    def merge_async(self, fkx_path, output_dir):
+    def merge_async(self, fkx_path, output_dir, verify_sha256=True):
         self._is_cancelled = False
         self._thread = threading.Thread(
             target=self._merge,
-            args=(fkx_path, output_dir),
+            args=(fkx_path, output_dir, verify_sha256),
             daemon=True
         )
         self._thread.start()
 
-    def _merge(self, fkx_path, output_dir):
+    def _merge(self, fkx_path, output_dir, verify_sha256=True):
         try:
+            fkx_path = os.path.abspath(fkx_path)
+            output_dir = os.path.abspath(output_dir)
+
             if not fkx_path:
                 self._emit_error("请输入.fkx文件路径")
                 return
@@ -54,7 +57,7 @@ class FileMerger(BaseWorker):
                 'num_chunks': num_chunks,
             })
 
-            base_path = os.path.dirname(os.path.abspath(fkx_path))
+            base_path = os.path.dirname(fkx_path)
 
             self._emit_progress(0, num_chunks)
             self._emit_chunk_progress(0, 100)
@@ -116,24 +119,25 @@ class FileMerger(BaseWorker):
                 self._emit_complete({'cancelled': True})
                 return
 
-            if 'sha256' in fkx_info:
+            if 'sha256' in fkx_info and verify_sha256:
                 self._emit_status("正在校验SHA-256...")
                 actual_sha256 = hashlib.sha256()
-                cancelled = False
+                sha256_cancelled = False
+                sha256_bytes = [0]
                 with open(output_path, 'rb') as f:
                     for chunk in iter(lambda: f.read(65536), b""):
                         if self._is_cancelled:
-                            cancelled = True
+                            sha256_cancelled = True
                             break
                         actual_sha256.update(chunk)
+                        sha256_bytes[0] += len(chunk)
+                        if total_size > 0:
+                            percentage = sha256_bytes[0] / total_size
+                            self._emit_chunk_progress(percentage * 100, 100)
 
-                if cancelled:
-                    try:
-                        os.remove(output_path)
-                    except FileNotFoundError:
-                        pass
-                    self._emit_status("已取消合并", '#cc0000')
-                    self._emit_complete({'cancelled': True})
+                if sha256_cancelled:
+                    self._emit_status("已取消SHA-256检验", '#cc6600')
+                    self._emit_complete({'cancelled': True, 'sha256_cancelled': True})
                     return
 
                 if actual_sha256.hexdigest() != fkx_info['sha256']:

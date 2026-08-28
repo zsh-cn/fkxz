@@ -22,9 +22,11 @@ class SplitterPage(BasePage):
     _start_btn: RoundedButton
     _cancel_btn: RoundedButton
     _status_label: tk.Label
+    _update_after_id: str | None
 
     def __init__(self, parent):
         super().__init__(parent)
+        self._update_after_id = None
         self._splitter = FileSplitter(callbacks={
             'on_progress': self._on_progress,
             'on_status': self._on_status,
@@ -109,7 +111,7 @@ class SplitterPage(BasePage):
             val_label.grid(row=i, column=1, sticky='w', pady=(0, 6))
             setattr(self, f'_{key}_label', val_label)
 
-        self._chunk_var.trace_add('write', lambda *args: self._update_file_info())
+        self._chunk_var.trace_add('write', lambda *args: self._schedule_file_info_update())
 
         progress_card = tk.Frame(self, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
         progress_card.grid(row=3, column=0, sticky='ew', padx=32, pady=(0, 12))
@@ -148,6 +150,7 @@ class SplitterPage(BasePage):
             return False
 
     def _update_file_info(self):
+        self._update_after_id = None
         if not hasattr(self, '_filesize_label'):
             return
         file_path = self._file_entry.get().strip()
@@ -173,6 +176,11 @@ class SplitterPage(BasePage):
         else:
             self._chunkcount_label.config(text='-')
 
+    def _schedule_file_info_update(self):
+        if self._update_after_id is not None:
+            self.after_cancel(self._update_after_id)
+        self._update_after_id = self.after(300, self._update_file_info)
+
     def _browse_file(self):
         path = filedialog.askopenfilename()
         if path:
@@ -189,7 +197,7 @@ class SplitterPage(BasePage):
             self._validate_input()
 
     def _on_input_change(self, event=None):
-        self._update_file_info()
+        self._schedule_file_info_update()
         self._validate_input()
 
     def _validate_input(self):
@@ -250,6 +258,9 @@ class SplitterPage(BasePage):
             ))
 
     def _reset_ui(self):
+        if self._update_after_id is not None:
+            self.after_cancel(self._update_after_id)
+            self._update_after_id = None
         self._validate_input()
         self._cancel_btn.config(state=tk.DISABLED)
         self._progress['value'] = 0

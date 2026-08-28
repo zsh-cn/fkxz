@@ -63,7 +63,7 @@
                 <div class="download-icon"><img src="icons/wjfkxz.ico" alt="main"></div>
                 <h3>聚合程序</h3>
                 <span class="file-name">main.exe</span>
-                <p class="card-desc">集成侧边栏导航的图形界面，三大功能合一</p>
+                <p class="card-desc">集成侧边栏导航的图形界面，文件分块与文件下载两大功能</p>
                 <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="main.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
@@ -161,6 +161,7 @@
                     <tbody>
                         <tr><td><code>-i, --input</code></td><td>.fkx 信息文件路径</td><td>是</td></tr>
                         <tr><td><code>-o, --output</code></td><td>输出目录</td><td>是</td></tr>
+                        <tr><td><code>-s, --skip-sha256</code></td><td>跳过SHA-256校验</td><td>否</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -174,6 +175,7 @@
                         <tr><td><code>-o, --output</code></td><td>输出目录</td><td>是</td></tr>
                         <tr><td><code>-e, --enhanced</code></td><td>启用增强模式（浏览器指纹伪装）</td><td>否</td></tr>
                         <tr><td><code>-t, --timeout</code></td><td>请求超时时间（秒），默认 120</td><td>否</td></tr>
+                        <tr><td><code>-s, --skip-sha256</code></td><td>跳过SHA-256校验</td><td>否</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -186,6 +188,9 @@
 <span class="comment">REM 本地合并分片</span>
 <span class="cmd">cli.exe</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">"D:\chunks\video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span>
 
+<span class="comment">REM 本地合并（跳过SHA-256校验）</span>
+<span class="cmd">cli.exe</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">"D:\chunks\video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span> <span class="arg">-s</span>
+
 <span class="comment">REM 远程下载并合并</span>
 <span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span>
 
@@ -193,13 +198,16 @@
 <span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span> <span class="arg">-e</span>
 
 <span class="comment">REM 自定义超时时间</span>
-<span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span> <span class="arg">-t</span> 300</pre>
+<span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span> <span class="arg">-t</span> 300
+
+<span class="comment">REM 跳过SHA-256校验</span>
+<span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span> <span class="arg">-s</span></pre>
             </div>
         </div>
 
         <div class="usage-detail">
             <h3>main.exe — 聚合 GUI 程序</h3>
-            <p class="detail-subtitle">集成式图形界面，采用侧边栏导航设计，将三大功能整合在一个窗口中</p>
+            <p class="detail-subtitle">集成式图形界面，采用侧边栏导航设计，将文件分块与文件下载两大功能整合在一个窗口中</p>
 
             <h4>启动</h4>
             <p>双击 <code>main.exe</code> 即可启动，无需任何命令行参数。</p>
@@ -207,13 +215,13 @@
             <h4>界面功能</h4>
             <ul>
                 <li><strong>文件分块</strong>：选择文件 → 设置输出目录 → 调整分片大小（1-1024 MB）→ 点击"开始拆分"</li>
-                <li><strong>本地合并</strong>：选择 .fkx 信息文件 → 设置输出目录 → 点击"开始合并"</li>
-                <li><strong>远程下载</strong>：输入 .fkx 文件 URL → 设置输出目录 → 可选启用增强模式 → 点击"开始下载"</li>
+                <li><strong>文件下载</strong>：输入 .fkx 文件 URL 或选择本地 .fkx 文件（自动识别）→ 设置输出目录 → 可选启用增强模式 → 点击"开始下载"/"开始合并"</li>
             </ul>
 
             <h4>特性</h4>
             <ul>
                 <li>侧边栏一键切换功能页面</li>
+                <li>文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 .fk 分片，远程模式自动下载分片后合并</li>
                 <li>实时分块进度 + 总进度 + 下载速度显示</li>
                 <li>文件信息预览（文件名、大小、分片数）</li>
                 <li>支持取消操作</li>

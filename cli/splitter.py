@@ -5,8 +5,8 @@ from cli.utils import format_size, print_progress
 
 
 def cmd_split(args):
-    file_path = args.input
-    output_dir = args.output
+    file_path = os.path.abspath(args.input)
+    output_dir = os.path.abspath(args.output)
     chunk_size_mb = args.chunk_size
 
     if not os.path.exists(file_path):
@@ -24,7 +24,6 @@ def cmd_split(args):
 
     chunk_size = chunk_size_mb * 1024 * 1024
 
-    output_dir = os.path.realpath(output_dir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 

@@ -5,8 +5,7 @@
 ## 项目功能特点
 
 - **文件拆分**：将大文件按指定大小拆分为多个 `.fk` 分片，并生成 `.fkx` 信息文件
-- **本地合并**：读取 `.fkx` 信息文件和同目录下的 `.fk` 分片，自动合并还原为原始文件
-- **远程下载**：从远程服务器下载 `.fkx` 信息文件及所有 `.fk` 分片，自动合并还原，支持 SHA-256 完整性校验
+- **文件下载**：支持本地 `.fkx` 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验
 - **增强模式**：集成 `curl_cffi` 浏览器指纹模拟，可伪装 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-\* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护
 - **多端支持**：提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式
 - **跨平台**：Python 工具支持 Windows / Linux / macOS；网页端工具支持所有现代浏览器
@@ -33,21 +32,19 @@ fkxz/
 │   └── downloader.py              # download 命令实现
 │
 ├── app/                           # 聚合 GUI 应用 (Tkinter, 带侧边栏导航)
-│   ├── main.py                    # GUI 入口，集成三大功能页面
+│   ├── main.py                    # GUI 入口，集成文件分块与文件下载两大功能
 │   ├── theme.py                   # 主题配色常量
 │   ├── core/                      # 核心业务逻辑
 │   │   ├── __init__.py
 │   │   ├── base_worker.py         # Worker 基类（线程管理）
 │   │   ├── splitter.py            # 文件拆分核心逻辑
-│   │   ├── downloader.py          # 远程下载核心逻辑
-│   │   └── merger.py              # 本地合并核心逻辑
+│   │   └── downloader.py          # 文件下载核心逻辑（本地合并+远程下载）
 │   ├── ui/                        # 图形界面组件
 │   │   ├── __init__.py
 │   │   ├── base_page.py           # 页面基类（通用 UI 布局）
 │   │   ├── sidebar.py             # 侧边栏导航
 │   │   ├── splitter_page.py       # 文件分块页面
-│   │   ├── merger_page.py         # 本地合并页面
-│   │   └── downloader_page.py     # 远程下载页面
+│   │   └── downloader_page.py     # 文件下载页面（本地合并+远程下载）
 │   └── utils/                     # 工具函数
 │       ├── __init__.py
 │       └── helpers.py             # 文件格式化、校验、FKX 解析、自定义组件
@@ -104,7 +101,7 @@ fkxz/
 | 程序 | 文件名 | 说明 |
 |------|--------|------|
 | 命令行工具 | `cli.exe` | 命令行版，支持 split / merge / download 命令 |
-| 聚合程序 | `main.exe` | 集成侧边栏导航的图形界面，三大功能合一 |
+| 聚合程序 | `main.exe` | 集成侧边栏导航的图形界面，文件分块与文件下载两大功能 |
 | 独立程序（文件拆分器） | `file_splitter.exe` | 专注于文件拆分 |
 | 独立程序（文件下载器） | `file_downloader.exe` | 支持本地合并与远程下载（含增强模式） |
 
@@ -142,6 +139,7 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output"
 |------|------|------|
 | `-i, --input` | `.fkx` 信息文件路径 | 是 |
 | `-o, --output` | 输出目录 | 是 |
+| `-s, --skip-sha256` | 跳过SHA-256校验 | 否 |
 
 **download（远程下载）**
 
@@ -151,6 +149,7 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output"
 | `-o, --output` | 输出目录 | 是 |
 | `-e, --enhanced` | 启用增强模式（浏览器指纹伪装） | 否 |
 | `-t, --timeout` | 请求超时时间（秒），默认 120 | 否 |
+| `-s, --skip-sha256` | 跳过SHA-256校验 | 否 |
 
 #### 使用示例
 
@@ -161,6 +160,9 @@ cli.exe split -i "D:\video.mp4" -o "D:\chunks" -c 10
 REM 本地合并分片
 cli.exe merge -i "D:\chunks\video.mp4.fkx" -o "D:\output"
 
+REM 本地合并（跳过SHA-256校验）
+cli.exe merge -i "D:\chunks\video.mp4.fkx" -o "D:\output" -s
+
 REM 远程下载并合并
 cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output"
 
@@ -169,13 +171,16 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -e
 
 REM 自定义超时时间
 cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -t 300
+
+REM 跳过SHA-256校验
+cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 ```
 
 ---
 
 ### main.exe — 聚合 GUI 程序
 
-`main.exe` 是集成式图形界面，采用侧边栏导航设计，将文件拆分、本地合并、远程下载三大功能整合在一个窗口中。
+`main.exe` 是集成式图形界面，采用侧边栏导航设计，将文件分块与文件下载两大功能整合在一个窗口中。
 
 #### 启动
 
@@ -184,12 +189,12 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -t 
 #### 界面功能
 
 - **文件分块**：选择文件 → 设置输出目录 → 调整分片大小（1-1024 MB）→ 点击"开始拆分"
-- **本地合并**：选择 `.fkx` 信息文件 → 设置输出目录 → 点击"开始合并"
-- **远程下载**：输入 `.fkx` 文件 URL → 设置输出目录 → 可选启用增强模式 → 点击"开始下载"
+- **文件下载**：输入 `.fkx` 文件 URL 或选择本地 `.fkx` 文件（自动识别）→ 设置输出目录 → 可选启用增强模式 → 点击"开始下载"/"开始合并"
 
 #### 特性
 
 - 侧边栏一键切换功能页面
+- 文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 `.fk` 分片，远程模式自动下载分片后合并
 - 实时分块进度 + 总进度 + 下载速度显示
 - 文件信息预览（文件名、大小、分片数）
 - 支持取消操作
@@ -267,6 +272,7 @@ pip install .
 ```bash
 fkxz split -i ./video.mp4 -o ./chunks -c 10
 fkxz merge -i ./chunks/video.mp4.fkx -o ./output
+fkxz merge -i ./chunks/video.mp4.fkx -o ./output -s
 fkxz download -u https://example.com/files/video.mp4.fkx -o ./output
 ```
 
@@ -306,6 +312,7 @@ python app/main.py             # 启动 GUI
 | `download` | 从远程 URL 下载 `.fkx` 和 `.fk` 分片后合并 |
 
 - 支持 SHA-256 完整性校验
+- 支持 `-s, --skip-sha256` 跳过SHA-256校验
 - 支持 `--enhanced` 增强模式（curl_cffi 浏览器指纹模拟）
 - 支持 `--timeout` 自定义请求超时时间（默认 120 秒）
 - 终端实时进度条显示
@@ -313,14 +320,14 @@ python app/main.py             # 启动 GUI
 
 ### 聚合 GUI 程序 — `app/main.py`
 
-Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体：
+Tkinter 现代化图形界面，采用侧边栏导航设计，集成两大功能于一体：
 
 - **文件分块**：选择文件 → 设置分片大小 → 一键拆分，生成 `.fk` 分片和 `.fkx` 信息文件
-- **本地合并**：选择 `.fkx` 信息文件 → 自动读取同目录分片 → 合并还原
-- **远程下载**：输入 `.fkx` 文件 URL → 可选增强模式 → 下载分片并合并
+- **文件下载**：输入 `.fkx` 文件 URL 或选择本地 `.fkx` 文件（自动识别本地/远程模式）→ 可选增强模式 → 下载/合并分片并还原
 
 **特性：**
-- 侧边栏导航，三页无缝切换
+- 侧边栏导航，两页无缝切换
+- 文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 `.fk` 分片，远程模式自动下载分片后合并
 - 自定义圆角进度条和按钮组件，现代化视觉风格
 - HiDPI 高 DPI 自适应（Windows）
 - 多线程异步处理，界面不阻塞
@@ -411,14 +418,17 @@ python cli/main.py split -i ./video.mp4 -o ./chunks -c 10
 ```bash
 # 安装后使用 fkxz 命令
 fkxz merge -i ./chunks/video.mp4.fkx -o ./output
+fkxz merge -i ./chunks/video.mp4.fkx -o ./output -s
 
 # 或直接运行源码
 python cli/main.py merge -i ./chunks/video.mp4.fkx -o ./output
+python cli/main.py merge -i ./chunks/video.mp4.fkx -o ./output -s
 ```
 
 参数说明：
 - `-i, --input`：`.fkx` 信息文件路径（必填）
 - `-o, --output`：输出目录（必填）
+- `-s, --skip-sha256`：跳过SHA-256校验（可选）
 
 #### 远程下载
 
@@ -427,11 +437,13 @@ python cli/main.py merge -i ./chunks/video.mp4.fkx -o ./output
 fkxz download -u https://example.com/files/video.mp4.fkx -o ./output
 fkxz download -u https://example.com/files/video.mp4.fkx -o ./output --enhanced
 fkxz download -u https://example.com/files/video.mp4.fkx -o ./output -t 300
+fkxz download -u https://example.com/files/video.mp4.fkx -o ./output -s
 
 # 或直接运行源码
 python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./output
 python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./output --enhanced
 python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./output -t 300
+python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./output -s
 ```
 
 参数说明：
@@ -439,6 +451,7 @@ python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./outp
 - `-o, --output`：输出目录（必填）
 - `-e, --enhanced`：启用增强模式（可选，需安装 curl_cffi）
 - `-t, --timeout`：请求超时时间（秒），默认 120（可选）
+- `-s, --skip-sha256`：跳过SHA-256校验（可选）
 
 ### 聚合 GUI 程序
 

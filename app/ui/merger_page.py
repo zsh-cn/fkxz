@@ -23,6 +23,8 @@ class MergerPage(BasePage):
     _start_btn: RoundedButton
     _cancel_btn: RoundedButton
     _status_label: tk.Label
+    _verify_sha256_var: tk.BooleanVar
+    _verify_sha256_cb: ttk.Checkbutton
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -68,6 +70,17 @@ class MergerPage(BasePage):
 
         self._build_field(input_frame, '信息文件 (.fkx)', '_fkx_entry', self._browse_fkx, 0, 0)
         self._build_field(input_frame, '输出目录', '_output_entry', self._browse_output, 2, 0)
+
+        verify_frame = tk.Frame(input_frame, bg=BG_CARD)
+        verify_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=(4, 0))
+
+        self._verify_sha256_var = tk.BooleanVar(value=True)
+        self._verify_sha256_cb = ttk.Checkbutton(
+            verify_frame,
+            text='启用SHA-256校验',
+            variable=self._verify_sha256_var,
+        )
+        self._verify_sha256_cb.pack(side=tk.LEFT)
 
         info_card = tk.Frame(self, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
         info_card.grid(row=2, column=0, sticky='ew', padx=32, pady=(0, 12))
@@ -179,6 +192,7 @@ class MergerPage(BasePage):
         self._merger.merge_async(
             self._fkx_entry.get().strip(),
             self._output_entry.get().strip(),
+            verify_sha256=self._verify_sha256_var.get(),
         )
 
     def _cancel(self):

@@ -137,14 +137,17 @@
             <div class="code-block">
 <pre><span class="comment"># 安装后使用 fkxz 命令</span>
 <span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
 
 <span class="comment"># 或直接运行源码</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span></pre>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span></pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
             <ul>
                 <li><code>-i, --input</code>：<code>.fkx</code> 信息文件路径（必填）</li>
                 <li><code>-o, --output</code>：输出目录（必填）</li>
+                <li><code>-s, --skip-sha256</code>：跳过SHA-256校验（可选）</li>
             </ul>
 
             <h4>远程下载</h4>
@@ -153,11 +156,13 @@
 <span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
 <span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
 <span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300
+<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
 
 <span class="comment"># 或直接运行源码</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300</pre>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span></pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
             <ul>
@@ -165,6 +170,7 @@
                 <li><code>-o, --output</code>：输出目录（必填）</li>
                 <li><code>-e, --enhanced</code>：启用增强模式（可选，需安装 curl_cffi）</li>
                 <li><code>-t, --timeout</code>：请求超时时间（秒），默认 120（可选）</li>
+                <li><code>-s, --skip-sha256</code>：跳过SHA-256校验（可选）</li>
             </ul>
         </div>
 
@@ -245,21 +251,19 @@
 │   └── downloader.py              <span class="comment"># download 命令实现</span>
 │
 ├── <span class="cmd">app/</span>                           <span class="comment"># 聚合 GUI 应用 (Tkinter, 带侧边栏导航)</span>
-│   ├── main.py                    <span class="comment"># GUI 入口，集成三大功能页面</span>
+│   ├── main.py                    <span class="comment"># GUI 入口，集成文件分块与文件下载两大功能</span>
 │   ├── theme.py                   <span class="comment"># 主题配色常量</span>
 │   ├── <span class="cmd">core/</span>                      <span class="comment"># 核心业务逻辑</span>
 │   │   ├── __init__.py
 │   │   ├── base_worker.py         <span class="comment"># Worker 基类（线程管理）</span>
 │   │   ├── splitter.py            <span class="comment"># 文件拆分核心逻辑</span>
-│   │   ├── downloader.py          <span class="comment"># 远程下载核心逻辑</span>
-│   │   └── merger.py              <span class="comment"># 本地合并核心逻辑</span>
+│   │   ├── downloader.py          <span class="comment"># 文件下载核心逻辑（本地合并+远程下载）</span>
 │   ├── <span class="cmd">ui/</span>                        <span class="comment"># 图形界面组件</span>
 │   │   ├── __init__.py
 │   │   ├── base_page.py           <span class="comment"># 页面基类（通用 UI 布局）</span>
 │   │   ├── sidebar.py             <span class="comment"># 侧边栏导航</span>
 │   │   ├── splitter_page.py       <span class="comment"># 文件分块页面</span>
-│   │   ├── merger_page.py         <span class="comment"># 本地合并页面</span>
-│   │   └── downloader_page.py     <span class="comment"># 远程下载页面</span>
+│   │   └── downloader_page.py     <span class="comment"># 文件下载页面（本地合并+远程下载）</span>
 │   └── <span class="cmd">utils/</span>                     <span class="comment"># 工具函数</span>
 │       ├── __init__.py
 │       └── helpers.py             <span class="comment"># 文件格式化、校验、FKX 解析、自定义组件</span>
@@ -329,6 +333,7 @@
             </div>
             <ul>
                 <li>支持 SHA-256 完整性校验</li>
+                <li>支持 <code>-s, --skip-sha256</code> 跳过SHA-256校验</li>
                 <li>支持 --enhanced 增强模式（curl_cffi 浏览器指纹模拟）</li>
                 <li>支持 --timeout 自定义请求超时时间（默认 120 秒）</li>
                 <li>终端实时进度条显示</li>
@@ -338,15 +343,15 @@
 
         <div class="usage-detail">
             <h3>聚合 GUI 程序 — app/main.py</h3>
-            <p class="detail-subtitle">Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体</p>
+            <p class="detail-subtitle">Tkinter 现代化图形界面，采用侧边栏导航设计，集成文件分块与文件下载两大功能于一体</p>
             <ul>
                 <li><strong>文件分块</strong>：选择文件 → 设置分片大小 → 一键拆分，生成 .fk 分片和 .fkx 信息文件</li>
-                <li><strong>本地合并</strong>：选择 .fkx 信息文件 → 自动读取同目录分片 → 合并还原</li>
-                <li><strong>远程下载</strong>：输入 .fkx 文件 URL → 可选增强模式 → 下载分片并合并</li>
+                <li><strong>文件下载</strong>：输入 .fkx 文件 URL 或选择本地 .fkx 文件（自动识别本地/远程模式）→ 可选增强模式 → 下载/合并分片并还原</li>
             </ul>
             <p style="margin-top:12px;font-weight:600;">特性：</p>
             <ul>
-                <li>侧边栏导航，三页无缝切换</li>
+                <li>侧边栏导航，两页无缝切换</li>
+                <li>文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 .fk 分片，远程模式自动下载分片后合并</li>
                 <li>自定义圆角进度条和按钮组件，现代化视觉风格</li>
                 <li>HiDPI 高 DPI 自适应（Windows）</li>
                 <li>多线程异步处理，界面不阻塞</li>

@@ -681,6 +681,7 @@ class FileDownloaderApp:
             return None
         
         self.fkx_path = self._resolve_local_path(self.fkx_path)
+        self.output_dir = os.path.abspath(self.output_dir)
         self.is_local = not self._is_remote_url(self.fkx_path)
         return (self.fkx_path, self.output_dir)
 

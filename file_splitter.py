@@ -238,10 +238,10 @@ class FileSplitterApp:
     def _validate_split_inputs(self):
         entry_file = self.file_entry.get().strip()
         if entry_file:
-            self.file_path = entry_file
+            self.file_path = os.path.abspath(entry_file)
         entry_output = self.output_entry.get().strip()
         if entry_output:
-            self.output_dir = entry_output
+            self.output_dir = os.path.abspath(entry_output)
 
         if not self.file_path:
             self.update_status("状态: 请选择要拆分的文件", foreground="#cc0000")

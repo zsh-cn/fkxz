@@ -64,12 +64,8 @@
                 <p>将大文件按指定大小拆分为多个 <code>.fk</code> 分片，并生成 <code>.fkx</code> 信息文件</p>
             </div>
             <div class="feature-card">
-                <h3>本地合并</h3>
-                <p>读取 <code>.fkx</code> 信息文件和同目录下的 <code>.fk</code> 分片，自动合并还原为原始文件</p>
-            </div>
-            <div class="feature-card">
-                <h3>远程下载</h3>
-                <p>从远程服务器下载 <code>.fkx</code> 信息文件及所有 <code>.fk</code> 分片，自动合并还原，支持 SHA-256 完整性校验</p>
+                <h3>文件下载</h3>
+                <p>支持本地 <code>.fkx</code> 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验</p>
             </div>
             <div class="feature-card">
                 <h3>增强模式</h3>
@@ -113,9 +109,10 @@
             </div>
             <div class="platform-card">
                 <h3>聚合 GUI 程序</h3>
-                <p style="margin-bottom:10px;">Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体。</p>
+                <p style="margin-bottom:10px;">Tkinter 现代化图形界面，采用侧边栏导航设计，集成文件分块与文件下载两大功能于一体。</p>
                 <ul>
-                    <li>侧边栏导航，三页无缝切换</li>
+                    <li>侧边栏导航，两页无缝切换</li>
+                    <li>文件下载页面自动识别本地/远程模式</li>
                     <li>实时分块进度 + 总进度 + 下载速度</li>
                     <li>文件信息预览（文件名、大小、分片数）</li>
                     <li>支持取消操作</li>
@@ -172,6 +169,7 @@
 <span class="comment"># 安装后直接使用 fkxz 命令</span>
 <span class="cmd">fkxz</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
 <span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
 <span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
 
 <span class="comment"># 如需增强模式（浏览器指纹模拟）</span>

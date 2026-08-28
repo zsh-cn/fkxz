@@ -78,10 +78,12 @@ def resolve_local_path(path):
     return path
 
 
-def calculate_sha256(file_path):
+def calculate_sha256(file_path, cancel_check=None):
     sha256_hash = hashlib.sha256()
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(65536), b""):
+            if cancel_check and cancel_check():
+                return None
             sha256_hash.update(chunk)
     return sha256_hash.hexdigest()
 

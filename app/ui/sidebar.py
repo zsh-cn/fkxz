@@ -38,8 +38,7 @@ class Sidebar(ttk.Frame):
 
         items = [
             ('文件分块', '将大文件拆分为多个分片'),
-            ('本地合并', '合并本地分片还原文件'),
-            ('远程下载', '从远程URL下载并合并'),
+            ('文件下载', '从本地或远程URL获取分片并合并还原文件'),
         ]
 
         for i, (label, tip) in enumerate(items):

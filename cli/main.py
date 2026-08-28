@@ -17,9 +17,11 @@ def main():
 使用示例:
   python main.py split  -i ./video.mp4 -o ./chunks -c 10
   python main.py merge  -i ./chunks/video.mp4.fkx -o ./output
+  python main.py merge  -i ./chunks/video.mp4.fkx -o ./output -s
   python main.py download -u https://example.com/files/video.mp4.fkx -o ./output
   python main.py download -u https://example.com/files/video.mp4.fkx -o ./output --enhanced
   python main.py download -u https://example.com/files/video.mp4.fkx -o ./output -t 300
+  python main.py download -u https://example.com/files/video.mp4.fkx -o ./output -s
         """
     )
 
@@ -34,6 +36,8 @@ def main():
     parser_merge = subparsers.add_parser('merge', help='本地合并分片文件')
     parser_merge.add_argument('-i', '--input', required=True, help='.fkx信息文件路径')
     parser_merge.add_argument('-o', '--output', required=True, help='输出目录')
+    parser_merge.add_argument('-s', '--skip-sha256', action='store_true',
+                              help='跳过SHA-256校验')
 
     parser_download = subparsers.add_parser('download', help='远程下载并合并文件')
     parser_download.add_argument('-u', '--url', required=True, help='.fkx信息文件的URL')
@@ -42,6 +46,8 @@ def main():
                                  help='启用增强模式 (浏览器指纹伪装 + curl_cffi)')
     parser_download.add_argument('-t', '--timeout', type=int, default=120,
                                  help='请求超时时间(秒), 默认120')
+    parser_download.add_argument('-s', '--skip-sha256', action='store_true',
+                                 help='跳过SHA-256校验')
 
     args = parser.parse_args()
 

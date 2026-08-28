@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import shutil
+import hashlib
 import random
 from urllib.parse import urlparse, urljoin
 
@@ -151,7 +152,7 @@ def download_chunk(base_url, chunk_info, chunk_index, output_dir, session, enhan
 
 def cmd_download(args):
     url = args.url
-    output_dir = args.output
+    output_dir = os.path.abspath(args.output)
     enhanced = args.enhanced
     timeout = args.timeout
 
@@ -260,19 +261,30 @@ def cmd_download(args):
     from cli.merger import merge_chunks
     merge_chunks(downloaded_chunks, output_path, num_chunks, total_size)
 
-    if 'sha256' in fkx_info:
+    if 'sha256' in fkx_info and not getattr(args, 'skip_sha256', False):
         sys.stdout.write("正在校验SHA-256...\n")
         sys.stdout.flush()
-        actual_sha256 = calculate_sha256(output_path)
-        if actual_sha256 != fkx_info['sha256']:
+        actual_sha256 = hashlib.sha256()
+        sha256_bytes = [0]
+        with open(output_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                actual_sha256.update(chunk)
+                sha256_bytes[0] += len(chunk)
+                if total_size > 0:
+                    print_progress(sha256_bytes[0], total_size,
+                                   prefix="校验: ",
+                                   suffix=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}")
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        if actual_sha256.hexdigest() != fkx_info['sha256']:
             sys.stdout.write(f"错误: SHA-256校验失败!\n")
             sys.stdout.write(f"  期望: {fkx_info['sha256']}\n")
-            sys.stdout.write(f"  实际: {actual_sha256}\n")
+            sys.stdout.write(f"  实际: {actual_sha256.hexdigest()}\n")
             sys.stdout.flush()
             os.remove(output_path)
             shutil.rmtree(chunk_dir)
             sys.exit(1)
-        sys.stdout.write(f"  SHA-256校验通过: {actual_sha256}\n")
+        sys.stdout.write(f"  SHA-256校验通过: {actual_sha256.hexdigest()}\n")
         sys.stdout.flush()
 
     shutil.rmtree(chunk_dir)

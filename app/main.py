@@ -11,7 +11,6 @@ except Exception:
 
 from ui.sidebar import Sidebar
 from ui.splitter_page import SplitterPage
-from ui.merger_page import MergerPage
 from ui.downloader_page import DownloaderPage
 from theme import (
     BG_PAGE, BG_CARD, BG_SIDEBAR,
@@ -99,7 +98,6 @@ class App:
         self._content_area = tk.Frame(main_container, bg=BG_PAGE)
         self._pages = []
         self._pages.append(SplitterPage(self._content_area))
-        self._pages.append(MergerPage(self._content_area))
         self._pages.append(DownloaderPage(self._content_area))
 
         self._sidebar = Sidebar(main_container, on_select=self._on_nav_select)

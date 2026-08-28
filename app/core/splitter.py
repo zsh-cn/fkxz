@@ -22,6 +22,9 @@ class FileSplitter(BaseWorker):
 
     def _split(self, file_path, output_dir, chunk_size_mb):
         try:
+            file_path = os.path.abspath(file_path)
+            output_dir = os.path.abspath(output_dir)
+
             if not file_path or not os.path.exists(file_path):
                 self._emit_error("请选择要拆分的文件")
                 return
@@ -91,7 +94,14 @@ class FileSplitter(BaseWorker):
                 return
 
             self._emit_status("正在计算文件SHA-256...")
-            file_sha256 = calculate_sha256(file_path)
+            file_sha256 = calculate_sha256(
+                file_path,
+                cancel_check=lambda: self._is_cancelled
+            )
+            if self._is_cancelled or file_sha256 is None:
+                self._emit_status("拆分已取消", '#cc0000')
+                self._emit_complete({'cancelled': True})
+                return
             fkx_content.append(f"sha256={file_sha256}")
 
             fkx_filename = f"{file_name}.fkx"
