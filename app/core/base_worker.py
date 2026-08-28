@@ -46,3 +46,9 @@ class BaseWorker:
         cb = self.callbacks.get('on_file_info')
         if cb:
             cb(info)
+
+    def _ask_retry(self, title, message):
+        cb = self.callbacks.get('on_ask_retry')
+        if cb:
+            return cb(title, message)
+        return False

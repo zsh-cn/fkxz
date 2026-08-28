@@ -45,11 +45,16 @@ def sanitize_filename(filename):
     return filename
 
 
-def calculate_sha256(file_path):
+def calculate_sha256(file_path, progress_callback=None):
+    file_size = os.path.getsize(file_path)
     sha256_hash = hashlib.sha256()
+    processed = 0
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(65536), b""):
             sha256_hash.update(chunk)
+            processed += len(chunk)
+            if progress_callback:
+                progress_callback(processed, file_size)
     return sha256_hash.hexdigest()
 
 
@@ -81,10 +86,13 @@ def parse_fkx(content):
                 chunk_filename = os.path.basename(parts[0].strip())
                 if index in raw_chunks:
                     raise ValueError(f"chunk 索引重复: chunk_{index}")
-                raw_chunks[index] = {
+                chunk_info = {
                     'filename': chunk_filename,
                     'size': int(parts[1])
                 }
+                if len(parts) >= 3:
+                    chunk_info['sha256'] = parts[2].strip()
+                raw_chunks[index] = chunk_info
         else:
             info[key] = value.strip()
 
@@ -101,3 +109,8 @@ def parse_fkx(content):
 
     info['chunks'] = [raw_chunks[idx] for idx in sorted_indices]
     return info
+
+
+def fkx_chunk_to_line(index, chunk_info):
+    sha256_part = f",{chunk_info['sha256']}" if 'sha256' in chunk_info else ""
+    return f"chunk_{index}={chunk_info['filename']},{chunk_info['size']}{sha256_part}"

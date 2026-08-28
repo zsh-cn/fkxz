@@ -377,8 +377,8 @@ class DownloaderPage(BasePage):
         while not flag[0] and not self._downloader.is_cancelled and time.time() < deadline:
             self.after(200, lambda: None)
             try:
-                self._downloader.root.update_idletasks()
-                self._downloader.root.update()
+                self.winfo_toplevel().update_idletasks()
+                self.winfo_toplevel().update()
             except Exception:
                 break
 

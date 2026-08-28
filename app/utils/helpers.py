@@ -34,11 +34,18 @@ def parse_fkx(content):
                     'filename': chunk_filename,
                     'size': int(parts[1])
                 }
+                if len(parts) >= 3:
+                    chunk_info['sha256'] = parts[2].strip()
                 info['chunks'].append(chunk_info)
         else:
             info[key] = value.strip()
 
     return info
+
+
+def fkx_chunk_to_line(index, chunk_info):
+    sha256_part = f",{chunk_info['sha256']}" if 'sha256' in chunk_info else ""
+    return f"chunk_{index}={chunk_info['filename']},{chunk_info['size']}{sha256_part}"
 
 
 def sanitize_filename(filename):
@@ -78,13 +85,18 @@ def resolve_local_path(path):
     return path
 
 
-def calculate_sha256(file_path, cancel_check=None):
+def calculate_sha256(file_path, cancel_check=None, progress_callback=None):
+    file_size = os.path.getsize(file_path)
     sha256_hash = hashlib.sha256()
+    processed = 0
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(65536), b""):
             if cancel_check and cancel_check():
                 return None
             sha256_hash.update(chunk)
+            processed += len(chunk)
+            if progress_callback:
+                progress_callback(processed, file_size)
     return sha256_hash.hexdigest()
 
 

@@ -1,7 +1,6 @@
 import os
 import hashlib
 import shutil
-import tempfile
 import threading
 import time
 from urllib.parse import urlparse, urljoin
@@ -10,7 +9,7 @@ import requests as req_lib
 from requests.adapters import HTTPAdapter
 
 from core.base_worker import BaseWorker
-from utils.helpers import parse_fkx, sanitize_filename, format_size, is_remote_url, resolve_local_path
+from utils.helpers import parse_fkx, sanitize_filename, format_size, is_remote_url, resolve_local_path, calculate_sha256
 
 try:
     from curl_cffi import requests as curl_requests
@@ -84,101 +83,78 @@ class FileDownloader(BaseWorker):
     def _download_text(self, url):
         if self._session is None:
             return None
-        while True:
-            try:
-                if self._is_cancelled:
-                    return None
-                headers = self._get_request_headers()
-                resp = self._session.get(url, timeout=120, headers=headers)
-                resp.raise_for_status()
-                return resp.text
-            except Exception as e:
-                if self._is_cancelled:
-                    return None
-                if not self._ask_retry("下载失败", f"无法下载文件信息: {str(e)[:100]}\n是否重试？"):
-                    return None
+        try:
+            if self._is_cancelled:
+                return None
+            headers = self._get_request_headers()
+            resp = self._session.get(url, timeout=120, headers=headers)
+            resp.raise_for_status()
+            return resp.text
+        except Exception:
+            return None
 
     def _download_chunk(self, url, chunk_path, chunk_size, referer):
         if self._session is None:
             return False
-        while True:
-            try:
-                headers = self._get_request_headers(referer=referer, is_chunk=True)
-                downloaded_bytes = [0]
-                last_reported = [0]
+        try:
+            headers = self._get_request_headers(referer=referer, is_chunk=True)
+            downloaded_bytes = [0]
+            last_reported = [0]
 
-                if self._enhanced and HAS_CURL_CFFI:
-                    fh_ref = [None]
+            if self._enhanced and HAS_CURL_CFFI:
+                fh_ref = [None]
 
-                    def content_callback(data):
+                def content_callback(data):
+                    if self._is_cancelled:
+                        return -1
+                    fh_ref[0].write(data)
+                    downloaded_bytes[0] += len(data)
+                    d = downloaded_bytes[0]
+                    if d - last_reported[0] >= 65536 or d >= chunk_size:
+                        last_reported[0] = d
+                        with self._progress_lock:
+                            cb = self._progress_callback
+                        if cb:
+                            cb(d, chunk_size, len(data))
+
+                with open(chunk_path, 'wb') as f:
+                    fh_ref[0] = f
+                    resp = self._session.get(url, timeout=120, headers=headers, content_callback=content_callback)
+                resp.raise_for_status()
+            else:
+                resp = self._session.get(url, stream=True, timeout=120, headers=headers)
+                resp.raise_for_status()
+
+                with open(chunk_path, 'wb') as f:
+                    for chunk in resp.iter_content(chunk_size=65536):
                         if self._is_cancelled:
-                            return -1
-                        fh_ref[0].write(data)
-                        downloaded_bytes[0] += len(data)
-                        d = downloaded_bytes[0]
-                        if d - last_reported[0] >= 65536 or d >= chunk_size:
-                            last_reported[0] = d
-                            with self._progress_lock:
-                                cb = self._progress_callback
-                            if cb:
-                                cb(d, chunk_size, len(data))
+                            return False
+                        f.write(chunk)
+                        downloaded_bytes[0] += len(chunk)
+                        with self._progress_lock:
+                            cb = self._progress_callback
+                        if cb:
+                            cb(downloaded_bytes[0], chunk_size, len(chunk))
 
-                    with open(chunk_path, 'wb') as f:
-                        fh_ref[0] = f
-                        resp = self._session.get(url, timeout=120, headers=headers, content_callback=content_callback)
-                    resp.raise_for_status()
-                else:
-                    resp = self._session.get(url, stream=True, timeout=120, headers=headers)
-                    resp.raise_for_status()
-
-                    with open(chunk_path, 'wb') as f:
-                        for chunk in resp.iter_content(chunk_size=65536):
-                            if self._is_cancelled:
-                                try:
-                                    os.remove(chunk_path)
-                                except FileNotFoundError:
-                                    pass
-                                return False
-                            f.write(chunk)
-                            downloaded_bytes[0] += len(chunk)
-                            with self._progress_lock:
-                                cb = self._progress_callback
-                            if cb:
-                                cb(downloaded_bytes[0], chunk_size, len(chunk))
-
-                if self._is_cancelled:
-                    try:
-                        os.remove(chunk_path)
-                    except FileNotFoundError:
-                        pass
-                    return False
-
-                if os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
-                    return True
-
-                try:
-                    os.remove(chunk_path)
-                except FileNotFoundError:
-                    pass
+            if self._is_cancelled:
                 return False
-            except Exception as e:
-                try:
-                    os.remove(chunk_path)
-                except FileNotFoundError:
-                    pass
-                if self._is_cancelled:
-                    return False
-                if not self._ask_retry("下载失败", f"分片下载失败: {str(e)[:100]}\n是否重试？"):
-                    return False
+
+            if os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
+                return True
+
+            return False
+        except Exception:
+            return False
 
     def _get_chunk_dir(self, output_dir, safe_name):
-        prefix = f"{safe_name}-fkxz-" if safe_name else "fkwj-"
-        chunk_dir = tempfile.mkdtemp(prefix=prefix, dir=output_dir)
+        chunk_dir = os.path.join(output_dir, f"{safe_name}-fkxz")
+        if not os.path.exists(chunk_dir):
+            os.makedirs(chunk_dir)
         return chunk_dir
 
     def _cleanup_chunk_dir(self, chunk_dir):
-        if os.path.exists(chunk_dir):
-            shutil.rmtree(chunk_dir)
+        if chunk_dir and os.path.exists(chunk_dir):
+            shutil.rmtree(chunk_dir, ignore_errors=True)
 
     def _close_session(self):
         if self._session is not None:
@@ -268,6 +244,59 @@ class FileDownloader(BaseWorker):
         except Exception as e:
             self._emit_status(f"获取文件信息失败: {str(e)[:100]}", '#cc0000')
 
+    def _check_existing_chunk(self, chunk_dir, chunk_info):
+        chunk_path = os.path.join(chunk_dir, chunk_info['filename'])
+        chunk_path = os.path.normpath(chunk_path)
+        if not os.path.exists(chunk_path):
+            return None
+        if os.path.getsize(chunk_path) != chunk_info['size']:
+            return None
+        if 'sha256' in chunk_info:
+            self._emit_status(f"正在校验分片: {chunk_info['filename']}")
+            actual_sha256 = calculate_sha256(
+                chunk_path,
+                cancel_check=lambda: self._is_cancelled,
+                progress_callback=lambda p, t: self._emit_chunk_progress(p, t)
+            )
+            if self._is_cancelled:
+                return None
+            if actual_sha256 == chunk_info['sha256']:
+                self._emit_chunk_progress(100, 100)
+                return chunk_path
+            return None
+        return chunk_path
+
+    def _sync_local_fkx(self, chunk_dir, remote_fkx_content, fkx_filename):
+        local_fkx_path = os.path.join(chunk_dir, fkx_filename)
+        if os.path.exists(local_fkx_path):
+            try:
+                with open(local_fkx_path, 'r', encoding='utf-8') as f:
+                    local_fkx_content = f.read()
+                local_info = parse_fkx(local_fkx_content)
+                remote_info = parse_fkx(remote_fkx_content)
+
+                local_num = len(local_info.get('chunks', []))
+                remote_num = len(remote_info.get('chunks', []))
+                if local_num == remote_num:
+                    match = True
+                    for i in range(local_num):
+                        lc = local_info['chunks'][i]
+                        rc = remote_info['chunks'][i]
+                        if lc['filename'] != rc['filename'] or lc['size'] != rc['size']:
+                            match = False
+                            break
+                    if match:
+                        if any('sha256' not in lc for lc in local_info['chunks']) and \
+                           any('sha256' in rc for rc in remote_info['chunks']):
+                            return remote_info
+                        return local_info
+            except Exception:
+                pass
+
+        with open(local_fkx_path, 'w', encoding='utf-8') as f:
+            f.write(remote_fkx_content)
+        return parse_fkx(remote_fkx_content)
+
     def _download(self, fkx_url, output_dir, enhanced, verify_sha256=True):
         chunk_dir = ""
         output_path = None
@@ -282,9 +311,15 @@ class FileDownloader(BaseWorker):
                 return
 
             if error:
-                self._emit_error(error)
                 self._close_session()
-                return
+                if not self._ask_retry("下载失败", f"{error}\n是否重试？"):
+                    self._emit_error(error)
+                    return
+                fkx_info, error, fkx_content = self._fetch_and_parse_fkx(fkx_url, enhanced, emit_status=False)
+                if error:
+                    self._close_session()
+                    self._emit_error(error)
+                    return
 
             if fkx_info is None:
                 self._emit_error("无法解析文件信息")
@@ -341,23 +376,39 @@ class FileDownloader(BaseWorker):
                 base_url = f"{parsed.scheme}://{parsed.netloc}{dir_path}/"
 
                 chunk_dir = self._get_chunk_dir(output_dir, safe_filename)
-                fkx_save_path = os.path.join(chunk_dir, os.path.basename(fkx_url))
-                with open(fkx_save_path, 'w', encoding='utf-8') as f:
-                    f.write(fkx_content)
+                fkx_filename = os.path.basename(fkx_url)
 
+                fkx_info = self._sync_local_fkx(chunk_dir, fkx_content, fkx_filename)
+                num_chunks = len(fkx_info['chunks'])
+                total_size = sum(chunk['size'] for chunk in fkx_info['chunks'])
+                self._total_size = total_size
+                self._emit_progress(0, num_chunks)
+
+                download_start_time = time.time()
                 downloaded_chunks = {}
                 downloaded_size = 0
-                download_start_time = time.time()
 
                 self._emit_status(f"正在顺序下载分片 (共{num_chunks}个)")
 
-                for i, chunk_info in enumerate(fkx_info['chunks']):
+                i = 0
+                while i < num_chunks:
                     if self._is_cancelled:
-                        self._cleanup_chunk_dir(chunk_dir)
                         self._close_session()
-                        self._emit_status("已取消下载", '#cc0000')
+                        self._emit_status("已取消下载（分片已保留）", '#cc0000')
                         self._emit_complete({'cancelled': True})
                         return
+
+                    chunk_info = fkx_info['chunks'][i]
+
+                    existing = self._check_existing_chunk(chunk_dir, chunk_info)
+                    if existing:
+                        self._emit_status(f"分片 {i+1}/{num_chunks} 已存在，跳过")
+                        downloaded_chunks[i] = existing
+                        downloaded_size += chunk_info['size']
+                        self._emit_progress(i + 1, num_chunks)
+                        self._emit_chunk_progress(100, 100)
+                        i += 1
+                        continue
 
                     self._emit_status(f"正在下载分片 {i+1}/{num_chunks}: {chunk_info['filename']}")
 
@@ -378,40 +429,48 @@ class FileDownloader(BaseWorker):
 
                         if not success:
                             if self._is_cancelled:
-                                self._cleanup_chunk_dir(chunk_dir)
                                 self._close_session()
-                                self._emit_status("已取消下载", '#cc0000')
+                                self._emit_status("已取消下载（分片已保留）", '#cc0000')
                                 self._emit_complete({'cancelled': True})
                                 return
-                            self._cleanup_chunk_dir(chunk_dir)
-                            self._close_session()
-                            self._emit_error(f"分片 {i+1} 下载失败")
-                            return
+
+                            if not self._ask_retry("下载失败", f"分片 {i+1}/{num_chunks} 下载失败\n是否从失败处继续？"):
+                                self._close_session()
+                                self._emit_status("下载已中断（分片已保留）", '#cc6600')
+                                self._emit_complete({'cancelled': True})
+                                return
+                            continue
 
                         if os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
                             downloaded_chunks[i] = chunk_path
                             downloaded_size += chunk_size
                         else:
-                            self._cleanup_chunk_dir(chunk_dir)
-                            self._close_session()
-                            self._emit_error(f"分片 {i+1} 下载不完整")
-                            return
+                            if not self._ask_retry("下载失败", f"分片 {i+1}/{num_chunks} 下载不完整\n是否重试？"):
+                                self._close_session()
+                                self._emit_status("下载已中断（分片已保留）", '#cc6600')
+                                self._emit_complete({'cancelled': True})
+                                return
+                            continue
 
                     self._emit_progress(i + 1, num_chunks)
                     self._emit_chunk_progress(100, 100)
+                    i += 1
 
             if self._is_cancelled:
-                if not is_local:
-                    self._cleanup_chunk_dir(chunk_dir)
-                self._close_session()
-                self._emit_status("已取消下载", '#cc0000')
+                if is_local:
+                    self._emit_status("已取消合并", '#cc0000')
+                else:
+                    self._emit_status("已取消下载（分片已保留）", '#cc0000')
                 self._emit_complete({'cancelled': True})
                 return
 
             if len(downloaded_chunks) != num_chunks:
-                self._emit_error(f"下载不完整: 期望{num_chunks}个分片，实际下载{len(downloaded_chunks)}个")
                 if not is_local:
-                    self._cleanup_chunk_dir(chunk_dir)
+                    self._close_session()
+                    self._emit_status("下载已中断（分片已保留）", '#cc6600')
+                    self._emit_complete({'cancelled': True})
+                    return
+                self._emit_error(f"下载不完整: 期望{num_chunks}个分片，实际下载{len(downloaded_chunks)}个")
                 self._close_session()
                 return
 
@@ -441,10 +500,11 @@ class FileDownloader(BaseWorker):
                     os.remove(output_path)
                 except FileNotFoundError:
                     pass
-                if not is_local:
-                    self._cleanup_chunk_dir(chunk_dir)
                 self._close_session()
-                self._emit_status("已取消下载", '#cc0000')
+                if is_local:
+                    self._emit_status("已取消合并", '#cc0000')
+                else:
+                    self._emit_status("已取消下载（分片已保留）", '#cc0000')
                 self._emit_complete({'cancelled': True})
                 return
 
@@ -465,22 +525,25 @@ class FileDownloader(BaseWorker):
                             self._emit_chunk_progress(percentage * 100, 100)
 
                 if sha256_cancelled:
-                    if not is_local:
-                        self._cleanup_chunk_dir(chunk_dir)
                     self._close_session()
-                    self._emit_status("已取消SHA-256检验", '#cc6600')
+                    if is_local:
+                        self._emit_status("已取消SHA-256检验", '#cc6600')
+                    else:
+                        self._emit_status("已取消SHA-256检验（分片已保留）", '#cc6600')
                     self._emit_complete({'cancelled': True, 'sha256_cancelled': True})
                     return
 
                 if actual_sha256.hexdigest() != fkx_info['sha256']:
-                    self._emit_error("文件SHA-256校验失败")
                     try:
                         os.remove(output_path)
                     except FileNotFoundError:
                         pass
-                    if not is_local:
-                        self._cleanup_chunk_dir(chunk_dir)
                     self._close_session()
+                    if not is_local:
+                        self._emit_status("SHA-256校验失败（分片已保留）", '#cc0000')
+                        self._emit_complete({'cancelled': True, 'sha256_failed': True})
+                    else:
+                        self._emit_error("文件SHA-256校验失败")
                     return
 
             if not is_local:

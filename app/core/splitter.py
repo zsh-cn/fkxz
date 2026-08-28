@@ -2,7 +2,7 @@ import os
 import threading
 
 from core.base_worker import BaseWorker
-from utils.helpers import calculate_sha256
+from utils.helpers import calculate_sha256, fkx_chunk_to_line
 
 
 class FileSplitter(BaseWorker):
@@ -21,6 +21,7 @@ class FileSplitter(BaseWorker):
             self._thread.start()
 
     def _split(self, file_path, output_dir, chunk_size_mb):
+        fkx_path = None
         try:
             file_path = os.path.abspath(file_path)
             output_dir = os.path.abspath(output_dir)
@@ -61,53 +62,71 @@ class FileSplitter(BaseWorker):
 
             self._emit_progress(0, num_chunks)
 
-            fkx_content = [
-                f"filename={file_name}",
-                f"total_size={file_size}",
-                f"chunk_size={chunk_size}",
-                f"num_chunks={num_chunks}"
-            ]
+            fkx_filename = f"{file_name}.fkx"
+            fkx_path = os.path.join(output_dir, fkx_filename)
 
-            with open(file_path, 'rb') as f:
-                for i in range(num_chunks):
-                    if self._is_cancelled:
-                        self._emit_status("拆分已取消", '#cc0000')
-                        self._cleanup_chunks(output_dir, file_name, i)
-                        self._emit_complete({'cancelled': True})
-                        return
+            with open(fkx_path, 'w', encoding='utf-8') as fkx_file:
+                fkx_file.write(f"filename={file_name}\n")
+                fkx_file.write(f"total_size={file_size}\n")
+                fkx_file.write(f"chunk_size={chunk_size}\n")
+                fkx_file.write(f"num_chunks={num_chunks}\n")
+                fkx_file.flush()
 
-                    chunk_data = f.read(chunk_size)
-                    chunk_filename = f"{file_name}-{i+1}.fk"
-                    chunk_path = os.path.join(output_dir, chunk_filename)
+                with open(file_path, 'rb') as f:
+                    for i in range(num_chunks):
+                        if self._is_cancelled:
+                            self._emit_status("拆分已取消（分片已保留）", '#cc0000')
+                            self._emit_complete({'cancelled': True})
+                            return
 
-                    with open(chunk_path, 'wb') as chunk_file:
-                        chunk_file.write(chunk_data)
+                        chunk_data = f.read(chunk_size)
+                        chunk_filename = f"{file_name}-{i+1}.fk"
+                        chunk_path = os.path.join(output_dir, chunk_filename)
 
-                    fkx_content.append(f"chunk_{i+1}={chunk_filename},{len(chunk_data)}")
+                        with open(chunk_path, 'wb') as chunk_file:
+                            chunk_file.write(chunk_data)
 
-                    self._emit_progress(i + 1, num_chunks)
-                    self._emit_status(f"正在拆分 {i+1}/{num_chunks}")
+                        self._emit_status(f"正在计算分片SHA-256 {i+1}/{num_chunks}")
+                        chunk_sha256 = calculate_sha256(
+                            chunk_path,
+                            cancel_check=lambda: self._is_cancelled,
+                            progress_callback=lambda p, t: self._emit_chunk_progress(p, t)
+                        )
+                        if self._is_cancelled or chunk_sha256 is None:
+                            self._emit_status("拆分已取消（分片已保留）", '#cc0000')
+                            self._emit_complete({'cancelled': True})
+                            return
+
+                        chunk_info = {
+                            'filename': chunk_filename,
+                            'size': len(chunk_data),
+                            'sha256': chunk_sha256
+                        }
+                        fkx_file.write(fkx_chunk_to_line(i + 1, chunk_info) + "\n")
+                        fkx_file.flush()
+
+                        self._emit_progress(i + 1, num_chunks)
+                        self._emit_chunk_progress(100, 100)
+                        self._emit_status(f"正在拆分 {i+1}/{num_chunks}")
 
             if self._is_cancelled:
-                self._emit_status("拆分已取消", '#cc0000')
+                self._emit_status("拆分已取消（分片已保留）", '#cc0000')
                 self._emit_complete({'cancelled': True})
                 return
 
             self._emit_status("正在计算文件SHA-256...")
             file_sha256 = calculate_sha256(
                 file_path,
-                cancel_check=lambda: self._is_cancelled
+                cancel_check=lambda: self._is_cancelled,
+                progress_callback=lambda p, t: self._emit_chunk_progress(p, t)
             )
             if self._is_cancelled or file_sha256 is None:
-                self._emit_status("拆分已取消", '#cc0000')
+                self._emit_status("拆分已取消（分片已保留）", '#cc0000')
                 self._emit_complete({'cancelled': True})
                 return
-            fkx_content.append(f"sha256={file_sha256}")
 
-            fkx_filename = f"{file_name}.fkx"
-            fkx_path = os.path.join(output_dir, fkx_filename)
-            with open(fkx_path, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(fkx_content))
+            with open(fkx_path, 'a', encoding='utf-8') as fkx_file:
+                fkx_file.write(f"sha256={file_sha256}\n")
 
             self._emit_progress(num_chunks, num_chunks)
             self._emit_status(f"拆分完成！已生成 {num_chunks} 个分片", '#006600')
@@ -121,13 +140,3 @@ class FileSplitter(BaseWorker):
 
         except Exception as e:
             self._emit_error(f"拆分过程发生错误: {str(e)}")
-
-    def _cleanup_chunks(self, output_dir, file_name, count):
-        for i in range(1, count + 1):
-            chunk_path = os.path.join(output_dir, f"{file_name}-{i}.fk")
-            try:
-                os.remove(chunk_path)
-            except FileNotFoundError:
-                pass
-            except Exception:
-                pass

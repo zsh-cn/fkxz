@@ -3,7 +3,6 @@ import sys
 import time
 import shutil
 import hashlib
-import random
 from urllib.parse import urlparse, urljoin
 
 import requests
@@ -13,9 +12,6 @@ from cli.utils import (
     BROWSER_HEADERS, HAS_CURL_CFFI, curl_requests,
     format_size, sanitize_filename, calculate_sha256, parse_fkx, print_progress
 )
-
-MAX_RETRIES = 3
-RETRY_BASE_DELAY = 1
 
 
 def _validate_chunk_filename(filename):
@@ -42,7 +38,7 @@ def download_fkx(url, session, enhanced, timeout=120):
 
 
 def _report_download_progress(downloaded, chunk_size):
-    pct = min(downloaded / chunk_size * 100, 100)
+    pct = min(downloaded / chunk_size * 100, 100) if chunk_size > 0 else 100
     sys.stdout.write(
         f"\r    下载中... {format_size(downloaded)}/{format_size(chunk_size)} ({pct:.1f}%)" + " " * 20
     )
@@ -107,18 +103,61 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
         sys.stdout.flush()
         return True
     except Exception as e:
-        if os.path.exists(chunk_path):
-            os.remove(chunk_path)
         sys.stdout.write(f"\n    错误: 分片下载失败 - {e}\n")
         sys.stdout.flush()
         return False
 
 
-def download_chunk(base_url, chunk_info, chunk_index, output_dir, session, enhanced, base_referer, timeout=120):
+def _report_sha256_progress(processed, total):
+    pct = min(processed / total * 100, 100) if total > 0 else 100
+    sys.stdout.write(
+        f"\r    校验中... {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 20
+    )
+    sys.stdout.flush()
+
+
+def _check_existing_chunk(chunk_dir, chunk_info):
+    chunk_path = os.path.join(chunk_dir, chunk_info['filename'])
+    chunk_path = os.path.normpath(chunk_path)
+    if not os.path.exists(chunk_path):
+        return None
+    if os.path.getsize(chunk_path) != chunk_info['size']:
+        return None
+    if 'sha256' in chunk_info:
+        sys.stdout.write(f"    校验中... {chunk_info['filename']}")
+        sys.stdout.flush()
+        actual_sha256 = calculate_sha256(
+            chunk_path,
+            progress_callback=lambda p, t: _report_sha256_progress(p, t)
+        )
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
+        if actual_sha256 == chunk_info['sha256']:
+            return chunk_path
+        return None
+    return chunk_path
+
+
+def _ask_retry_cli(prompt):
+    while True:
+        answer = input(f"{prompt} (y/n): ").strip().lower()
+        if answer == 'y':
+            return True
+        if answer == 'n':
+            return False
+
+
+def download_chunk(base_url, chunk_info, chunk_index, chunk_dir, session, enhanced, base_referer, timeout=120):
+    existing = _check_existing_chunk(chunk_dir, chunk_info)
+    if existing:
+        sys.stdout.write(f"  [{chunk_index + 1}] {chunk_info['filename']} 已存在，跳过\n")
+        sys.stdout.flush()
+        return True, existing
+
     chunk_filename = _validate_chunk_filename(chunk_info['filename'])
     chunk_url = urljoin(base_url, chunk_filename)
     chunk_size = chunk_info['size']
-    chunk_path = os.path.join(output_dir, chunk_filename)
+    chunk_path = os.path.join(chunk_dir, chunk_filename)
     chunk_path = os.path.normpath(chunk_path)
 
     if chunk_size == 0:
@@ -131,23 +170,13 @@ def download_chunk(base_url, chunk_info, chunk_index, output_dir, session, enhan
     sys.stdout.write(f"  [{chunk_index + 1}] {chunk_filename} ({format_size(chunk_size)})\n")
     sys.stdout.flush()
 
-    for attempt in range(1, MAX_RETRIES + 1):
+    while True:
         success = download_chunk_stream(chunk_url, chunk_path, chunk_size, session, enhanced, base_referer, timeout)
         if success and os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
             return True, chunk_path
 
-        if os.path.exists(chunk_path):
-            os.remove(chunk_path)
-
-        if attempt < MAX_RETRIES:
-            delay = RETRY_BASE_DELAY * attempt + random.uniform(0, 0.5)
-            sys.stdout.write(f"    重试 {attempt}/{MAX_RETRIES - 1}，{delay:.1f}s 后重试...\n")
-            sys.stdout.flush()
-            time.sleep(delay)
-
-    sys.stdout.write(f"    错误: 分片 {chunk_index + 1} 下载失败（已重试 {MAX_RETRIES} 次）\n")
-    sys.stdout.flush()
-    return False, None
+        if not _ask_retry_cli(f"分片 {chunk_index + 1} 下载失败，是否重试？"):
+            return False, None
 
 
 def cmd_download(args):
@@ -207,18 +236,46 @@ def cmd_download(args):
     safe_filename = sanitize_filename(os.path.basename(fkx_info['filename']))
     chunk_dir_name = f"{safe_filename}-fkxz"
     chunk_dir = os.path.join(output_dir, chunk_dir_name)
-    if os.path.exists(chunk_dir):
-        shutil.rmtree(chunk_dir)
     os.makedirs(chunk_dir, exist_ok=True)
 
-    fkx_save_path = os.path.join(chunk_dir, os.path.basename(urlparse(url).path))
-    with open(fkx_save_path, 'w', encoding='utf-8') as f:
-        f.write(fkx_content)
+    fkx_filename = os.path.basename(urlparse(url).path)
+    local_fkx_path = os.path.join(chunk_dir, fkx_filename)
+
+    if os.path.exists(local_fkx_path):
+        try:
+            with open(local_fkx_path, 'r', encoding='utf-8') as f:
+                local_fkx_content = f.read()
+            local_info = parse_fkx(local_fkx_content)
+            remote_info = parse_fkx(fkx_content)
+            local_num = len(local_info.get('chunks', []))
+            remote_num = len(remote_info.get('chunks', []))
+            if local_num == remote_num:
+                match = True
+                for i in range(local_num):
+                    lc = local_info['chunks'][i]
+                    rc = remote_info['chunks'][i]
+                    if lc['filename'] != rc['filename'] or lc['size'] != rc['size']:
+                        match = False
+                        break
+                if match:
+                    if any('sha256' not in lc for lc in local_info['chunks']) and \
+                       any('sha256' in rc for rc in remote_info['chunks']):
+                        fkx_info = remote_info
+                    else:
+                        fkx_info = local_info
+                    num_chunks = len(fkx_info['chunks'])
+                    total_size = sum(c['size'] for c in fkx_info['chunks'])
+                    sys.stdout.write("复用本地文件信息\n")
+        except Exception:
+            pass
+    else:
+        with open(local_fkx_path, 'w', encoding='utf-8') as f:
+            f.write(fkx_content)
 
     sys.stdout.write(f"文件名: {fkx_info['filename']}\n")
     sys.stdout.write(f"文件大小: {format_size(total_size)}\n")
     sys.stdout.write(f"分片数: {num_chunks}\n")
-    sys.stdout.write(f"临时目录: {chunk_dir}\n")
+    sys.stdout.write(f"分片目录: {chunk_dir}\n")
     sys.stdout.write("\n")
     sys.stdout.flush()
 
@@ -226,14 +283,19 @@ def cmd_download(args):
     download_start_time = time.time()
     total_downloaded = 0
 
-    for i, chunk_info in enumerate(fkx_info['chunks']):
+    i = 0
+    while i < num_chunks:
+        chunk_info = fkx_info['chunks'][i]
         success, chunk_path = download_chunk(base_url, chunk_info, i, chunk_dir,
                                              session, enhanced, base_referer, timeout)
         if not success:
-            sys.stdout.write(f"\n错误: 分片 {i+1} 下载失败，已中止\n")
+            sys.stdout.write(f"\n分片 {i+1} 下载失败\n")
             sys.stdout.flush()
-            shutil.rmtree(chunk_dir)
-            sys.exit(1)
+            if not _ask_retry_cli("是否从失败处继续下载？"):
+                sys.stdout.write(f"下载已中断（分片已保留在: {chunk_dir}）\n")
+                sys.stdout.flush()
+                sys.exit(1)
+            continue
 
         downloaded_chunks[i] = chunk_path
         total_downloaded += chunk_info['size']
@@ -244,13 +306,14 @@ def cmd_download(args):
                        prefix=f"总进度: ",
                        suffix=f"{i+1}/{num_chunks} | {format_size(int(speed))}/s")
         sys.stdout.write("\n")
+        i += 1
     sys.stdout.write("\n")
     sys.stdout.flush()
 
     if len(downloaded_chunks) != num_chunks:
         sys.stdout.write(f"错误: 下载不完整 - 期望{num_chunks}个，实际{len(downloaded_chunks)}个\n")
+        sys.stdout.write(f"分片已保留在: {chunk_dir}\n")
         sys.stdout.flush()
-        shutil.rmtree(chunk_dir)
         sys.exit(1)
 
     sys.stdout.write("正在合并文件...\n")
@@ -282,7 +345,8 @@ def cmd_download(args):
             sys.stdout.write(f"  实际: {actual_sha256.hexdigest()}\n")
             sys.stdout.flush()
             os.remove(output_path)
-            shutil.rmtree(chunk_dir)
+            sys.stdout.write(f"分片已保留在: {chunk_dir}\n")
+            sys.stdout.flush()
             sys.exit(1)
         sys.stdout.write(f"  SHA-256校验通过: {actual_sha256.hexdigest()}\n")
         sys.stdout.flush()

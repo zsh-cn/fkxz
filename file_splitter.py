@@ -222,14 +222,29 @@ class FileSplitterApp:
         else:
             return f"{size / (1024 * 1024 * 1024):.2f} GB"
 
-    def calculate_sha256(self, file_path, cancel_check=None):
+    def calculate_sha256(self, file_path, cancel_check=None, progress_callback=None):
+        file_size = os.path.getsize(file_path)
         sha256_hash = hashlib.sha256()
+        processed = 0
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 if cancel_check and cancel_check():
                     return None
                 sha256_hash.update(chunk)
+                processed += len(chunk)
+                if progress_callback:
+                    progress_callback(processed, file_size)
         return sha256_hash.hexdigest()
+    
+    def _on_split_sha256_progress(self, processed, total):
+        def update():
+            if total > 0:
+                self.progress['value'] = processed / total * 100
+            self.status_label.config(
+                text=f"状态: 正在计算SHA-256... {self.format_size(processed)} / {self.format_size(total)}"
+            )
+            self.root.update_idletasks()
+        self.root.after(0, update)
     
     def update_status(self, text, foreground="#333333"):
         self.status_label.config(text=text, foreground=foreground)
@@ -278,56 +293,71 @@ class FileSplitterApp:
         num_chunks = (file_size + self.chunk_size - 1) // self.chunk_size
         return (file_name, file_size, num_chunks)
 
-    def _do_split_chunks(self, file_name, num_chunks):
-        fkx_content = []
+    def _do_split_chunks(self, file_name, num_chunks, fkx_path):
         try:
-            with open(self.file_path, 'rb') as f:
-                for i in range(num_chunks):
-                    if self.is_cancelled:
-                        self.update_status("状态: 拆分已取消", foreground="#cc0000")
-                        self.cleanup_chunks(self.output_dir, file_name, i)
-                        return None
-                    
-                    chunk_data = f.read(self.chunk_size)
-                    chunk_filename = f"{file_name}-{i+1}.fk"
-                    chunk_path = os.path.join(self.output_dir, chunk_filename)
-                    
-                    with open(chunk_path, 'wb') as chunk_file:
-                        chunk_file.write(chunk_data)
-                    
-                    fkx_content.append(f"chunk_{i+1}={chunk_filename},{len(chunk_data)}")
-                    
-                    self.progress['value'] = i + 1
-                    self.update_status(f"状态: 正在拆分 {i+1}/{num_chunks}")
-            return fkx_content
+            with open(fkx_path, 'w', encoding='utf-8') as fkx_file:
+                fkx_file.write(f"filename={file_name}\n")
+                fkx_file.write(f"total_size={os.path.getsize(self.file_path)}\n")
+                fkx_file.write(f"chunk_size={self.chunk_size}\n")
+                fkx_file.write(f"num_chunks={num_chunks}\n")
+                fkx_file.flush()
+
+                with open(self.file_path, 'rb') as f:
+                    for i in range(num_chunks):
+                        if self.is_cancelled:
+                            self.update_status("状态: 拆分已取消（分片已保留）", foreground="#cc0000")
+                            return False
+
+                        chunk_data = f.read(self.chunk_size)
+                        chunk_filename = f"{file_name}-{i+1}.fk"
+                        chunk_path = os.path.join(self.output_dir, chunk_filename)
+
+                        with open(chunk_path, 'wb') as chunk_file:
+                            chunk_file.write(chunk_data)
+
+                        self.update_status(f"状态: 正在计算分片SHA-256 {i+1}/{num_chunks}")
+
+                        chunk_sha256 = self.calculate_sha256(
+                            chunk_path,
+                            cancel_check=lambda: self.is_cancelled,
+                            progress_callback=lambda p, t: self._on_split_sha256_progress(p, t)
+                        )
+                        if self.is_cancelled or chunk_sha256 is None:
+                            self.update_status("状态: 拆分已取消（分片已保留）", foreground="#cc0000")
+                            return False
+
+                        fkx_file.write(f"chunk_{i+1}={chunk_filename},{len(chunk_data)},{chunk_sha256}\n")
+                        fkx_file.flush()
+
+                        self.progress['value'] = i + 1
+                        self.update_status(f"状态: 正在拆分 {i+1}/{num_chunks}")
+            return True
         except Exception as e:
             self.update_status(f"状态: 拆分过程发生错误: {str(e)}", foreground="#cc0000")
-            return None
+            return False
 
-    def _finalize_split(self, file_name, file_size, num_chunks, fkx_content):
+    def _finalize_split(self, file_name, file_size, num_chunks, fkx_path):
         self.update_status("状态: 正在计算文件SHA-256...")
-        
+
         file_sha256 = self.calculate_sha256(
             self.file_path,
-            cancel_check=lambda: self.is_cancelled
+            cancel_check=lambda: self.is_cancelled,
+            progress_callback=lambda p, t: self._on_split_sha256_progress(p, t)
         )
-        
+
         if self.is_cancelled or file_sha256 is None:
-            self.update_status("状态: 拆分已取消", foreground="#cc0000")
+            self.update_status("状态: 拆分已取消（分片已保留）", foreground="#cc0000")
             self.progress['value'] = 0
             self.reset_ui()
             return
-        
-        fkx_content.append(f"sha256={file_sha256}")
-        
-        fkx_filename = f"{file_name}.fkx"
-        fkx_path = os.path.join(self.output_dir, fkx_filename)
-        with open(fkx_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(fkx_content))
-        
+
+        with open(fkx_path, 'a', encoding='utf-8') as f:
+            f.write(f"sha256={file_sha256}\n")
+
         self.progress['value'] = num_chunks
         self.update_status(f"状态: 拆分完成！已生成 {num_chunks} 个分片", foreground="#006600")
         self.reset_ui()
+        fkx_filename = os.path.basename(fkx_path)
         messagebox.showinfo("完成", f"文件拆分完成！\n文件名: {file_name}\n文件大小: {self.format_size(file_size)}\n分片数: {num_chunks}\n信息文件: {fkx_filename}\n保存位置: {self.output_dir}")
 
     def split_file(self):
@@ -335,9 +365,9 @@ class FileSplitterApp:
         if inputs is None:
             self.reset_ui()
             return
-        
+
         file_name, file_size, num_chunks = inputs
-        
+
         self.start_button.config(state=tk.DISABLED)
         self.cancel_button.config(state=tk.NORMAL)
         self.file_entry.config(state=tk.DISABLED)
@@ -346,42 +376,27 @@ class FileSplitterApp:
         self.output_browse_btn.config(state=tk.DISABLED)
         self.chunk_spinbox.config(state=tk.DISABLED)
         self.is_cancelled = False
-        
+
         self.progress['maximum'] = num_chunks
         self.progress['value'] = 0
-        
-        fkx_content = [
-            f"filename={file_name}",
-            f"total_size={file_size}",
-            f"chunk_size={self.chunk_size}",
-            f"num_chunks={num_chunks}"
-        ]
-        
-        chunk_results = self._do_split_chunks(file_name, num_chunks)
-        if chunk_results is None:
+
+        fkx_filename = f"{file_name}.fkx"
+        fkx_path = os.path.join(self.output_dir, fkx_filename)
+
+        if not self._do_split_chunks(file_name, num_chunks, fkx_path):
             self.progress['value'] = 0
             self.reset_ui()
             return
-        
-        fkx_content.extend(chunk_results)
-        self._finalize_split(file_name, file_size, num_chunks, fkx_content)
-    
-    def cleanup_chunks(self, output_dir, file_name, count):
-        for i in range(1, count + 1):
-            chunk_path = os.path.join(output_dir, f"{file_name}-{i}.fk")
-            if os.path.exists(chunk_path):
-                try:
-                    os.remove(chunk_path)
-                except OSError:
-                    pass
-    
+
+        self._finalize_split(file_name, file_size, num_chunks, fkx_path)
+
     def start_split(self):
         self.split_thread = threading.Thread(target=self.split_file)
         self.split_thread.start()
-    
+
     def cancel_split(self):
         self.is_cancelled = True
-    
+
     def reset_ui(self):
         self.start_button.config(state=tk.NORMAL)
         self.cancel_button.config(state=tk.DISABLED)
