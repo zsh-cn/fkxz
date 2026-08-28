@@ -1,6 +1,5 @@
 import os
 import hashlib
-import shutil
 import threading
 
 from core.base_worker import BaseWorker
@@ -92,16 +91,12 @@ class FileMerger(BaseWorker):
             output_path = os.path.normpath(output_path)
 
             merged_bytes = [0]
+            cancelled = False
             with open(output_path, 'wb') as f:
                 for i in range(num_chunks):
                     if self._is_cancelled:
-                        try:
-                            os.remove(output_path)
-                        except FileNotFoundError:
-                            pass
-                        self._emit_status("已取消合并", '#cc0000')
-                        self._emit_complete({'cancelled': True})
-                        return
+                        cancelled = True
+                        break
 
                     chunk_path = downloaded_chunks[i]
                     with open(chunk_path, 'rb') as chunk_file:
@@ -112,20 +107,34 @@ class FileMerger(BaseWorker):
                                 percentage = merged_bytes[0] / total_size
                                 self._emit_chunk_progress(percentage * 100, 100)
 
+            if cancelled:
+                try:
+                    os.remove(output_path)
+                except FileNotFoundError:
+                    pass
+                self._emit_status("已取消合并", '#cc0000')
+                self._emit_complete({'cancelled': True})
+                return
+
             if 'sha256' in fkx_info:
                 self._emit_status("正在校验SHA-256...")
                 actual_sha256 = hashlib.sha256()
+                cancelled = False
                 with open(output_path, 'rb') as f:
                     for chunk in iter(lambda: f.read(65536), b""):
                         if self._is_cancelled:
-                            try:
-                                os.remove(output_path)
-                            except FileNotFoundError:
-                                pass
-                            self._emit_status("已取消合并", '#cc0000')
-                            self._emit_complete({'cancelled': True})
-                            return
+                            cancelled = True
+                            break
                         actual_sha256.update(chunk)
+
+                if cancelled:
+                    try:
+                        os.remove(output_path)
+                    except FileNotFoundError:
+                        pass
+                    self._emit_status("已取消合并", '#cc0000')
+                    self._emit_complete({'cancelled': True})
+                    return
 
                 if actual_sha256.hexdigest() != fkx_info['sha256']:
                     self._emit_error("文件SHA-256校验失败")

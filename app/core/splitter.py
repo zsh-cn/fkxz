@@ -7,13 +7,18 @@ from utils.helpers import calculate_sha256
 
 class FileSplitter(BaseWorker):
     def split_async(self, file_path, output_dir, chunk_size_mb):
-        self._is_cancelled = False
-        self._thread = threading.Thread(
-            target=self._split,
-            args=(file_path, output_dir, chunk_size_mb),
-            daemon=True
-        )
-        self._thread.start()
+        with self._lock:
+            if self._is_cancelled:
+                self._is_cancelled = False
+            if self._thread is not None and self._thread.is_alive():
+                self._emit_status("正在取消之前的拆分...", '#cc0000')
+                return
+            self._thread = threading.Thread(
+                target=self._split,
+                args=(file_path, output_dir, chunk_size_mb),
+                daemon=True
+            )
+            self._thread.start()
 
     def _split(self, file_path, output_dir, chunk_size_mb):
         try:

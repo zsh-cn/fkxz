@@ -26,6 +26,8 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-cancel { background: #ea4335; display: none; }
 .btn-cancel.show { display: block; }
+.btn-resume { background: #34a853; display: none; margin-top: 8px; }
+.btn-resume.show { display: block; }
 </style>
 </head>
 <body>
@@ -34,28 +36,28 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
     <div class="file-info" id="fileInfo">
         <div class="info-row"><span class="info-label">文件名：</span><span class="info-value" id="fileName">-</span></div>
         <div class="info-row"><span class="info-label">文件大小：</span><span class="info-value" id="fileSize">-</span></div>
+        <div class="info-row" id="resumeRow" style="display:none;">
+            <span class="info-label">已保存进度：</span>
+            <span class="info-value" id="resumeProgress">-</span>
+        </div>
     </div>
     <div class="progress-section" id="progressSection">
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
         <div class="progress-text" id="progressText">准备中...</div>
     </div>
-    
+
     <button class="btn" id="downloadBtn" disabled>下载</button>
     <button class="btn btn-cancel" id="cancelBtn">取消下载</button>
+    <button class="btn btn-resume" id="resumeBtn">继续下载</button>
 </div>
 <script>
 let fkxInfo = null, baseUrl = '', isDownloading = false, abortController = null;
+let resumeOffset = 0;
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
     return (bytes / 1024 / 1024).toFixed(2) + ' MB';
-}
-
-function formatSpeed(bytesPerSecond) {
-    if (bytesPerSecond < 1024) return bytesPerSecond.toFixed(0) + ' B/s';
-    if (bytesPerSecond < 1024 * 1024) return (bytesPerSecond / 1024).toFixed(1) + ' KB/s';
-    return (bytesPerSecond / 1024 / 1024).toFixed(1) + ' MB/s';
 }
 
 function getBaseUrl(url) {
@@ -82,8 +84,6 @@ function parseFkx(content) {
     return info;
 }
 
-
-
 function updateProgress(current, total, text) {
     document.getElementById('progressSection').classList.add('show');
     document.getElementById('progressFill').style.width = total > 0 ? ((current / total) * 100).toFixed(1) + '%' : '0%';
@@ -97,18 +97,20 @@ function showMessage(text) {
 
 async function parseFkxUrl(url) {
     const btn = document.getElementById('downloadBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
     document.getElementById('fileInfo').classList.remove('show');
     btn.disabled = true;
+    resumeBtn.classList.remove('show');
     try {
         showMessage('获取文件信息...');
         const res = await fetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         fkxInfo = parseFkx(await res.text());
         if (!fkxInfo.filename || !fkxInfo.chunks?.length) throw new Error('格式错误');
-        
+
         baseUrl = getBaseUrl(url);
         const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
-        
+
         document.getElementById('fileName').textContent = fkxInfo.filename;
         document.getElementById('fileSize').textContent = formatSize(totalSize);
         document.getElementById('fileInfo').classList.add('show');
@@ -119,71 +121,145 @@ async function parseFkxUrl(url) {
     }
 }
 
-async function downloadAndMerge() {
+function saveResumeState(offset) {
+    if (offset > 0 && fkxInfo) {
+        sessionStorage.setItem('fkx_resume', JSON.stringify({
+            url: fkxInfo._url,
+            offset: offset,
+            chunks: fkxInfo.chunks.map(c => c.filename + ',' + c.size).join('\n'),
+            filename: fkxInfo.filename
+        }));
+    }
+}
+
+function loadResumeState() {
+    const data = sessionStorage.getItem('fkx_resume');
+    if (!data) return null;
+    try {
+        const state = JSON.parse(data);
+        return {
+            url: state.url,
+            offset: state.offset,
+            chunks: state.chunks.split('\n').map(l => {
+                const p = l.split(',');
+                return { filename: p[0].trim(), size: parseInt(p[1]) || 0 };
+            }),
+            filename: state.filename
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+async function resumeFromSession(saved) {
+    if (!saved) return false;
+    resumeOffset = saved.offset || 0;
+    fkxInfo = {
+        chunks: saved.chunks,
+        filename: saved.filename,
+        _url: saved.url
+    };
+    const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
+    document.getElementById('fileName').textContent = fkxInfo.filename;
+    document.getElementById('fileSize').textContent = formatSize(totalSize);
+    document.getElementById('resumeProgress').textContent = formatSize(resumeOffset);
+    document.getElementById('resumeRow').style.display = 'flex';
+    updateProgress(resumeOffset, totalSize, '已保存进度 ' + formatSize(resumeOffset) + '/' + formatSize(totalSize));
+    document.getElementById('downloadBtn').disabled = false;
+    document.getElementById('resumeBtn').classList.add('show');
+    return true;
+}
+
+async function downloadAndMerge(startOffset) {
+    const offset = startOffset || 0;
     if (!fkxInfo?.chunks?.length || isDownloading) return;
     isDownloading = true;
     abortController = new AbortController();
     const btn = document.getElementById('downloadBtn');
     const cancelBtn = document.getElementById('cancelBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
     btn.style.display = 'none';
     cancelBtn.classList.add('show');
-    
+    resumeBtn.classList.remove('show');
+
     const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
     const useFileSystemAccess = 'showSaveFilePicker' in window;
     const progressBar = document.getElementById('progressFill').parentElement;
     if (!useFileSystemAccess) progressBar.classList.add('hidden');
-    let fileHandle = null, writer = null, blobParts = [], downloaded = 0;
-    let speedLastTime = Date.now(), speedLastBytes = 0, speedStr = '';
-    
+    let fileHandle = null, writer = null, blobParts = [], downloaded = offset;
+    let speedLastTime = Date.now(), speedLastBytes = offset, speedStr = '';
+
     try {
         const sanitizedName = fkxInfo.filename.replace(/[<>:"/\\|?*]/g, '_');
-        
+
         if (useFileSystemAccess) {
             try {
                 fileHandle = await window.showSaveFilePicker({ suggestedName: sanitizedName, types: [{ description: '所有文件', accept: { '*/*': [] } }] });
-                writer = await fileHandle.createWritable();
+                writer = await fileHandle.createWritable({ mode: 'readwrite' });
             } catch (e) {
                 if (e.name === 'AbortError') { resetDownloadState(); return; }
                 throw new Error('无法获取文件写入权限: ' + e.message);
             }
+            if (offset > 0 && writer) {
+                await writer.seek(offset);
+            }
         }
-        
+
+        let cumulativeSize = 0;
+        let startIdx = 0;
         for (let i = 0; i < fkxInfo.chunks.length; i++) {
+            if (cumulativeSize + fkxInfo.chunks[i].size > offset) {
+                startIdx = i;
+                break;
+            }
+            cumulativeSize += fkxInfo.chunks[i].size;
+        }
+        const skipInFirstChunk = offset - cumulativeSize;
+
+        if (offset > 0) {
+            updateProgress(offset, totalSize, '恢复中... ' + formatSize(offset) + '/' + formatSize(totalSize));
+            await new Promise(r => setTimeout(r, 100));
+        }
+
+        for (let i = startIdx; i < fkxInfo.chunks.length; i++) {
             if (abortController.signal.aborted) throw new DOMException('已取消', 'AbortError');
             const chunk = fkxInfo.chunks[i];
-            
-            const res = await fetch(baseUrl + chunk.filename, { signal: abortController.signal });
-            if (!res.ok) throw new Error('下载失败: ' + chunk.filename);
-            
-            const reader = res.body.getReader();
+            const chunkRes = await fetch(baseUrl + chunk.filename, {
+                signal: abortController.signal,
+                headers: i === startIdx && skipInFirstChunk > 0 ? { 'Range': 'bytes=' + skipInFirstChunk + '-' } : {}
+            });
+            if (!chunkRes.ok) throw new Error('下载失败: ' + chunk.filename);
+
+            const reader = chunkRes.body.getReader();
             const buffers = [];
             let chunkLoaded = 0;
-            
+
             while (true) {
-                if (abortController.signal.aborted) { reader.cancel(); throw new DOMException('已取消', 'AbortError'); }
                 const { done, value } = await reader.read();
                 if (done) break;
+                if (abortController.signal.aborted) { reader.cancel(); throw new DOMException('已取消', 'AbortError'); }
                 buffers.push(value);
                 chunkLoaded += value.length;
                 const now = Date.now();
-                const currentBytes = downloaded + chunkLoaded;
+                const currentBytes = offset + chunkLoaded;
                 if (now - speedLastTime > 500) {
                     const elapsed = (now - speedLastTime) / 1000;
                     if (elapsed > 0) speedStr = '  ·  ' + formatSpeed((currentBytes - speedLastBytes) / elapsed);
                     speedLastTime = now;
                     speedLastBytes = currentBytes;
                 }
-                updateProgress(currentBytes, totalSize, `${formatSize(currentBytes)}/${formatSize(totalSize)}${speedStr}`);
+                updateProgress(currentBytes, totalSize, formatSize(currentBytes) + '/' + formatSize(totalSize) + speedStr);
             }
-            
+
             const chunkBlob = new Blob(buffers);
             if (useFileSystemAccess && writer) await writer.write(await chunkBlob.arrayBuffer());
             else blobParts.push(chunkBlob);
-            downloaded += chunk.size;
+            downloaded = offset + chunkLoaded;
+            saveResumeState(downloaded);
         }
-        
+
         updateProgress(totalSize, totalSize, '合并中...');
-        
+
         if (useFileSystemAccess && writer) {
             await writer.close();
         } else {
@@ -197,17 +273,18 @@ async function downloadAndMerge() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+        sessionStorage.removeItem('fkx_resume');
         updateProgress(totalSize, totalSize, '下载完成');
     } catch (e) {
         if (e.name === 'AbortError') {
             if (writer) {
-                try { await writer.abort(); } catch (e) {}
-                try { await fileHandle.remove(); } catch (e) {}
+                try { await writer.abort(); console.log('写入器已中止'); } catch (e2) { console.warn('中止写入器失败:', e2); }
+                try { await fileHandle.remove(); console.log('临时文件已清理'); } catch (e2) { console.warn('清理临时文件失败:', e2); }
             }
             updateProgress(0, totalSize, '下载已取消');
         } else {
             showMessage('下载失败: ' + e.message);
-            if (writer) try { await writer.close(); } catch (e) {}
+            if (writer) try { await writer.close(); } catch (e2) { console.warn('关闭写入器失败:', e2); }
         }
     } finally {
         resetDownloadState();
@@ -219,10 +296,14 @@ function resetDownloadState() {
     abortController = null;
     const btn = document.getElementById('downloadBtn');
     const cancelBtn = document.getElementById('cancelBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
     btn.style.display = '';
     btn.disabled = false;
     cancelBtn.classList.remove('show');
-    document.getElementById('progressFill').parentElement.classList.remove('hidden');
+    resumeBtn.classList.remove('show');
+    if (!('showSaveFilePicker' in window)) {
+        document.getElementById('progressFill').parentElement.classList.remove('hidden');
+    }
 }
 
 function cancelDownload() {
@@ -231,14 +312,35 @@ function cancelDownload() {
     }
 }
 
+function formatSpeed(bytesPerSecond) {
+    if (bytesPerSecond < 1024) return bytesPerSecond.toFixed(0) + ' B/s';
+    if (bytesPerSecond < 1024 * 1024) return (bytesPerSecond / 1024).toFixed(1) + ' KB/s';
+    return (bytesPerSecond / 1024 / 1024).toFixed(1) + ' MB/s';
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     const fkxParam = new URLSearchParams(window.location.search).get('fkx');
+    const saved = loadResumeState();
+    if (saved && fkxParam) {
+        fkxInfo = {
+            chunks: saved.chunks,
+            filename: saved.filename,
+            _url: saved.url || fkxParam
+        };
+        resumeFromSession(saved);
+        return;
+    }
     if (fkxParam) {
         const fkxUrl = /^https?:\/\//i.test(fkxParam) ? fkxParam : new URL(fkxParam, window.location.href).href;
+        fkxInfo = fkxInfo || {};
+        fkxInfo._url = fkxUrl;
         parseFkxUrl(fkxUrl);
-    } else showMessage('缺少文件参数');
-    document.getElementById('downloadBtn').addEventListener('click', downloadAndMerge);
+    } else {
+        showMessage('缺少文件参数');
+    }
+    document.getElementById('downloadBtn').addEventListener('click', () => downloadAndMerge(0));
     document.getElementById('cancelBtn').addEventListener('click', cancelDownload);
+    document.getElementById('resumeBtn').addEventListener('click', () => downloadAndMerge(resumeOffset));
 });
 </script>
 </body>

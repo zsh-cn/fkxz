@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import shutil
+import random
 from urllib.parse import urlparse, urljoin
 
 import requests
@@ -11,6 +12,9 @@ from cli.utils import (
     BROWSER_HEADERS, HAS_CURL_CFFI, curl_requests,
     format_size, sanitize_filename, calculate_sha256, parse_fkx, print_progress
 )
+
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1
 
 
 def _validate_chunk_filename(filename):
@@ -125,14 +129,22 @@ def download_chunk(base_url, chunk_info, chunk_index, output_dir, session, enhan
 
     sys.stdout.write(f"  [{chunk_index + 1}] {chunk_filename} ({format_size(chunk_size)})\n")
     sys.stdout.flush()
-    success = download_chunk_stream(chunk_url, chunk_path, chunk_size, session, enhanced, base_referer, timeout)
 
-    if success and os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
-        return True, chunk_path
+    for attempt in range(1, MAX_RETRIES + 1):
+        success = download_chunk_stream(chunk_url, chunk_path, chunk_size, session, enhanced, base_referer, timeout)
+        if success and os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
+            return True, chunk_path
 
-    if os.path.exists(chunk_path):
-        os.remove(chunk_path)
-    sys.stdout.write(f"    错误: 分片 {chunk_index + 1} 下载失败或大小不匹配\n")
+        if os.path.exists(chunk_path):
+            os.remove(chunk_path)
+
+        if attempt < MAX_RETRIES:
+            delay = RETRY_BASE_DELAY * attempt + random.uniform(0, 0.5)
+            sys.stdout.write(f"    重试 {attempt}/{MAX_RETRIES - 1}，{delay:.1f}s 后重试...\n")
+            sys.stdout.flush()
+            time.sleep(delay)
+
+    sys.stdout.write(f"    错误: 分片 {chunk_index + 1} 下载失败（已重试 {MAX_RETRIES} 次）\n")
     sys.stdout.flush()
     return False, None
 

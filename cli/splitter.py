@@ -10,30 +10,35 @@ def cmd_split(args):
     chunk_size_mb = args.chunk_size
 
     if not os.path.exists(file_path):
-        print(f"错误: 文件不存在 - {file_path}")
+        sys.stdout.write(f"错误: 文件不存在 - {file_path}\n")
+        sys.stdout.flush()
         sys.exit(1)
     if not os.path.isfile(file_path):
-        print(f"错误: 路径不是文件 - {file_path}")
+        sys.stdout.write(f"错误: 路径不是文件 - {file_path}\n")
+        sys.stdout.flush()
         sys.exit(1)
     if chunk_size_mb < 1 or chunk_size_mb > 1024:
-        print(f"错误: 分片大小应在1-1024 MB之间")
+        sys.stdout.write("错误: 分片大小应在1-1024 MB之间\n")
+        sys.stdout.flush()
         sys.exit(1)
 
     chunk_size = chunk_size_mb * 1024 * 1024
 
+    output_dir = os.path.realpath(output_dir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
     file_name = os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
-    num_chunks = (file_size + chunk_size - 1) // chunk_size
+    num_chunks = max(1, (file_size + chunk_size - 1) // chunk_size)
 
-    print(f"文件: {file_name}")
-    print(f"大小: {format_size(file_size)}")
-    print(f"分片大小: {chunk_size_mb} MB")
-    print(f"分片数: {num_chunks}")
-    print(f"输出目录: {output_dir}")
-    print()
+    sys.stdout.write(f"文件: {file_name}\n")
+    sys.stdout.write(f"大小: {format_size(file_size)}\n")
+    sys.stdout.write(f"分片大小: {chunk_size_mb} MB\n")
+    sys.stdout.write(f"分片数: {num_chunks}\n")
+    sys.stdout.write(f"输出目录: {output_dir}\n")
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 
     fkx_content = [
         f"filename={file_name}",
@@ -61,7 +66,7 @@ def cmd_split(args):
                            prefix=f"拆分: ",
                            suffix=f"{i+1}/{num_chunks}")
 
-    print()
+    sys.stdout.write("\n")
 
     file_sha256 = sha256_hash.hexdigest()
     fkx_content.append(f"sha256={file_sha256}")
@@ -71,8 +76,8 @@ def cmd_split(args):
     with open(fkx_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(fkx_content))
 
-    print(f"\n拆分完成！")
-    print(f"  分片数: {num_chunks}")
-    print(f"  信息文件: {fkx_filename}")
-    print(f"  SHA-256: {file_sha256}")
-    print(f"  保存位置: {output_dir}")
+    sys.stdout.write(f"\n拆分完成！\n")
+    sys.stdout.write(f"  分片数: {num_chunks}\n")
+    sys.stdout.write(f"  信息文件: {fkx_filename}\n")
+    sys.stdout.write(f"  SHA-256: {file_sha256}\n")
+    sys.stdout.write(f"  保存位置: {output_dir}\n")

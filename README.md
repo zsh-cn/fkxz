@@ -8,7 +8,7 @@
 - **本地合并**：读取 `.fkx` 信息文件和同目录下的 `.fk` 分片，自动合并还原为原始文件
 - **远程下载**：从远程服务器下载 `.fkx` 信息文件及所有 `.fk` 分片，自动合并还原，支持 SHA-256 完整性校验
 - **增强模式**：集成 `curl_cffi` 浏览器指纹模拟，可伪装 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-\* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护
-- **多端支持**：提供命令行工具（CLI）、新版 GUI 应用（集成侧边栏）、旧版独立 GUI 工具、网页端工具等多种使用方式
+- **多端支持**：提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式
 - **跨平台**：Python 工具支持 Windows / Linux / macOS；网页端工具支持所有现代浏览器
 - **实时进度**：终端进度条 / GUI 进度条，实时显示分块进度、总进度和下载速度
 - **自动清理**：远程下载完成后自动清理临时分片文件
@@ -32,7 +32,7 @@ fkxz/
 │   ├── merger.py                  # merge 命令实现
 │   └── downloader.py              # download 命令实现
 │
-├── app/                           # 新版 GUI 应用 (Tkinter, 带侧边栏导航)
+├── app/                           # 聚合 GUI 应用 (Tkinter, 带侧边栏导航)
 │   ├── main.py                    # GUI 入口，集成三大功能页面
 │   ├── theme.py                   # 主题配色常量
 │   ├── core/                      # 核心业务逻辑
@@ -87,8 +87,8 @@ fkxz/
 │       ├── sw.js
 │       └── favicon.png
 │
-├── file_splitter.py               # 旧版独立拆分器 (GUI)
-├── file_downloader.py             # 旧版独立下载/合并器 (GUI, 支持增强模式)
+├── file_splitter.py               # 独立文件拆分器 (GUI)
+├── file_downloader.py             # 独立文件下载/合并器 (GUI, 支持增强模式)
 ├── pyproject.toml                 # 项目元数据与构建配置
 ├── requirements.txt               # Python 依赖（兼容传统 pip install -r）
 ├── LICENSE                        # MPL 2.0 许可证
@@ -104,9 +104,9 @@ fkxz/
 | 程序 | 文件名 | 说明 |
 |------|--------|------|
 | 命令行工具 | `cli.exe` | 命令行版，支持 split / merge / download 命令 |
-| 新版 GUI | `main.exe` | 集成侧边栏导航的图形界面，三大功能合一 |
-| 文件拆分器 | `file_splitter.exe` | 独立 GUI，专注于文件拆分 |
-| 文件下载器 | `file_downloader.exe` | 独立 GUI，支持本地合并与远程下载（含增强模式） |
+| 聚合程序 | `main.exe` | 集成侧边栏导航的图形界面，三大功能合一 |
+| 独立程序（文件拆分器） | `file_splitter.exe` | 专注于文件拆分 |
+| 独立程序（文件下载器） | `file_downloader.exe` | 支持本地合并与远程下载（含增强模式） |
 
 > **注意**：`file_downloader.exe` 的增强模式需要 `curl_cffi` 支持，已打包版本内置了增强模式能力。如果增强模式不可用，程序会自动回退到标准模式。
 
@@ -173,7 +173,7 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -t 
 
 ---
 
-### main.exe — 新版 GUI 应用
+### main.exe — 聚合 GUI 程序
 
 `main.exe` 是集成式图形界面，采用侧边栏导航设计，将文件拆分、本地合并、远程下载三大功能整合在一个窗口中。
 
@@ -311,7 +311,7 @@ python app/main.py             # 启动 GUI
 - 终端实时进度条显示
 - 下载完成后自动清理临时文件
 
-### 新版 GUI 应用 — `app/main.py`
+### 聚合 GUI 程序 — `app/main.py`
 
 Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体：
 
@@ -330,7 +330,7 @@ Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能
 - 支持取消操作
 - 右键上下文菜单（剪切/复制/粘贴/全选）
 
-### 旧版独立 GUI 工具
+### 独立 GUI 工具
 
 #### file_splitter.py — 文件拆分器
 
@@ -440,7 +440,7 @@ python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./outp
 - `-e, --enhanced`：启用增强模式（可选，需安装 curl_cffi）
 - `-t, --timeout`：请求超时时间（秒），默认 120（可选）
 
-### 新版 GUI 应用
+### 聚合 GUI 程序
 
 ```bash
 python app/main.py
@@ -451,7 +451,7 @@ python app/main.py
 - **本地合并**：选择 `.fkx` 信息文件、输出目录，点击"开始合并"
 - **远程下载**：输入 `.fkx` 文件 URL、选择输出目录，可选启用增强模式，点击"开始下载"
 
-### 旧版 GUI 工具
+### 独立 GUI 工具
 
 #### 拆分文件
 
@@ -501,8 +501,8 @@ python file_downloader.py
 | 组件 | 最低版本 | 依赖 |
 |------|---------|------|
 | CLI 工具 (`cli/`) | Python 3.8+ | `requests` |
-| 新版 GUI (`app/`) | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
-| 旧版 GUI | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
+| 聚合 GUI (`app/`) | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
+| 独立 GUI | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
 | 增强模式 | Python 3.8+ | `requests` + `curl_cffi` |
 
 安装依赖：
@@ -574,7 +574,7 @@ pyinstaller --onefile --console --name cli --icon icon/wjfkxz-cli.ico cli/main.p
 - `--name cli`：输出文件名为 `cli.exe`
 - `--icon icon/wjfkxz-cli.ico`：设置 exe 程序图标
 
-#### 打包 main.exe（新版 GUI 应用）
+#### 打包 main.exe（聚合 GUI 程序）
 
 ```bash
 pyinstaller --onefile --windowed --name main --icon icon/wjfkxz.ico --add-data "icon;icon" --add-data "app;app" app/main.py

@@ -35,6 +35,11 @@
     <div class="container">
         <img class="hero-icon" src="favicon.png" alt="fkxz">
         <h1>文件分块下载</h1>
+        <p class="site-links">
+            <a href="https://zsh-cn.github.io/fkxz/">主站</a>
+            <span> | </span>
+            <a href="https://fkxz.zhshh.cn">备用站</a>
+        </p>
         <p class="desc">将大文件拆分为多个小分片，支持本地合并与远程下载合并，可用于绕过文件上传大小限制或便于文件传输</p>
         <div class="hero-actions">
             <a href="download.html" class="btn btn-primary">
@@ -72,7 +77,7 @@
             </div>
             <div class="feature-card">
                 <h3>多端支持</h3>
-                <p>提供命令行工具（CLI）、新版 GUI 应用（集成侧边栏）、旧版独立 GUI 工具、网页端工具等多种使用方式</p>
+                <p>提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式</p>
             </div>
             <div class="feature-card">
                 <h3>跨平台</h3>
@@ -107,7 +112,7 @@
                 </ul>
             </div>
             <div class="platform-card">
-                <h3>新版 GUI 应用</h3>
+                <h3>聚合 GUI 程序</h3>
                 <p style="margin-bottom:10px;">Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体。</p>
                 <ul>
                     <li>侧边栏导航，三页无缝切换</li>
@@ -118,7 +123,7 @@
                 </ul>
             </div>
             <div class="platform-card">
-                <h3>旧版独立 GUI</h3>
+                <h3>独立 GUI 程序</h3>
                 <p style="margin-bottom:10px;">两个独立的 Tkinter 图形界面工具，分别专注于拆分和下载/合并。</p>
                 <ul>
                     <li><strong>file_splitter.py</strong>：文件拆分器</li>
@@ -189,13 +194,13 @@
 <span class="comment"># 安装依赖</span>
 <span class="cmd">pip install -r</span> <span class="path">requirements.txt</span>
 
-<span class="comment"># 启动新版 GUI</span>
+<span class="comment"># 启动聚合 GUI</span>
 <span class="cmd">python</span> <span class="path">app/main.py</span>
 
 <span class="comment"># 或使用 CLI</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
 
-<span class="comment"># 或使用旧版 GUI</span>
+<span class="comment"># 或使用独立 GUI</span>
 <span class="cmd">python</span> <span class="path">file_splitter.py</span>
 <span class="cmd">python</span> <span class="path">file_downloader.py</span></pre>
                 </div>

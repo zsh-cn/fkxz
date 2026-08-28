@@ -1,4 +1,5 @@
 import os
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import threading
@@ -7,7 +8,10 @@ from theme import (
     BG_PAGE, BG_CARD, FG_PRIMARY, FG_SECONDARY, FG_TERTIARY,
     ACCENT, BORDER, ERROR,
 )
-from utils.helpers import format_size, RoundedButton, RoundedProgressBar, parse_fkx
+from utils.helpers import (
+    format_size, RoundedButton, RoundedProgressBar, parse_fkx,
+    is_remote_url, has_drive_letter, is_domain_like, resolve_local_path,
+)
 from ui.base_page import BasePage
 from core.downloader import FileDownloader, HAS_CURL_CFFI
 
@@ -42,6 +46,9 @@ class DownloaderPage(BasePage):
             'on_ask_retry': self._on_ask_retry,
         })
         self._info_after_id = None
+        self._auto_prepending = False
+        self._retry_queue = []
+        self._running = False
         self._build()
 
     def _build(self):
@@ -148,7 +155,7 @@ class DownloaderPage(BasePage):
         btn_frame.grid(row=4, column=0, sticky='ew', padx=32, pady=(0, 28))
 
         self._start_btn = RoundedButton(btn_frame, text='开始下载', command=self._start, width=120, height=38,
-                                        state='disabled')
+                                        state='normal')
         self._start_btn.pack(side=tk.LEFT, padx=(0, 12))
 
         self._cancel_btn = RoundedButton(btn_frame, text='取消', command=self._cancel, width=80, height=38,
@@ -160,8 +167,7 @@ class DownloaderPage(BasePage):
         if path:
             self._url_entry.delete(0, tk.END)
             self._url_entry.insert(0, path)
-            self._validate_input()
-            self._parse_and_display_info()
+            self._on_input_change()
 
     def _browse_output(self):
         path = filedialog.askdirectory()
@@ -171,6 +177,22 @@ class DownloaderPage(BasePage):
             self._validate_input()
 
     def _on_input_change(self, event=None):
+        path = self._url_entry.get().strip()
+        if path and path.endswith('.fkx') and is_domain_like(path):
+            if not self._auto_prepending:
+                local_path = os.path.join(os.getcwd(), path)
+                if os.path.exists(local_path):
+                    self._update_path_type_ui(path, is_local=True)
+                else:
+                    self._auto_prepending = True
+                    self._url_entry.delete(0, tk.END)
+                    self._url_entry.insert(0, 'https://' + path)
+                    self._auto_prepending = False
+                    path = 'https://' + path
+                    self._update_path_type_ui(path)
+        else:
+            self._update_path_type_ui(path)
+
         self._validate_input()
         if self._info_after_id:
             self.after_cancel(self._info_after_id)
@@ -182,32 +204,48 @@ class DownloaderPage(BasePage):
         self._filename_label.config(text='-')
         self._filesize_label.config(text='-')
         self._chunks_label.config(text='-')
+        self._chunk_progress['value'] = 0
+        self._total_progress['value'] = 0
 
     def _parse_and_display_info(self):
         self._info_after_id = None
         if self._cancel_btn.cget('state') == 'normal':
             return
         path = self._url_entry.get().strip()
-        if path and not (path.startswith('http://') or path.startswith('https://')):
-            if path.endswith('.fkx') and os.path.exists(path):
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
+        if path and is_remote_url(path):
+            if path.endswith('.fkx'):
+                self._downloader.fetch_fkx_info_async(path, enhanced=self._enhanced_var.get())
+        elif path and path.endswith('.fkx'):
+            try:
+                resolved = resolve_local_path(path)
+                if os.path.exists(resolved) and os.path.isfile(resolved):
+                    with open(resolved, 'r', encoding='utf-8') as f:
                         content = f.read()
                     info = parse_fkx(content)
                     self._filename_label.config(text=info.get('filename', '-'))
                     self._filesize_label.config(text=format_size(int(str(info.get('total_size', 0)))))
                     self._chunks_label.config(text=str(info.get('num_chunks', len(info.get('chunks', [])))))
-                except Exception:
-                    self._reset_info_labels()
-            else:
-                self._reset_info_labels()
-        elif path and (path.startswith('http://') or path.startswith('https://')):
-            if path.endswith('.fkx'):
-                self._downloader.fetch_fkx_info_async(path, enhanced=self._enhanced_var.get())
-            else:
-                self._reset_info_labels()
+            except Exception:
+                pass
+
+    def _update_path_type_ui(self, path, is_local=False):
+        if not path:
+            if HAS_CURL_CFFI:
+                self._enhanced_cb.config(state=tk.NORMAL)
+            return
+        if not is_local and (is_remote_url(path) or is_domain_like(path)):
+            if HAS_CURL_CFFI:
+                self._enhanced_cb.config(state=tk.NORMAL)
+            self._start_btn.config(text='开始下载')
         else:
-            self._reset_info_labels()
+            self._enhanced_cb.config(state=tk.DISABLED)
+            self._start_btn.config(text='开始合并')
+
+    def _apply_validation(self, valid, status_text, status_color=None):
+        if status_color is None:
+            status_color = FG_SECONDARY
+        self._start_btn.config(state=tk.NORMAL)
+        self._status_label.config(text=status_text, fg=status_color)
 
     def _validate_input(self):
         text = self._url_entry.get().strip()
@@ -215,30 +253,56 @@ class DownloaderPage(BasePage):
 
         if not text:
             self._apply_validation(False, '就绪')
+            self._reset_info_labels()
             return
 
-        if text.startswith('http://') or text.startswith('https://'):
-            if not text.endswith('.fkx'):
-                self._apply_validation(False, 'URL 必须指向 .fkx 文件', ERROR)
-            elif not output:
-                self._apply_validation(False, '请选择输出目录', ERROR)
-            else:
-                self._apply_validation(True, '就绪 (远程模式)', ACCENT)
+        if not text.endswith('.fkx'):
+            self._apply_validation(False, '就绪')
+            return
+
+        if not output:
+            self._apply_validation(False, '就绪')
+            return
+
+        if is_remote_url(text):
+            self._apply_validation(True, '就绪 (远程模式)', ACCENT)
         else:
-            self._apply_validation(False, '请输入有效的 URL', ERROR)
+            self._apply_validation(True, '就绪 (本地模式)', ACCENT)
 
     def _start(self):
+        self._running = True
         if self._info_after_id:
             self.after_cancel(self._info_after_id)
             self._info_after_id = None
+
+        text = self._url_entry.get().strip()
+        output = self._output_entry.get().strip()
+
+        if not text:
+            self._on_status('请输入文件信息的URL或本地路径', ERROR)
+            self._reset_info_labels()
+            self._running = False
+            return
+        if not text.endswith('.fkx'):
+            self._on_status('输入必须是.fkx文件', ERROR)
+            self._reset_info_labels()
+            self._running = False
+            return
+        if not output:
+            self._on_status('请选择输出目录', ERROR)
+            self._running = False
+            return
+
+        text = resolve_local_path(text)
+
         self._start_btn.config(state=tk.DISABLED)
         self._cancel_btn.config(state=tk.NORMAL)
         self._chunk_progress['value'] = 0
         self._total_progress['value'] = 0
         self._download_detail.config(text='')
         self._downloader.download_async(
-            self._url_entry.get().strip(),
-            self._output_entry.get().strip(),
+            text,
+            output,
             enhanced=self._enhanced_var.get(),
         )
 
@@ -256,11 +320,13 @@ class DownloaderPage(BasePage):
         self.after(0, lambda: self._chunk_progress.configure(value=value, maximum=maximum))
 
     def _on_status(self, text, color='#333333'):
+        if not self._running and color == ERROR:
+            color = FG_SECONDARY
         self.after(0, lambda: self._status_label.configure(text=text, fg=color))
 
     def _on_error(self, message):
-        self.after(0, lambda: messagebox.showerror('错误', message))
-        self.after(0, self._reset_ui)
+        self.after(0, lambda: self._status_label.configure(text=message, fg=ERROR))
+        self.after(0, self._on_input_change)
 
     def _on_complete(self, result):
         cancelled = result.get('cancelled', False) if result else False
@@ -285,28 +351,37 @@ class DownloaderPage(BasePage):
         self.after(0, lambda t=text: self._download_detail.config(text=t))
 
     def _on_ask_retry(self, title, message):
-        result = [False]
-        event = threading.Event()
+        flag = [False]
 
-        def show():
+        def do_ask():
             if messagebox.askretrycancel(title, message):
-                result[0] = True
-            event.set()
+                flag[0] = True
 
-        self.after(0, show)
-        event.wait()
-        return result[0]
+        self.after(0, do_ask)
+
+        deadline = time.time() + 120
+        while not flag[0] and not self._downloader.is_cancelled and time.time() < deadline:
+            self.after(200, lambda: None)
+            try:
+                self._downloader.root.update_idletasks()
+                self._downloader.root.update()
+            except Exception:
+                break
+
+        return flag[0]
 
     def _reset_ui(self):
-        self._validate_input()
+        self._running = False
+        self._on_input_change()
         self._cancel_btn.config(state=tk.DISABLED)
         self._download_detail.config(text='')
         self._chunk_progress['value'] = 0
         self._total_progress['value'] = 0
 
     def _finalize_ui(self, cancelled=False):
+        self._running = False
         self._cancel_btn.config(state=tk.DISABLED)
-        self._validate_input()
+        self._on_input_change()
         if cancelled:
             self._download_detail.config(text='')
             self._chunk_progress['value'] = 0

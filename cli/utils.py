@@ -58,7 +58,7 @@ def print_progress(current, total, prefix="", suffix=""):
     filled = int(bar_len * current / total) if total > 0 else 0
     bar = '#' * filled + '-' * (bar_len - filled)
     percent = (current / total * 100) if total > 0 else 0
-    sys.stdout.write(f"\r{prefix}[{bar}] {percent:.1f}% {suffix}" + " " * 20)
+    sys.stdout.write(f"\r{prefix}[{bar}] {percent:.1f}% {suffix}" + " " * 60)
     sys.stdout.flush()
 
 

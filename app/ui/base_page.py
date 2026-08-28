@@ -8,7 +8,7 @@ from utils.helpers import setup_context_menu, RoundedButton, RoundedProgressBar
 
 class BasePage(ttk.Frame):
     _on_input_change: Callable[[tk.Event], Any]
-    _start_btn: tk.Canvas
+    _start_btn: RoundedButton
     _status_label: tk.Label
 
     def _build_field(self, parent, label, attr, browse_cb, row, col, show_browse=True):
@@ -21,7 +21,7 @@ class BasePage(ttk.Frame):
         entry = ttk.Entry(entry_row, font=('Microsoft YaHei UI', 10))
         entry.grid(row=0, column=0, sticky='ew', padx=(0, 10))
         entry.bind('<KeyRelease>', self._on_input_change)
-        setup_context_menu(entry)
+        setup_context_menu(entry, on_change=self._on_input_change)
         setattr(self, attr, entry)
 
         if show_browse:

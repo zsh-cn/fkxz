@@ -58,12 +58,12 @@
                         <td><code>requests</code></td>
                     </tr>
                     <tr>
-                        <td>新版 GUI</td>
+                        <td>聚合 GUI</td>
                         <td>Python 3.8+</td>
                         <td><code>requests</code>、<code>tkinter</code></td>
                     </tr>
                     <tr>
-                        <td>旧版 GUI</td>
+                        <td>独立 GUI</td>
                         <td>Python 3.8+</td>
                         <td><code>requests</code>、<code>tkinter</code></td>
                     </tr>
@@ -169,7 +169,7 @@
         </div>
 
         <div class="usage-detail">
-            <h3>新版 GUI 应用</h3>
+            <h3>聚合 GUI 程序</h3>
             <div class="code-block">
 <pre><span class="cmd">python</span> <span class="path">app/main.py</span></pre>
             </div>
@@ -182,7 +182,7 @@
         </div>
 
         <div class="usage-detail">
-            <h3>旧版 GUI 工具</h3>
+            <h3>独立 GUI 工具</h3>
 
             <h4>拆分文件</h4>
             <div class="code-block">
@@ -244,7 +244,7 @@
 │   ├── merger.py                  <span class="comment"># merge 命令实现</span>
 │   └── downloader.py              <span class="comment"># download 命令实现</span>
 │
-├── <span class="cmd">app/</span>                           <span class="comment"># 新版 GUI 应用 (Tkinter, 带侧边栏导航)</span>
+├── <span class="cmd">app/</span>                           <span class="comment"># 聚合 GUI 应用 (Tkinter, 带侧边栏导航)</span>
 │   ├── main.py                    <span class="comment"># GUI 入口，集成三大功能页面</span>
 │   ├── theme.py                   <span class="comment"># 主题配色常量</span>
 │   ├── <span class="cmd">core/</span>                      <span class="comment"># 核心业务逻辑</span>
@@ -299,8 +299,8 @@
 │       ├── sw.js
 │       └── favicon.png
 │
-├── file_splitter.py               <span class="comment"># 旧版独立拆分器 (GUI)</span>
-├── file_downloader.py             <span class="comment"># 旧版独立下载/合并器 (GUI, 支持增强模式)</span>
+├── file_splitter.py               <span class="comment"># 独立文件拆分器 (GUI)</span>
+├── file_downloader.py             <span class="comment"># 独立文件下载/合并器 (GUI, 支持增强模式)</span>
 ├── pyproject.toml                 <span class="comment"># 项目元数据与构建配置</span>
 ├── requirements.txt               <span class="comment"># Python 依赖（兼容传统 pip install -r）</span>
 ├── LICENSE                        <span class="comment"># MPL 2.0 许可证</span>
@@ -337,7 +337,7 @@
         </div>
 
         <div class="usage-detail">
-            <h3>新版 GUI 应用 — app/main.py</h3>
+            <h3>聚合 GUI 程序 — app/main.py</h3>
             <p class="detail-subtitle">Tkinter 现代化图形界面，采用侧边栏导航设计，集成三大功能于一体</p>
             <ul>
                 <li><strong>文件分块</strong>：选择文件 → 设置分片大小 → 一键拆分，生成 .fk 分片和 .fkx 信息文件</li>
@@ -359,7 +359,7 @@
         </div>
 
         <div class="usage-detail">
-            <h3>旧版独立 GUI 工具</h3>
+            <h3>独立 GUI 工具</h3>
             <div style="margin-bottom:16px;">
                 <h4>file_splitter.py — 文件拆分器</h4>
                 <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，将大文件拆分为多个 .fk 分片，并生成 .fkx 信息文件。</p>

@@ -149,15 +149,9 @@ class MergerPage(BasePage):
                 info = parse_fkx(content)
                 self._filename_label.config(text=info.get('filename', '-'))
                 self._filesize_label.config(text=format_size(int(str(info.get('total_size', 0)))))
-                self._chunks_label.config(text=str(info.get('num_chunks', len(info.get('chunks', [])))))
+                self._chunks_label.config(text=str(len(info.get('chunks', []))))
             except Exception:
-                self._filename_label.config(text='-')
-                self._filesize_label.config(text='-')
-                self._chunks_label.config(text='-')
-        else:
-            self._filename_label.config(text='-')
-            self._filesize_label.config(text='-')
-            self._chunks_label.config(text='-')
+                pass
 
     def _validate_input(self):
         path = self._fkx_entry.get().strip()
@@ -168,11 +162,11 @@ class MergerPage(BasePage):
             return
 
         if not path.endswith('.fkx') or not os.path.exists(path):
-            self._apply_validation(False, '请输入有效的 .fkx 文件路径', ERROR)
+            self._apply_validation(False, '就绪')
             return
 
         if not output:
-            self._apply_validation(False, '请选择输出目录', ERROR)
+            self._apply_validation(False, '就绪')
             return
 
         self._apply_validation(True, '就绪 (本地模式)', ACCENT)
@@ -204,7 +198,7 @@ class MergerPage(BasePage):
         self.after(0, lambda: self._status_label.configure(text=text, fg=color))
 
     def _on_error(self, message):
-        self.after(0, lambda: messagebox.showerror('错误', message))
+        self.after(0, lambda: self._status_label.configure(text=message, fg=ERROR))
         self.after(0, self._reset_ui)
 
     def _on_complete(self, result):

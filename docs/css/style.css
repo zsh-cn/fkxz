@@ -144,6 +144,23 @@ header .container {
     line-height: 1.8;
 }
 
+.hero .site-links {
+    font-size: 18px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.hero .site-links a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.hero .site-links a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
 .hero-actions {
     display: flex;
     gap: 12px;
@@ -516,6 +533,20 @@ header .container {
 .download-btn svg {
     width: 16px;
     height: 16px;
+}
+
+.backup-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.backup-link:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
 }
 
 

@@ -48,6 +48,36 @@ def sanitize_filename(filename):
     return filename
 
 
+def is_remote_url(path):
+    return path.startswith('http://') or path.startswith('https://')
+
+
+def has_drive_letter(path):
+    return len(path) >= 2 and path[1] == ':'
+
+
+def is_domain_like(path):
+    if not path:
+        return False
+    if path.startswith('http://') or path.startswith('https://'):
+        return False
+    if len(path) >= 2 and path[1] == ':':
+        return False
+    if path.startswith('.') or path.startswith('/') or path.startswith('\\'):
+        return False
+    slash_pos = path.find('/')
+    if slash_pos == -1:
+        slash_pos = len(path)
+    dot_pos = path.find('.')
+    return dot_pos != -1 and dot_pos < slash_pos
+
+
+def resolve_local_path(path):
+    if not is_remote_url(path) and not has_drive_letter(path):
+        return os.path.abspath(path)
+    return path
+
+
 def calculate_sha256(file_path):
     sha256_hash = hashlib.sha256()
     with open(file_path, 'rb') as f:
@@ -56,21 +86,70 @@ def calculate_sha256(file_path):
     return sha256_hash.hexdigest()
 
 
-def setup_context_menu(entry_widget):
+def _delete_selected(entry_widget):
+    try:
+        if entry_widget.selection_present():
+            entry_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
+    except tk.TclError:
+        pass
+
+
+def setup_context_menu(entry_widget, on_change=None):
+    def _after_action():
+        if on_change is not None:
+            entry_widget.after_idle(on_change)
+
+    def _copy_to_clipboard(saved_selection=None):
+        try:
+            entry_widget.clipboard_clear()
+            if saved_selection:
+                entry_widget.clipboard_append(saved_selection)
+            else:
+                entry_widget.event_generate('<<Copy>>')
+        except tk.TclError:
+            pass
+
     menu = tk.Menu(entry_widget, tearoff=0)
-    menu.add_command(label="剪切", command=lambda: entry_widget.event_generate('<<Cut>>'))
+    menu.add_command(label="剪切", command=lambda: (entry_widget.event_generate('<<Cut>>'), _after_action()))
     menu.add_command(label="复制", command=lambda: entry_widget.event_generate('<<Copy>>'))
-    menu.add_command(label="粘贴", command=lambda: entry_widget.event_generate('<<Paste>>'))
+    menu.add_command(label="粘贴", command=lambda: (entry_widget.event_generate('<<Paste>>'), _after_action()))
     menu.add_separator()
-    menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
+    menu.add_command(label="删除", command=lambda: (_delete_selected(entry_widget), _after_action()))
     menu.add_separator()
     menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
 
     def _show_menu(event):
-        if entry_widget.focus_get() != entry_widget:
-            entry_widget.focus_set()
-            entry_widget.select_range(0, tk.END)
-        menu.tk_popup(event.x_root, event.y_root)
+        try:
+            if entry_widget.focus_get() != entry_widget:
+                entry_widget.focus_set()
+                entry_widget.select_range(0, tk.END)
+            has_selection = False
+            saved_selection = None
+            try:
+                has_selection = entry_widget.selection_present()
+                if has_selection:
+                    saved_selection = entry_widget.selection_get()
+            except tk.TclError:
+                pass
+            state = tk.NORMAL if has_selection else tk.DISABLED
+            menu.entryconfig(0, state=state)
+            menu.entryconfig(1, state=state, command=lambda: _copy_to_clipboard(saved_selection))
+            menu.entryconfig(4, state=state)
+
+            paste_state = tk.DISABLED
+            try:
+                if entry_widget.clipboard_get():
+                    paste_state = tk.NORMAL
+            except (tk.TclError, Exception):
+                pass
+            menu.entryconfig(2, state=paste_state)
+
+            select_all_state = tk.NORMAL if entry_widget.get() else tk.DISABLED
+            menu.entryconfig(6, state=select_all_state)
+
+            menu.tk_popup(event.x_root, event.y_root)
+        except tk.TclError:
+            pass
 
     entry_widget.bind('<Button-3>', _show_menu)
 

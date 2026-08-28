@@ -4,15 +4,18 @@ import threading
 class BaseWorker:
     def __init__(self, callbacks=None):
         self.callbacks = callbacks or {}
+        self._lock = threading.Lock()
         self._is_cancelled = False
         self._thread = None
 
     def cancel(self):
-        self._is_cancelled = True
+        with self._lock:
+            self._is_cancelled = True
 
     @property
     def is_cancelled(self):
-        return self._is_cancelled
+        with self._lock:
+            return self._is_cancelled
 
     def _emit_progress(self, value, maximum):
         cb = self.callbacks.get('on_progress')

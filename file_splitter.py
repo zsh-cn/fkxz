@@ -35,13 +35,31 @@ class FileSplitterApp:
         
         self.create_widgets()
     
-    def _setup_context_menu(self, entry_widget):
+    def _delete_selected(self, entry_widget):
+        try:
+            if entry_widget.selection_present():
+                entry_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
+        except tk.TclError:
+            pass
+
+    def _setup_context_menu(self, entry_widget, on_change=None):
         menu = tk.Menu(entry_widget, tearoff=0)
+
+        def _copy_to_clipboard(saved_selection=None):
+            try:
+                entry_widget.clipboard_clear()
+                if saved_selection:
+                    entry_widget.clipboard_append(saved_selection)
+                else:
+                    entry_widget.event_generate('<<Copy>>')
+            except tk.TclError:
+                pass
+
         menu.add_command(label="剪切", command=lambda: entry_widget.event_generate('<<Cut>>'))
         menu.add_command(label="复制", command=lambda: entry_widget.event_generate('<<Copy>>'))
         menu.add_command(label="粘贴", command=lambda: entry_widget.event_generate('<<Paste>>'))
         menu.add_separator()
-        menu.add_command(label="删除", command=lambda: entry_widget.delete(0, tk.END))
+        menu.add_command(label="删除", command=lambda: [self._delete_selected(entry_widget), entry_widget.after(10, on_change) if on_change else None])
         menu.add_separator()
         menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
 
@@ -49,6 +67,30 @@ class FileSplitterApp:
             if entry_widget.focus_get() != entry_widget:
                 entry_widget.focus_set()
                 entry_widget.select_range(0, tk.END)
+            has_selection = False
+            saved_selection = None
+            try:
+                has_selection = entry_widget.selection_present()
+                if has_selection:
+                    saved_selection = entry_widget.selection_get()
+            except tk.TclError:
+                pass
+            state = tk.NORMAL if has_selection else tk.DISABLED
+            menu.entryconfig(0, state=state)
+            menu.entryconfig(1, state=state, command=lambda: _copy_to_clipboard(saved_selection))
+            menu.entryconfig(4, state=state)
+
+            paste_state = tk.DISABLED
+            try:
+                if entry_widget.clipboard_get():
+                    paste_state = tk.NORMAL
+            except (tk.TclError, Exception):
+                pass
+            menu.entryconfig(2, state=paste_state)
+
+            select_all_state = tk.NORMAL if entry_widget.get() else tk.DISABLED
+            menu.entryconfig(6, state=select_all_state)
+
             menu.tk_popup(event.x_root, event.y_root)
 
         entry_widget.bind('<Button-3>', _show_menu)
@@ -65,22 +107,27 @@ class FileSplitterApp:
         ttk.Label(input_frame, text="选择要拆分的文件:").grid(row=0, column=0, sticky=tk.E, pady=5)
         self.file_entry = ttk.Entry(input_frame)
         self.file_entry.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
-        ttk.Button(input_frame, text="浏览", command=self.browse_file).grid(row=0, column=2, pady=5)
-        self._setup_context_menu(self.file_entry)
+        self.file_entry.bind('<KeyRelease>', self._on_file_entry_change)
+        self.file_entry.bind('<<Paste>>', lambda e: self.file_entry.after(10, self._on_file_entry_change))
+        self.file_entry.bind('<<Cut>>', lambda e: self.file_entry.after(10, self._on_file_entry_change))
+        self.file_browse_btn = ttk.Button(input_frame, text="浏览", command=self.browse_file)
+        self.file_browse_btn.grid(row=0, column=2, pady=5)
+        self._setup_context_menu(self.file_entry, self._on_file_entry_change)
         
         ttk.Label(input_frame, text="输出目录:").grid(row=1, column=0, sticky=tk.E, pady=5)
         self.output_entry = ttk.Entry(input_frame)
         self.output_entry.grid(row=1, column=1, padx=10, pady=5, sticky=tk.EW)
-        ttk.Button(input_frame, text="浏览", command=self.browse_output_dir).grid(row=1, column=2, pady=5)
+        self.output_browse_btn = ttk.Button(input_frame, text="浏览", command=self.browse_output_dir)
+        self.output_browse_btn.grid(row=1, column=2, pady=5)
         self._setup_context_menu(self.output_entry)
         
         ttk.Label(input_frame, text="每个分片大小(MB):").grid(row=2, column=0, sticky=tk.E, pady=5)
         self.chunk_size_var = tk.IntVar(value=10)
-        chunk_spinbox = ttk.Spinbox(input_frame, from_=1, to=1024, textvariable=self.chunk_size_var, width=10)
-        chunk_spinbox.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
-        chunk_spinbox.bind('<KeyRelease>', self._schedule_file_info_update)
-        chunk_spinbox.bind('<<Increment>>', self._schedule_file_info_update)
-        chunk_spinbox.bind('<<Decrement>>', self._schedule_file_info_update)
+        self.chunk_spinbox = ttk.Spinbox(input_frame, from_=1, to=1024, textvariable=self.chunk_size_var, width=10)
+        self.chunk_spinbox.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
+        self.chunk_spinbox.bind('<KeyRelease>', self._schedule_file_info_update)
+        self.chunk_spinbox.bind('<<Increment>>', self._schedule_file_info_update)
+        self.chunk_spinbox.bind('<<Decrement>>', self._schedule_file_info_update)
         
         ttk.Label(input_frame, text="(范围: 1-1024 MB)").grid(row=2, column=2, sticky=tk.W, pady=5)
         
@@ -106,6 +153,17 @@ class FileSplitterApp:
         self.cancel_button = ttk.Button(button_frame, text="取消拆分", command=self.cancel_split, width=15, state=tk.DISABLED)
         self.cancel_button.pack(side=tk.LEFT, padx=5)
     
+    def _on_file_entry_change(self, event=None):
+        self.file_path = self.file_entry.get().strip()
+        if self.file_path and os.path.isfile(self.file_path):
+            self.progress['value'] = 0
+            self.status_label.config(text="状态: 就绪", foreground="#333333")
+            self._schedule_file_info_update()
+        elif not self.file_path:
+            self.progress['value'] = 0
+            self.status_label.config(text="状态: 就绪", foreground="#333333")
+            self.file_info_label.config(text="")
+
     def _schedule_file_info_update(self, event=None):
         if hasattr(self, '_update_after_id'):
             self.root.after_cancel(self._update_after_id)
@@ -139,6 +197,9 @@ class FileSplitterApp:
             self.file_entry.delete(0, tk.END)
             self.file_entry.insert(0, file_path)
             
+            self.progress['value'] = 0
+            self.status_label.config(text="状态: 就绪", foreground="#333333")
+            
             if os.path.exists(file_path):
                 self._update_file_info()
             else:
@@ -160,7 +221,7 @@ class FileSplitterApp:
             return f"{size / (1024 * 1024):.2f} MB"
         else:
             return f"{size / (1024 * 1024 * 1024):.2f} GB"
-    
+
     def calculate_sha256(self, file_path, cancel_check=None):
         sha256_hash = hashlib.sha256()
         with open(file_path, 'rb') as f:
@@ -170,42 +231,46 @@ class FileSplitterApp:
                 sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
     
-    def update_status(self, text):
-        self.status_label.config(text=text)
+    def update_status(self, text, foreground="#333333"):
+        self.status_label.config(text=text, foreground=foreground)
         self.root.update_idletasks()
     
-    def show_error(self, message):
-        messagebox.showerror("错误", message)
-    
     def _validate_split_inputs(self):
+        entry_file = self.file_entry.get().strip()
+        if entry_file:
+            self.file_path = entry_file
+        entry_output = self.output_entry.get().strip()
+        if entry_output:
+            self.output_dir = entry_output
+
         if not self.file_path:
-            self.show_error("请选择要拆分的文件")
+            self.update_status("状态: 请选择要拆分的文件", foreground="#cc0000")
             return None
         if not os.path.exists(self.file_path):
-            self.show_error("所选文件不存在")
+            self.update_status("状态: 所选文件不存在", foreground="#cc0000")
             return None
         if not os.path.isfile(self.file_path):
-            self.show_error("所选路径不是文件")
+            self.update_status("状态: 所选路径不是文件", foreground="#cc0000")
             return None
         if not self.output_dir:
-            self.show_error("请选择输出目录")
+            self.update_status("状态: 请选择输出目录", foreground="#cc0000")
             return None
         
         try:
             chunk_size_mb = self.chunk_size_var.get()
             if chunk_size_mb < 1 or chunk_size_mb > 1024:
-                self.show_error("分片大小应在1-1024 MB之间")
+                self.update_status("状态: 分片大小应在1-1024 MB之间", foreground="#cc0000")
                 return None
             self.chunk_size = chunk_size_mb * 1024 * 1024
         except (ValueError, tk.TclError):
-            self.show_error("分片大小必须是数字")
+            self.update_status("状态: 分片大小必须是数字", foreground="#cc0000")
             return None
         
         if not os.path.exists(self.output_dir):
             try:
                 os.makedirs(self.output_dir)
             except Exception as e:
-                self.show_error(f"无法创建输出目录: {str(e)}")
+                self.update_status(f"状态: 无法创建输出目录: {str(e)}", foreground="#cc0000")
                 return None
         
         file_name = os.path.basename(self.file_path)
@@ -219,7 +284,7 @@ class FileSplitterApp:
             with open(self.file_path, 'rb') as f:
                 for i in range(num_chunks):
                     if self.is_cancelled:
-                        self.update_status("状态: 拆分已取消")
+                        self.update_status("状态: 拆分已取消", foreground="#cc0000")
                         self.cleanup_chunks(self.output_dir, file_name, i)
                         return None
                     
@@ -236,7 +301,7 @@ class FileSplitterApp:
                     self.update_status(f"状态: 正在拆分 {i+1}/{num_chunks}")
             return fkx_content
         except Exception as e:
-            self.show_error(f"拆分过程发生错误: {str(e)}")
+            self.update_status(f"状态: 拆分过程发生错误: {str(e)}", foreground="#cc0000")
             return None
 
     def _finalize_split(self, file_name, file_size, num_chunks, fkx_content):
@@ -248,7 +313,7 @@ class FileSplitterApp:
         )
         
         if self.is_cancelled or file_sha256 is None:
-            self.update_status("状态: 拆分已取消")
+            self.update_status("状态: 拆分已取消", foreground="#cc0000")
             self.progress['value'] = 0
             self.reset_ui()
             return
@@ -261,7 +326,7 @@ class FileSplitterApp:
             f.write('\n'.join(fkx_content))
         
         self.progress['value'] = num_chunks
-        self.update_status(f"状态: 拆分完成！已生成 {num_chunks} 个分片")
+        self.update_status(f"状态: 拆分完成！已生成 {num_chunks} 个分片", foreground="#006600")
         self.reset_ui()
         messagebox.showinfo("完成", f"文件拆分完成！\n文件名: {file_name}\n文件大小: {self.format_size(file_size)}\n分片数: {num_chunks}\n信息文件: {fkx_filename}\n保存位置: {self.output_dir}")
 
@@ -275,6 +340,11 @@ class FileSplitterApp:
         
         self.start_button.config(state=tk.DISABLED)
         self.cancel_button.config(state=tk.NORMAL)
+        self.file_entry.config(state=tk.DISABLED)
+        self.file_browse_btn.config(state=tk.DISABLED)
+        self.output_entry.config(state=tk.DISABLED)
+        self.output_browse_btn.config(state=tk.DISABLED)
+        self.chunk_spinbox.config(state=tk.DISABLED)
         self.is_cancelled = False
         
         self.progress['maximum'] = num_chunks
@@ -302,7 +372,7 @@ class FileSplitterApp:
             if os.path.exists(chunk_path):
                 try:
                     os.remove(chunk_path)
-                except:
+                except OSError:
                     pass
     
     def start_split(self):
@@ -315,6 +385,11 @@ class FileSplitterApp:
     def reset_ui(self):
         self.start_button.config(state=tk.NORMAL)
         self.cancel_button.config(state=tk.DISABLED)
+        self.file_entry.config(state=tk.NORMAL)
+        self.file_browse_btn.config(state=tk.NORMAL)
+        self.output_entry.config(state=tk.NORMAL)
+        self.output_browse_btn.config(state=tk.NORMAL)
+        self.chunk_spinbox.config(state=tk.NORMAL)
 
 if __name__ == "__main__":
     try:

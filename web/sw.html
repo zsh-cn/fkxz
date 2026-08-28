@@ -21,6 +21,8 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
 
 .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; background: #4285f4; color: white; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-resume { background: #34a853; display: none; margin-top: 8px; }
+.btn-resume.show { display: block; }
 </style>
 </head>
 <body>
@@ -29,15 +31,21 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
     <div class="file-info" id="fileInfo">
         <div class="info-row"><span class="info-label">文件名：</span><span class="info-value" id="fileName">-</span></div>
         <div class="info-row"><span class="info-label">文件大小：</span><span class="info-value" id="fileSize">-</span></div>
+        <div class="info-row" id="resumeRow" style="display:none;">
+            <span class="info-label">已保存进度：</span>
+            <span class="info-value" id="resumeProgress">-</span>
+        </div>
     </div>
     <div class="progress-section" id="progressSection">
         <div class="progress-text" id="progressText">准备中...</div>
     </div>
-    
+
     <button class="btn" id="downloadBtn" disabled>下载</button>
+    <button class="btn btn-resume" id="resumeBtn">继续下载</button>
 </div>
 <script>
-let fkxInfo = null, baseUrl = '';
+let fkxInfo = null, baseUrl = '', resumeOffset = 0;
+let _fkxParam = null;
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -76,18 +84,20 @@ function showMessage(text) {
 
 async function parseFkxUrl(url) {
     const btn = document.getElementById('downloadBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
     document.getElementById('fileInfo').classList.remove('show');
     btn.disabled = true;
+    resumeBtn.classList.remove('show');
     try {
         showMessage('获取文件信息...');
         const res = await fetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         fkxInfo = parseFkx(await res.text());
         if (!fkxInfo.filename || !fkxInfo.chunks?.length) throw new Error('格式错误');
-        
+
         baseUrl = getBaseUrl(url);
         const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
-        
+
         document.getElementById('fileName').textContent = fkxInfo.filename;
         document.getElementById('fileSize').textContent = formatSize(totalSize);
         document.getElementById('fileInfo').classList.add('show');
@@ -98,31 +108,37 @@ async function parseFkxUrl(url) {
     }
 }
 
-function startDownload() {
+function startDownload(offset) {
     if (!fkxInfo?.chunks?.length) return;
     const btn = document.getElementById('downloadBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
     btn.disabled = true;
+    resumeBtn.disabled = true;
 
-    const fkxParam = new URLSearchParams(window.location.search).get('fkx');
-    const fkxUrl = /^https?:\/\//i.test(fkxParam) ? fkxParam : new URL(fkxParam, window.location.href).href;
+    const fkxUrl = /^https?:\/\//i.test(_fkxParam) ? _fkxParam : new URL(_fkxParam, window.location.href).href;
+    const absoluteFkxUrl = new URL(fkxUrl, window.location.origin + window.location.pathname).href;
+    const downloadUrl = new URL('./fkxz', window.location.href);
+    downloadUrl.searchParams.set('fkx', absoluteFkxUrl);
+    if (offset > 0) downloadUrl.searchParams.set('resume', String(offset));
 
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;';
     document.body.appendChild(iframe);
 
-    const downloadUrl = './fkxz?fkx=' + encodeURIComponent(fkxUrl);
-    iframe.src = downloadUrl;
+    iframe.src = downloadUrl.href;
 
     showMessage('下载已开始，请查看浏览器下载栏');
-    btn.disabled = false;
-
-    setTimeout(() => { if (iframe.parentNode) iframe.remove(); }, 60000);
+    setTimeout(() => {
+        btn.disabled = false;
+        resumeBtn.disabled = false;
+        if (iframe.parentNode) iframe.remove();
+    }, 5000);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
     if ('serviceWorker' in navigator) {
         try {
-            const reg = await navigator.serviceWorker.register('./sw.js', { scope: '/' });
+            const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
             await navigator.serviceWorker.ready;
             console.log('SW 已注册:', reg.scope);
         } catch (e) {
@@ -131,11 +147,36 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     const fkxParam = new URLSearchParams(window.location.search).get('fkx');
+    const saved = sessionStorage.getItem('fkx_resume');
     if (fkxParam) {
-        const fkxUrl = /^https?:\/\//i.test(fkxParam) ? fkxParam : new URL(fkxParam, window.location.href).href;
-        parseFkxUrl(fkxUrl);
-    } else showMessage('缺少文件参数');
-    document.getElementById('downloadBtn').addEventListener('click', startDownload);
+        _fkxParam = fkxParam;
+        if (saved) {
+            try {
+                const state = JSON.parse(saved);
+                resumeOffset = state.offset || 0;
+                fkxInfo = {
+                    chunks: state.chunks.split('\n').map(l => {
+                        const p = l.split(',');
+                        return { filename: p[0].trim(), size: parseInt(p[1]) || 0 };
+                    }),
+                    filename: state.filename
+                };
+                const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
+                document.getElementById('fileName').textContent = fkxInfo.filename;
+                document.getElementById('fileSize').textContent = formatSize(totalSize);
+                document.getElementById('resumeProgress').textContent = formatSize(resumeOffset);
+                document.getElementById('resumeRow').style.display = 'flex';
+                document.getElementById('downloadBtn').disabled = false;
+                document.getElementById('resumeBtn').classList.add('show');
+                return;
+            } catch (e) { sessionStorage.removeItem('fkx_resume'); }
+        }
+        parseFkxUrl(fkxParam);
+    } else {
+        showMessage('缺少文件参数');
+    }
+    document.getElementById('downloadBtn').addEventListener('click', () => startDownload(0));
+    document.getElementById('resumeBtn').addEventListener('click', () => startDownload(resumeOffset));
 });
 </script>
 </body>

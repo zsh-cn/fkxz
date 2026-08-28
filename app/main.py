@@ -122,6 +122,11 @@ class App:
     def run(self):
         self.root.mainloop()
 
+    def destroy(self):
+        if hasattr(self, '_icon'):
+            self._icon.destroy()
+        super().destroy()
+
 
 def main():
     try:

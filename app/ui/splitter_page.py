@@ -152,6 +152,7 @@ class SplitterPage(BasePage):
             return
         file_path = self._file_entry.get().strip()
         if not file_path or not os.path.exists(file_path):
+            self._progress['value'] = 0
             self._filesize_label.config(text='-')
             self._chunkcount_label.config(text='-')
             return
@@ -200,11 +201,11 @@ class SplitterPage(BasePage):
             return
 
         if not os.path.isfile(file_path):
-            self._apply_validation(False, '请选择有效的文件', ERROR)
+            self._apply_validation(False, '就绪')
             return
 
         if not output:
-            self._apply_validation(False, '请选择输出目录', ERROR)
+            self._apply_validation(False, '就绪')
             return
 
         self._apply_validation(True, '就绪')
@@ -232,7 +233,7 @@ class SplitterPage(BasePage):
         self.after(0, lambda: self._status_label.configure(text=text, fg=color))
 
     def _on_error(self, message):
-        self.after(0, lambda: messagebox.showerror('错误', message))
+        self.after(0, lambda: self._status_label.configure(text=message, fg=ERROR))
         self.after(0, self._reset_ui)
 
     def _on_complete(self, result):
@@ -258,3 +259,4 @@ class SplitterPage(BasePage):
         self._validate_input()
         if cancelled:
             self._progress['value'] = 0
+            self._status_label.config(text='拆分已取消', fg=ERROR)
