@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件分块下载</title>
+<meta name="description" content="将大文件拆分为多个小分片，支持本地合并与远程下载合并，轻松绕过文件上传大小限制">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <a class="logo" href="index.html">
+            <img src="favicon.png" alt="fkxz">
+            文件分块下载
+        </a>
+        <nav class="nav-links">
+            <a href="index.html" class="active">首页</a>
+            <a href="download.html">下载</a>
+            <a href="wjxz/experience.html">体验</a>
+            <a href="dev.html">文档</a>
+            <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<section class="hero">
+    <div class="container">
+        <img class="hero-icon" src="favicon.png" alt="fkxz">
+        <h1>文件分块下载</h1>
+        <p class="site-links">
+            <a href="https://zsh-cn.github.io/fkxz/">主站</a>
+            <span> | </span>
+            <a href="https://fkxz.zhshh.cn">备用站</a>
+        </p>
+        <p class="desc">将大文件拆分为多个小分片，支持本地合并与远程下载合并，可用于绕过文件上传大小限制或便于文件传输</p>
+        <div class="hero-actions">
+            <a href="download.html" class="btn btn-primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                下载已打包程序
+            </a>
+            <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener" class="btn btn-outline">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub 仓库
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">项目功能特点</h2>
+        <p class="section-subtitle">一站式大文件分片传输解决方案</p>
+        <div class="features">
+            <div class="feature-card">
+                <h3>文件拆分</h3>
+                <p>将大文件按指定大小拆分为多个 <code>.fk</code> 分片，并生成 <code>.fkx</code> 信息文件</p>
+            </div>
+            <div class="feature-card">
+                <h3>文件下载</h3>
+                <p>支持本地 <code>.fkx</code> 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验</p>
+            </div>
+            <div class="feature-card">
+                <h3>断点续传</h3>
+                <p>远程下载中断后已下载的分片自动保留，重新下载时自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片</p>
+            </div>
+            <div class="feature-card">
+                <h3>增强模式</h3>
+                <p>集成 <code>curl_cffi</code> 浏览器指纹模拟，可伪装 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</p>
+            </div>
+            <div class="feature-card">
+                <h3>多端支持</h3>
+                <p>提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式</p>
+            </div>
+            <div class="feature-card">
+                <h3>跨平台</h3>
+                <p>Python 工具支持 Windows / Linux / macOS；网页端支持所有现代浏览器</p>
+            </div>
+            <div class="feature-card">
+                <h3>实时进度</h3>
+                <p>终端进度条 / GUI 进度条，实时显示分块进度、总进度和下载速度</p>
+            </div>
+            <div class="feature-card">
+                <h3>自动清理</h3>
+                <p>远程下载完成后自动清理临时分片文件</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">多端支持</h2>
+        <p class="section-subtitle">提供多种使用方式，满足不同场景需求</p>
+        <div class="platform-grid">
+            <div class="platform-card">
+                <h3>命令行工具 (CLI)</h3>
+                <p style="margin-bottom:10px;">基于 argparse 的统一命令行入口，提供 split / merge / download 三大命令，适合批处理和脚本自动化场景。</p>
+                <ul>
+                    <li>SHA-256 完整性校验</li>
+                    <li>增强模式：curl_cffi 浏览器指纹模拟</li>
+                    <li>自定义超时时间（默认 120 秒）</li>
+                    <li>终端实时进度条显示</li>
+                    <li>下载完成后自动清理临时文件</li>
+                    <li>断点续传：分片保留，中断后继续下载</li>
+                </ul>
+            </div>
+            <div class="platform-card">
+                <h3>聚合 GUI 程序</h3>
+                <p style="margin-bottom:10px;">Tkinter 现代化图形界面，采用侧边栏导航设计，集成文件分块与文件下载两大功能于一体。</p>
+                <ul>
+                    <li>侧边栏导航，两页无缝切换</li>
+                    <li>文件下载页面自动识别本地/远程模式</li>
+                    <li>实时分块进度 + 总进度 + 下载速度</li>
+                    <li>远程下载支持断点续传</li>
+                    <li>文件信息预览（文件名、大小、分片数）</li>
+                    <li>支持取消操作</li>
+                    <li>右键上下文菜单</li>
+                </ul>
+            </div>
+            <div class="platform-card">
+                <h3>独立 GUI 程序</h3>
+                <p style="margin-bottom:10px;">两个独立的 Tkinter 图形界面工具，分别专注于拆分和下载/合并。</p>
+                <ul>
+                    <li><strong>wjfk.py</strong>：文件分块</li>
+                    <li><strong>wjxz.py</strong>：文件下载</li>
+                    <li>支持本地模式和远程模式</li>
+                    <li>SHA-256 完整性校验</li>
+                    <li>断点续传：下载中断后分片保留</li>
+                    <li>增强模式：curl_cffi 浏览器指纹模拟</li>
+                </ul>
+            </div>
+            <div class="platform-card">
+                <h3>网页端工具</h3>
+                <p style="margin-bottom:10px;">轻量级浏览器端工具，无需安装任何软件。</p>
+                <ul>
+                    <li><strong>index.html</strong>：浏览器端文件下载器</li>
+                    <li><strong>sw.js + sw.html</strong>：Service Worker 下载器</li>
+                    <li><strong>worker.js</strong>：Cloudflare Workers 后端</li>
+                    <li>纯前端实现，无需后端支持</li>
+                    <li>支持流式下载和实时进度</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">快速开始</h2>
+        <p class="section-subtitle">pip 安装、源码运行或直接下载，三种方式任选其一</p>
+
+        <div class="tab-container">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="pip">pip 安装</button>
+                <button class="tab-btn" data-tab="source">源码运行</button>
+                <button class="tab-btn" data-tab="exe">直接下载 exe</button>
+            </div>
+
+            <div class="tab-panel active" data-tab="pip">
+                <div class="code-block">
+<pre><span class="comment"># 克隆仓库</span>
+<span class="cmd">git clone</span> <span class="path">https://github.com/zsh-cn/fkxz.git</span>
+<span class="cmd">cd</span> <span class="path">fkxz</span>
+
+<span class="comment"># 基础安装</span>
+<span class="cmd">pip install</span> <span class="path">.</span>
+
+<span class="comment"># 安装后直接使用 fkxz 命令</span>
+<span class="cmd">fkxz</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
+<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
+<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+
+<span class="comment"># 如需增强模式（浏览器指纹模拟）</span>
+<span class="cmd">pip install</span> <span class="path">".[enhanced]"</span>
+<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span></pre>
+                </div>
+            </div>
+
+            <div class="tab-panel" data-tab="source">
+                <div class="code-block">
+<pre><span class="comment"># 克隆仓库</span>
+<span class="cmd">git clone</span> <span class="path">https://github.com/zsh-cn/fkxz.git</span>
+<span class="cmd">cd</span> <span class="path">fkxz</span>
+
+<span class="comment"># 创建虚拟环境（可选）</span>
+<span class="cmd">python -m venv</span> <span class="path">.venv</span>
+<span class="cmd">.venv\Scripts\activate</span>      <span class="comment"># Windows</span>
+<span class="comment"># source .venv/bin/activate  # Linux / macOS</span>
+
+<span class="comment"># 安装依赖</span>
+<span class="cmd">pip install -r</span> <span class="path">requirements.txt</span>
+
+<span class="comment"># 启动聚合 GUI</span>
+<span class="cmd">python</span> <span class="path">app/main.py</span>
+
+<span class="comment"># 或使用 CLI</span>
+<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
+
+<span class="comment"># 或使用独立 GUI</span>
+<span class="cmd">python</span> <span class="path">wjfk.py</span>
+<span class="cmd">python</span> <span class="path">wjxz.py</span></pre>
+                </div>
+            </div>
+
+            <div class="tab-panel" data-tab="exe">
+                <div class="web-experience-grid">
+                    <a href="download.html" class="web-exp-card">
+                        <div class="web-exp-icon"></div>
+                        <h3>直接下载 exe</h3>
+                        <p>无需安装 Python 环境，下载已打包程序后直接运行。支持 Windows 系统，开箱即用。</p>
+                        <span class="web-exp-link">前往下载页 →</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">Web 在线体验</h2>
+        <p class="section-subtitle">无需安装任何软件，浏览器直接使用</p>
+        <div class="web-experience-grid">
+            <a href="wjxz/experience.html" class="web-exp-card">
+                <div class="web-exp-icon"></div>
+                <h3>在线体验</h3>
+                <p>输入 .fkx 文件地址，选择标准模式或 Service Worker 模式，在浏览器中直接下载合并文件。无需安装任何软件。</p>
+                <span class="web-exp-link">立即体验 →</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">文档</h2>
+        <p class="section-subtitle">了解项目结构、文件格式、环境要求及自行打包指南</p>
+        <div class="web-experience-grid">
+            <a href="dev.html" class="web-exp-card">
+                <div class="web-exp-icon"></div>
+                <h3>查看文档</h3>
+                <p>包含项目结构、文件格式说明、环境要求、网页端工具详情和 PyInstaller 打包指南，帮助开发者快速上手。</p>
+                <span class="web-exp-link">查看详情 →</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">问题反馈</h2>
+        <p class="section-subtitle">如遇到问题或有功能建议，请通过以下方式反馈</p>
+        <div class="web-experience-grid">
+            <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener" class="web-exp-card">
+                <div class="web-exp-icon"></div>
+                <h3>GitHub Issues</h3>
+                <p style="margin-bottom:4px;">提交 Issue 时请尽量提供以下信息：</p>
+                <ul style="list-style:none;padding:0;font-size:13px;color:var(--text-secondary);line-height:2;">
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / wjfkxz.exe / wjfk.exe / wjxz.exe 或源码运行）</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统版本</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>问题的详细描述和复现步骤</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>相关的错误信息或截图</li>
+                </ul>
+                <span class="web-exp-link">提交 Issue →</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">免责声明</h2>
+        <p class="section-subtitle">使用前请仔细阅读</p>
+        <div class="usage-detail">
+            <p style="font-size:14px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">本工具仅供学习、研究和个人合法用途。使用者应遵守所在国家/地区的法律法规，不得将本工具用于任何违法或侵权活动。</p>
+            <ul>
+                <li>使用本工具下载文件时，请确保您拥有合法的下载权限，遵守目标网站的服务条款和 robots.txt 协议</li>
+                <li>增强模式（浏览器指纹模拟）功能仅用于研究和学习浏览器指纹技术，请勿用于绕过网站的安全防护措施进行未授权访问</li>
+                <li>本项目开发者不对使用者的任何不当行为承担责任，使用者需自行承担使用本工具所产生的一切后果和风险</li>
+                <li>本工具不提供任何形式的担保，使用过程中可能产生的数据丢失、文件损坏等问题，开发者不承担任何责任</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container" style="text-align:center;">
+        <h2 class="section-title">许可证</h2>
+        <p class="section-subtitle">本项目采用 Mozilla Public License Version 2.0 (MPL-2.0) 许可证</p>
+        <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener" class="btn btn-outline" style="margin-top:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            查看完整许可证
+        </a>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="container">
+        <div class="links">
+            <a href="index.html">首页</a>
+            <a href="download.html">下载</a>
+            <a href="wjxz/experience.html">体验</a>
+            <a href="dev.html">文档</a>
+            <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">GitHub 仓库</a>
+            <a href="https://github.com/zsh-cn/fkxz/releases/latest" target="_blank" rel="noopener">Releases</a>
+            <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener">问题反馈</a>
+            <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener">MPL-2.0</a>
+        </div>
+        <p class="copyright">&copy; 2025 zhshh. All rights reserved.</p>
+    </div>
+</footer>
+
+<script src="js/main.js"></script>
+<script>
+Fkxz.initTabs();
+</script>
+
+</body>
+</html>
