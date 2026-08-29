@@ -139,6 +139,8 @@ class MergerPage(BasePage):
         if path:
             self._fkx_entry.delete(0, tk.END)
             self._fkx_entry.insert(0, path)
+            self._chunk_progress['value'] = 0
+            self._total_progress['value'] = 0
             self._validate_input()
             self._parse_and_display_info()
 
@@ -150,6 +152,8 @@ class MergerPage(BasePage):
             self._validate_input()
 
     def _on_input_change(self, event=None):
+        self._chunk_progress['value'] = 0
+        self._total_progress['value'] = 0
         self._validate_input()
         self._parse_and_display_info()
 
@@ -209,6 +213,8 @@ class MergerPage(BasePage):
         self.after(0, lambda: self._chunk_progress.configure(value=value, maximum=maximum))
 
     def _on_status(self, text, color='#333333'):
+        if text == "正在校验SHA-256...":
+            self.after(0, lambda: self._cancel_btn.config(text='跳过'))
         self.after(0, lambda: self._status_label.configure(text=text, fg=color))
 
     def _on_error(self, message):
@@ -233,12 +239,12 @@ class MergerPage(BasePage):
 
     def _reset_ui(self):
         self._validate_input()
-        self._cancel_btn.config(state=tk.DISABLED)
+        self._cancel_btn.config(state=tk.DISABLED, text='取消')
         self._chunk_progress['value'] = 0
         self._total_progress['value'] = 0
 
     def _finalize_ui(self, cancelled=False):
-        self._cancel_btn.config(state=tk.DISABLED)
+        self._cancel_btn.config(state=tk.DISABLED, text='取消')
         self._validate_input()
         if cancelled:
             self._chunk_progress['value'] = 0

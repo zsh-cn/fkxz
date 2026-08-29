@@ -172,6 +172,7 @@
                 <li><code>-t, --timeout</code>：请求超时时间（秒），默认 120（可选）</li>
                 <li><code>-s, --skip-sha256</code>：跳过SHA-256校验（可选）</li>
             </ul>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">远程下载支持<strong>断点续传</strong>：分片先保存到 <code>{输出目录}/{文件名}-fkxz/</code> 分片目录，下载中断后分片保留，重新下载时自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片。</p>
         </div>
 
         <div class="usage-detail">
@@ -192,16 +193,17 @@
 
             <h4>拆分文件</h4>
             <div class="code-block">
-<pre><span class="cmd">python</span> <span class="path">file_splitter.py</span></pre>
+<pre><span class="cmd">python</span> <span class="path">wjfk.py</span></pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">在 GUI 中选择要拆分的文件、输出目录和分片大小，点击"开始拆分"。</p>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:4px;">拆分完成后可将 <code>.fk</code> 分片和 <code>.fkx</code> 文件上传到服务器，保持相同目录结构，使用 <code>.fkx</code> 文件信息 URL 以供分享、下载。</p>
 
             <h4>合并文件（本地/远程）</h4>
             <div class="code-block">
-<pre><span class="cmd">python</span> <span class="path">file_downloader.py</span></pre>
+<pre><span class="cmd">python</span> <span class="path">wjxz.py</span></pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">在输入框中填入 <code>.fkx</code> 文件的本地路径或完整 URL，选择输出目录。界面默认勾选<strong>增强模式</strong>（使用 curl_cffi 浏览器指纹模拟以绕过反爬虫），可根据需要取消勾选切换为标准模式。点击"开始合并"（本地）或"开始下载"（远程）。</p>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:4px;">远程下载支持<strong>断点续传</strong>：下载中断后分片保留在分片目录，重新下载自动跳过已下载分片（大小 + SHA-256 校验）。</p>
         </div>
 
         <div class="usage-detail">
@@ -303,8 +305,8 @@
 │       ├── sw.js
 │       └── favicon.png
 │
-├── file_splitter.py               <span class="comment"># 独立文件拆分器 (GUI)</span>
-├── file_downloader.py             <span class="comment"># 独立文件下载/合并器 (GUI, 支持增强模式)</span>
+├── wjfk.py                        <span class="comment"># 独立文件分块程序 (GUI)</span>
+├── wjxz.py                        <span class="comment"># 独立文件下载程序 (GUI, 支持增强模式)</span>
 ├── pyproject.toml                 <span class="comment"># 项目元数据与构建配置</span>
 ├── requirements.txt               <span class="comment"># Python 依赖（兼容传统 pip install -r）</span>
 ├── LICENSE                        <span class="comment"># MPL 2.0 许可证</span>
@@ -338,6 +340,7 @@
                 <li>支持 --timeout 自定义请求超时时间（默认 120 秒）</li>
                 <li>终端实时进度条显示</li>
                 <li>下载完成后自动清理临时文件</li>
+                <li>支持断点续传：分片保存在本地分片目录，中断后重新下载自动跳过已下载分片</li>
             </ul>
         </div>
 
@@ -357,6 +360,7 @@
                 <li>多线程异步处理，界面不阻塞</li>
                 <li>实时分块进度 + 总进度 + 下载速度显示</li>
                 <li>远程模式支持 curl_cffi 浏览器指纹模拟（绕过反爬虫）</li>
+                <li>远程下载支持断点续传（分片保留，重新下载自动跳过已下载分片）</li>
                 <li>文件信息预览（文件名、大小、分片数）</li>
                 <li>支持取消操作</li>
                 <li>右键上下文菜单（剪切/复制/粘贴/全选）</li>
@@ -366,7 +370,7 @@
         <div class="usage-detail">
             <h3>独立 GUI 工具</h3>
             <div style="margin-bottom:16px;">
-                <h4>file_splitter.py — 文件拆分器</h4>
+                <h4>wjfk.py — 文件分块</h4>
                 <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，将大文件拆分为多个 .fk 分片，并生成 .fkx 信息文件。</p>
                 <ul>
                     <li>支持自定义分片大小（1-1024 MB）</li>
@@ -375,13 +379,14 @@
                 </ul>
             </div>
             <div>
-                <h4>file_downloader.py — 文件下载/合并器</h4>
+                <h4>wjxz.py — 文件下载</h4>
                 <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，读取 .fkx 信息文件，获取所有分片并合并还原。</p>
                 <ul>
                     <li><strong>本地模式</strong>：从本地目录读取 .fkx 和 .fk 文件直接合并</li>
                     <li><strong>远程模式</strong>：从 URL 下载 .fkx 文件，逐个下载 .fk 分片后合并</li>
                     <li>实时进度显示（分块进度 / 总进度 / 下载速度）</li>
                     <li>SHA-256 完整性校验</li>
+                    <li>断点续传：下载中断后分片保留在本地分片目录，重新下载自动跳过已下载分片</li>
                     <li>自动清理临时文件</li>
                     <li><strong>增强模式</strong>（默认启用）：界面提供复选框，勾选后使用 curl_cffi 模拟 Chrome 浏览器指纹，自动伪装浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-* 等），支持 Referer 头信息传递，可绕过反爬虫保护（如 Cloudflare 验证、EdgeOne Pages、防盗链等）。取消勾选则使用标准请求模式</li>
                 </ul>
@@ -516,9 +521,9 @@
         <div class="tab-container">
             <div class="tabs">
                 <button class="tab-btn active" data-tab="pkg-cli">cli.exe</button>
-                <button class="tab-btn" data-tab="pkg-main">main.exe</button>
-                <button class="tab-btn" data-tab="pkg-splitter">file_splitter.exe</button>
-                <button class="tab-btn" data-tab="pkg-downloader">file_downloader.exe</button>
+                <button class="tab-btn" data-tab="pkg-main">wjfkxz.exe</button>
+                <button class="tab-btn" data-tab="pkg-splitter">wjfk.exe</button>
+                <button class="tab-btn" data-tab="pkg-downloader">wjxz.exe</button>
             </div>
 
             <div class="tab-panel active" data-tab="pkg-cli">
@@ -535,7 +540,7 @@
 
             <div class="tab-panel" data-tab="pkg-main">
                 <div class="code-block">
-<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">main</span> <span class="arg">--icon</span> <span class="path">icon/wjfkxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="arg">--add-data</span> <span class="path">"app;app"</span> <span class="path">app/main.py</span></pre>
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">wjfkxz</span> <span class="arg">--icon</span> <span class="path">icon/wjfkxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="arg">--add-data</span> <span class="path">"app;app"</span> <span class="path">app/main.py</span></pre>
                 </div>
                 <ul>
                     <li><code>--windowed</code>：窗口程序（不显示命令行窗口）</li>
@@ -547,7 +552,7 @@
 
             <div class="tab-panel" data-tab="pkg-splitter">
                 <div class="code-block">
-<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">file_splitter</span> <span class="arg">--icon</span> <span class="path">icon/wjfk.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="path">file_splitter.py</span></pre>
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">wjfk</span> <span class="arg">--icon</span> <span class="path">icon/wjfk.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="path">wjfk.py</span></pre>
                 </div>
                 <ul>
                     <li><code>--icon icon/wjfk.ico</code>：设置 exe 程序图标</li>
@@ -557,7 +562,7 @@
 
             <div class="tab-panel" data-tab="pkg-downloader">
                 <div class="code-block">
-<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">file_downloader</span> <span class="arg">--icon</span> <span class="path">icon/wjxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="arg">--hidden-import</span> <span class="opt">curl_cffi</span> <span class="path">file_downloader.py</span></pre>
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">wjxz</span> <span class="arg">--icon</span> <span class="path">icon/wjxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="arg">--hidden-import</span> <span class="opt">curl_cffi</span> <span class="path">wjxz.py</span></pre>
                 </div>
                 <ul>
                     <li><code>--icon icon/wjxz.ico</code>：设置 exe 程序图标</li>
@@ -572,7 +577,7 @@
             <li>打包后的 exe 文件位于 <code>dist/</code> 目录下</li>
             <li>如果增强模式打包失败或运行时不可用，程序会自动回退到标准 requests 模式</li>
             <li>建议在打包前先执行 <code>pip install -r requirements.txt</code> 和 <code>pip install ".[enhanced]"</code> 确保所有依赖已安装</li>
-            <li>对于 main.exe，请确保 app/ 目录及其子模块（core/、ui/、utils/）均被正确包含</li>
+            <li>对于 wjfkxz.exe，请确保 app/ 目录及其子模块（core/、ui/、utils/）均被正确包含</li>
         </ul>
     </div>
 </section>

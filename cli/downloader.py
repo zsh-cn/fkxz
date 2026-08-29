@@ -37,12 +37,13 @@ def download_fkx(url, session, enhanced, timeout=120):
         return None
 
 
-def _report_download_progress(downloaded, chunk_size):
-    pct = min(downloaded / chunk_size * 100, 100) if chunk_size > 0 else 100
-    sys.stdout.write(
-        f"\r    下载中... {format_size(downloaded)}/{format_size(chunk_size)} ({pct:.1f}%)" + " " * 20
-    )
-    sys.stdout.flush()
+def _report_download_progress(downloaded, chunk_size, downloaded_before, total_size, start_time):
+    total_downloaded = downloaded_before + downloaded
+    elapsed = time.time() - start_time
+    speed = total_downloaded / elapsed if elapsed > 0 else 0
+    print_progress(total_downloaded, total_size,
+                   prefix="下载: ",
+                   suffix=f"{format_size(total_downloaded)}/{format_size(total_size)} | {format_size(int(speed))}/s")
 
 
 def _validate_download_size(downloaded, chunk_size, chunk_path):
@@ -58,7 +59,8 @@ def _validate_download_size(downloaded, chunk_size, chunk_path):
     return True
 
 
-def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_referer, timeout=120):
+def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_referer, timeout=120,
+                          downloaded_before=0, total_size=0, start_time=None):
     headers = {}
     if enhanced:
         headers = dict(BROWSER_HEADERS)
@@ -67,6 +69,9 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
         headers["Sec-Fetch-Site"] = "same-origin"
         if base_referer:
             headers["Referer"] = base_referer
+
+    if start_time is None:
+        start_time = time.time()
 
     try:
         downloaded = [0]
@@ -77,7 +82,8 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
                 f.write(data)
                 downloaded[0] += len(data)
                 if chunk_size > 0 and downloaded[0] - last_report[0] >= 65536:
-                    _report_download_progress(downloaded[0], chunk_size)
+                    _report_download_progress(downloaded[0], chunk_size,
+                                              downloaded_before, total_size, start_time)
                     last_report[0] = downloaded[0]
 
             with open(chunk_path, 'wb') as f:
@@ -93,14 +99,13 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
                     f.write(chunk)
                     downloaded[0] += len(chunk)
                     if chunk_size > 0 and downloaded[0] - last_report[0] >= 65536:
-                        _report_download_progress(downloaded[0], chunk_size)
+                        _report_download_progress(downloaded[0], chunk_size,
+                                                  downloaded_before, total_size, start_time)
                         last_report[0] = downloaded[0]
 
         if not _validate_download_size(downloaded[0], chunk_size, chunk_path):
             return False
 
-        sys.stdout.write(f"\r    下载完成: {format_size(chunk_size)}" + " " * 20 + "\n")
-        sys.stdout.flush()
         return True
     except Exception as e:
         sys.stdout.write(f"\n    错误: 分片下载失败 - {e}\n")
@@ -111,7 +116,7 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
 def _report_sha256_progress(processed, total):
     pct = min(processed / total * 100, 100) if total > 0 else 100
     sys.stdout.write(
-        f"\r    校验中... {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 20
+        f"\r\033[K    校验中... {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 5
     )
     sys.stdout.flush()
 
@@ -147,7 +152,8 @@ def _ask_retry_cli(prompt):
             return False
 
 
-def download_chunk(base_url, chunk_info, chunk_index, chunk_dir, session, enhanced, base_referer, timeout=120):
+def download_chunk(base_url, chunk_info, chunk_index, chunk_dir, session, enhanced, base_referer, timeout=120,
+                   downloaded_before=0, total_size=0, start_time=None):
     existing = _check_existing_chunk(chunk_dir, chunk_info)
     if existing:
         sys.stdout.write(f"  [{chunk_index + 1}] {chunk_info['filename']} 已存在，跳过\n")
@@ -171,7 +177,8 @@ def download_chunk(base_url, chunk_info, chunk_index, chunk_dir, session, enhanc
     sys.stdout.flush()
 
     while True:
-        success = download_chunk_stream(chunk_url, chunk_path, chunk_size, session, enhanced, base_referer, timeout)
+        success = download_chunk_stream(chunk_url, chunk_path, chunk_size, session, enhanced, base_referer,
+                                        timeout, downloaded_before, total_size, start_time)
         if success and os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
             return True, chunk_path
 
@@ -287,7 +294,8 @@ def cmd_download(args):
     while i < num_chunks:
         chunk_info = fkx_info['chunks'][i]
         success, chunk_path = download_chunk(base_url, chunk_info, i, chunk_dir,
-                                             session, enhanced, base_referer, timeout)
+                                             session, enhanced, base_referer, timeout,
+                                             total_downloaded, total_size, download_start_time)
         if not success:
             sys.stdout.write(f"\n分片 {i+1} 下载失败\n")
             sys.stdout.flush()
@@ -300,12 +308,6 @@ def cmd_download(args):
         downloaded_chunks[i] = chunk_path
         total_downloaded += chunk_info['size']
 
-        elapsed = time.time() - download_start_time
-        speed = total_downloaded / elapsed if elapsed > 0 else 0
-        print_progress(i + 1, num_chunks,
-                       prefix=f"总进度: ",
-                       suffix=f"{i+1}/{num_chunks} | {format_size(int(speed))}/s")
-        sys.stdout.write("\n")
         i += 1
     sys.stdout.write("\n")
     sys.stdout.flush()

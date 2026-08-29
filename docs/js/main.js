@@ -2,7 +2,7 @@
     'use strict';
 
     var REPO = 'zsh-cn/fkxz';
-    var ASSETS = ['cli.exe', 'main.exe', 'file_splitter.exe', 'file_downloader.exe'];
+    var ASSETS = ['cli.exe', 'wjfkxz.exe', 'wjfk.exe', 'wjxz.exe'];
     var CACHE_KEY = 'fkxz_release_cache';
     var CACHE_TTL = 3600000;
 

@@ -1,6 +1,7 @@
 import os
 import hashlib
 import tkinter as tk
+from typing import Any
 
 
 def format_size(size_bytes):
@@ -18,28 +19,46 @@ def format_size(size_bytes):
 
 
 def parse_fkx(content):
-    info = {'chunks': []}
+    info: dict[str, Any] = {'chunks': []}
+    lines = content.strip().split('\n')
+    raw_chunks = {}
 
-    for line in content.splitlines():
-        line = line.strip()
-        if not line or '=' not in line:
+    for line in lines:
+        if '=' not in line:
             continue
         key, value = line.split('=', 1)
         if key.startswith('chunk_'):
+            try:
+                index = int(key.split('_', 1)[1])
+            except ValueError:
+                continue
             parts = value.split(',')
             if len(parts) >= 2:
-                chunk_filename = parts[0].strip()
-                chunk_filename = os.path.basename(chunk_filename)
+                chunk_filename = os.path.basename(parts[0].strip())
+                if index in raw_chunks:
+                    raise ValueError(f"chunk 索引重复: chunk_{index}")
                 chunk_info = {
                     'filename': chunk_filename,
                     'size': int(parts[1])
                 }
                 if len(parts) >= 3:
                     chunk_info['sha256'] = parts[2].strip()
-                info['chunks'].append(chunk_info)
+                raw_chunks[index] = chunk_info
         else:
             info[key] = value.strip()
 
+    if not raw_chunks:
+        raise ValueError("未找到任何 chunk 条目")
+
+    sorted_indices = sorted(raw_chunks.keys())
+    expected_start = 1
+    for i, idx in enumerate(sorted_indices):
+        if idx != expected_start + i:
+            raise ValueError(
+                f"chunk 索引不连续: 期望 chunk_{expected_start + i}, 实际 chunk_{idx}"
+            )
+
+    info['chunks'] = [raw_chunks[idx] for idx in sorted_indices]
     return info
 
 
@@ -80,6 +99,8 @@ def is_domain_like(path):
 
 
 def resolve_local_path(path):
+    if path.startswith('file://'):
+        path = path[7:]
     if not is_remote_url(path) and not has_drive_letter(path):
         return os.path.abspath(path)
     return path
@@ -133,6 +154,8 @@ def setup_context_menu(entry_widget, on_change=None):
     menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
 
     def _show_menu(event):
+        if str(entry_widget['state']) == 'disabled':
+            return
         try:
             if entry_widget.focus_get() != entry_widget:
                 entry_widget.focus_set()
@@ -238,7 +261,7 @@ class RoundedProgressBar(tk.Canvas):
         if 'maximum' in kwargs:
             self._maximum = kwargs.pop('maximum')
         self._draw()
-        super().configure(*args, **kwargs)
+        return super().configure(*args, **kwargs)
 
     def config(self, **kwargs):
         self.configure(**kwargs)
@@ -379,6 +402,7 @@ class RoundedButton(tk.Canvas):
 
     def configure(self, *args, **kwargs):
         self.config(**kwargs)
+        return super().configure(*args, **kwargs)
 
     def cget(self, key):
         if key == 'text':

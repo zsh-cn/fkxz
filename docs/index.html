@@ -68,6 +68,10 @@
                 <p>支持本地 <code>.fkx</code> 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验</p>
             </div>
             <div class="feature-card">
+                <h3>断点续传</h3>
+                <p>远程下载中断后已下载的分片自动保留，重新下载时自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片</p>
+            </div>
+            <div class="feature-card">
                 <h3>增强模式</h3>
                 <p>集成 <code>curl_cffi</code> 浏览器指纹模拟，可伪装 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</p>
             </div>
@@ -105,6 +109,7 @@
                     <li>自定义超时时间（默认 120 秒）</li>
                     <li>终端实时进度条显示</li>
                     <li>下载完成后自动清理临时文件</li>
+                    <li>断点续传：分片保留，中断后继续下载</li>
                 </ul>
             </div>
             <div class="platform-card">
@@ -114,6 +119,7 @@
                     <li>侧边栏导航，两页无缝切换</li>
                     <li>文件下载页面自动识别本地/远程模式</li>
                     <li>实时分块进度 + 总进度 + 下载速度</li>
+                    <li>远程下载支持断点续传</li>
                     <li>文件信息预览（文件名、大小、分片数）</li>
                     <li>支持取消操作</li>
                     <li>右键上下文菜单</li>
@@ -123,10 +129,11 @@
                 <h3>独立 GUI 程序</h3>
                 <p style="margin-bottom:10px;">两个独立的 Tkinter 图形界面工具，分别专注于拆分和下载/合并。</p>
                 <ul>
-                    <li><strong>file_splitter.py</strong>：文件拆分器</li>
-                    <li><strong>file_downloader.py</strong>：文件下载/合并器</li>
+                    <li><strong>wjfk.py</strong>：文件分块</li>
+                    <li><strong>wjxz.py</strong>：文件下载</li>
                     <li>支持本地模式和远程模式</li>
                     <li>SHA-256 完整性校验</li>
+                    <li>断点续传：下载中断后分片保留</li>
                     <li>增强模式：curl_cffi 浏览器指纹模拟</li>
                 </ul>
             </div>
@@ -199,8 +206,8 @@
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
 
 <span class="comment"># 或使用独立 GUI</span>
-<span class="cmd">python</span> <span class="path">file_splitter.py</span>
-<span class="cmd">python</span> <span class="path">file_downloader.py</span></pre>
+<span class="cmd">python</span> <span class="path">wjfk.py</span>
+<span class="cmd">python</span> <span class="path">wjxz.py</span></pre>
                 </div>
             </div>
 
@@ -258,7 +265,7 @@
                 <h3>GitHub Issues</h3>
                 <p style="margin-bottom:4px;">提交 Issue 时请尽量提供以下信息：</p>
                 <ul style="list-style:none;padding:0;font-size:13px;color:var(--text-secondary);line-height:2;">
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / main.exe / file_splitter.exe / file_downloader.exe 或源码运行）</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / wjfkxz.exe / wjfk.exe / wjxz.exe 或源码运行）</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统版本</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>问题的详细描述和复现步骤</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>相关的错误信息或截图</li>

@@ -6,6 +6,7 @@
 
 - **文件拆分**：将大文件按指定大小拆分为多个 `.fk` 分片，并生成 `.fkx` 信息文件
 - **文件下载**：支持本地 `.fkx` 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验
+- **断点续传**：远程下载中断后已下载的分片自动保留，重新下载时自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片，无需从头开始
 - **增强模式**：集成 `curl_cffi` 浏览器指纹模拟，可伪装 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-\* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护
 - **多端支持**：提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式
 - **跨平台**：Python 工具支持 Windows / Linux / macOS；网页端工具支持所有现代浏览器
@@ -84,8 +85,8 @@ fkxz/
 │       ├── sw.js
 │       └── favicon.png
 │
-├── file_splitter.py               # 独立文件拆分器 (GUI)
-├── file_downloader.py             # 独立文件下载/合并器 (GUI, 支持增强模式)
+├── wjfk.py                        # 独立文件分块程序 (GUI)
+├── wjxz.py                        # 独立文件下载程序 (GUI, 支持增强模式)
 ├── pyproject.toml                 # 项目元数据与构建配置
 ├── requirements.txt               # Python 依赖（兼容传统 pip install -r）
 ├── LICENSE                        # MPL 2.0 许可证
@@ -101,11 +102,11 @@ fkxz/
 | 程序 | 文件名 | 说明 |
 |------|--------|------|
 | 命令行工具 | `cli.exe` | 命令行版，支持 split / merge / download 命令 |
-| 聚合程序 | `main.exe` | 集成侧边栏导航的图形界面，文件分块与文件下载两大功能 |
-| 独立程序（文件拆分器） | `file_splitter.exe` | 专注于文件拆分 |
-| 独立程序（文件下载器） | `file_downloader.exe` | 支持本地合并与远程下载（含增强模式） |
+| 文件分块下载 | `wjfkxz.exe` | 集成侧边栏导航的图形界面，文件分块与文件下载两大功能 |
+| 文件分块 | `wjfk.exe` | 独立程序，专注于文件拆分 |
+| 文件下载 | `wjxz.exe` | 独立程序，支持本地合并与远程下载（含增强模式） |
 
-> **注意**：`file_downloader.exe` 的增强模式需要 `curl_cffi` 支持，已打包版本内置了增强模式能力。如果增强模式不可用，程序会自动回退到标准模式。
+> **注意**：`wjxz.exe` 的增强模式需要 `curl_cffi` 支持，已打包版本内置了增强模式能力。如果增强模式不可用，程序会自动回退到标准模式。
 
 ## Releases 已打包程序使用说明
 
@@ -176,15 +177,26 @@ REM 跳过SHA-256校验
 cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 ```
 
+#### 断点续传
+
+下载时，每个分片会先保存到 `{输出目录}/{文件名}-fkxz/` 分片目录中。若下载中断（网络错误、手动取消等），已下载的分片会保留在该目录，不会丢失。
+
+重新执行相同的 `download` 命令时，程序会自动检测分片目录：
+
+- 分片已存在且大小一致（`.fkx` 信息文件包含分片 SHA-256 时还会进行校验），直接跳过，仅下载缺失分片
+- 分片不完整（大小不符或校验失败），自动重新下载该分片
+
+全部下载完成后才合并文件并自动清理分片目录，实现断点续传。
+
 ---
 
-### main.exe — 聚合 GUI 程序
+### wjfkxz.exe — 文件分块下载
 
-`main.exe` 是集成式图形界面，采用侧边栏导航设计，将文件分块与文件下载两大功能整合在一个窗口中。
+`wjfkxz.exe` 是集成式图形界面，采用侧边栏导航设计，将文件分块与文件下载两大功能整合在一个窗口中。
 
 #### 启动
 
-双击 `main.exe` 即可启动，无需任何命令行参数。
+双击 `wjfkxz.exe` 即可启动，无需任何命令行参数。
 
 #### 界面功能
 
@@ -196,6 +208,7 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 - 侧边栏一键切换功能页面
 - 文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 `.fk` 分片，远程模式自动下载分片后合并
 - 实时分块进度 + 总进度 + 下载速度显示
+- 远程下载支持断点续传：中断后分片保留，重新下载自动跳过已下载分片（大小 + SHA-256 校验）
 - 文件信息预览（文件名、大小、分片数）
 - 支持取消操作
 - HiDPI 高 DPI 自适应
@@ -203,13 +216,13 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 
 ---
 
-### file_splitter.exe — 文件拆分器
+### wjfk.exe — 文件分块
 
-`file_splitter.exe` 是独立的文件拆分 GUI 工具，专注于将大文件拆分为多个小分片。
+`wjfk.exe` 是独立的文件分块 GUI 工具，专注于将大文件拆分为多个小分片。
 
 #### 启动
 
-双击 `file_splitter.exe` 即可启动。
+双击 `wjfk.exe` 即可启动。
 
 #### 使用步骤
 
@@ -227,13 +240,13 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 
 ---
 
-### file_downloader.exe — 文件下载/合并器
+### wjxz.exe — 文件下载
 
-`file_downloader.exe` 是独立的文件下载与合并 GUI 工具，支持本地合并和远程下载两种模式。
+`wjxz.exe` 是独立的文件下载 GUI 工具，支持本地合并和远程下载两种模式。
 
 #### 启动
 
-双击 `file_downloader.exe` 即可启动。
+双击 `wjxz.exe` 即可启动。
 
 #### 本地模式
 
@@ -251,6 +264,8 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 4. 点击"开始下载"
 
 程序会自动下载 `.fkx` 信息文件、逐个下载 `.fk` 分片、合并还原并校验 SHA-256。
+
+**断点续传**：下载中断（网络错误、手动取消等）后，已下载的分片会保留在 `{输出目录}/{文件名}-fkxz/` 分片目录中。再次点击"开始下载"时，程序会自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片，全部下载完成后自动清理分片目录。
 
 #### 增强模式
 
@@ -317,6 +332,7 @@ python app/main.py             # 启动 GUI
 - 支持 `--timeout` 自定义请求超时时间（默认 120 秒）
 - 终端实时进度条显示
 - 下载完成后自动清理临时文件
+- 支持断点续传：分片保存在本地分片目录，中断后重新下载自动跳过已下载分片
 
 ### 聚合 GUI 程序 — `app/main.py`
 
@@ -333,13 +349,14 @@ Tkinter 现代化图形界面，采用侧边栏导航设计，集成两大功能
 - 多线程异步处理，界面不阻塞
 - 实时分块进度 + 总进度 + 下载速度显示
 - 远程模式支持 curl_cffi 浏览器指纹模拟（绕过反爬虫）
+- 远程下载支持断点续传（分片保留，重新下载自动跳过已下载分片）
 - 文件信息预览（文件名、大小、分片数）
 - 支持取消操作
 - 右键上下文菜单（剪切/复制/粘贴/全选）
 
 ### 独立 GUI 工具
 
-#### file_splitter.py — 文件拆分器
+#### wjfk.py — 文件分块
 
 Tkinter 图形界面，将大文件拆分为多个 `.fk` 分片，并生成 `.fkx` 信息文件。
 
@@ -347,7 +364,7 @@ Tkinter 图形界面，将大文件拆分为多个 `.fk` 分片，并生成 `.fk
 - 每个分片及原始文件均计算 SHA-256 校验值
 - 支持取消拆分操作
 
-#### file_downloader.py — 文件下载/合并器
+#### wjxz.py — 文件下载
 
 Tkinter 图形界面，读取 `.fkx` 信息文件，获取所有分片并合并还原。
 
@@ -355,6 +372,7 @@ Tkinter 图形界面，读取 `.fkx` 信息文件，获取所有分片并合并�
 - **远程模式**：从 URL 下载 `.fkx` 文件，逐个下载 `.fk` 分片后合并
 - 实时进度显示（分块进度 / 总进度 / 下载速度）
 - SHA-256 完整性校验
+- 断点续传：下载中断后分片保留在本地分片目录，重新下载自动跳过已下载分片
 - 自动清理临时文件
 - **增强模式**（默认启用）：界面提供复选框，勾选后使用 `curl_cffi` 模拟 Chrome 浏览器指纹，自动伪装浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-\* 等），支持 Referer 头信息传递，可绕过反爬虫保护（如 Cloudflare 验证、EdgeOne Pages、防盗链等）。取消勾选则使用标准请求模式
 
@@ -469,7 +487,7 @@ python app/main.py
 #### 拆分文件
 
 ```bash
-python file_splitter.py
+python wjfk.py
 ```
 
 在 GUI 中选择要拆分的文件、输出目录和分片大小，点击"开始拆分"。
@@ -479,7 +497,7 @@ python file_splitter.py
 #### 合并文件（本地/远程）
 
 ```bash
-python file_downloader.py
+python wjxz.py
 ```
 
 在输入框中填入 `.fkx` 文件的本地路径或完整 URL，选择输出目录。界面默认勾选**增强模式**（使用 curl_cffi 浏览器指纹模拟以绕过反爬虫），可根据需要取消勾选切换为标准模式。点击"开始合并"（本地）或"开始下载"（远程）。
@@ -587,10 +605,10 @@ pyinstaller --onefile --console --name cli --icon icon/wjfkxz-cli.ico cli/main.p
 - `--name cli`：输出文件名为 `cli.exe`
 - `--icon icon/wjfkxz-cli.ico`：设置 exe 程序图标
 
-#### 打包 main.exe（聚合 GUI 程序）
+#### 打包 wjfkxz.exe（聚合 GUI 程序）
 
 ```bash
-pyinstaller --onefile --windowed --name main --icon icon/wjfkxz.ico --add-data "icon;icon" --add-data "app;app" app/main.py
+pyinstaller --onefile --windowed --name wjfkxz --icon icon/wjfkxz.ico --add-data "icon;icon" --add-data "app;app" app/main.py
 ```
 
 - `--windowed`：窗口程序（不显示命令行窗口）
@@ -598,19 +616,19 @@ pyinstaller --onefile --windowed --name main --icon icon/wjfkxz.ico --add-data "
 - `--add-data "app;app"`：将 app 模块打包进去
 - 任务栏/窗口图标：`icon/wjfkxz.png`（通过 `--add-data` 打包，程序运行时自动加载）
 
-#### 打包 file_splitter.exe（文件拆分器）
+#### 打包 wjfk.exe（文件分块）
 
 ```bash
-pyinstaller --onefile --windowed --name file_splitter --icon icon/wjfk.ico --add-data "icon;icon" file_splitter.py
+pyinstaller --onefile --windowed --name wjfk --icon icon/wjfk.ico --add-data "icon;icon" wjfk.py
 ```
 
 - `--icon icon/wjfk.ico`：设置 exe 程序图标
 - 任务栏/窗口图标：`icon/wjfk.png`（通过 `--add-data` 打包，程序运行时自动加载）
 
-#### 打包 file_downloader.exe（文件下载/合并器）
+#### 打包 wjxz.exe（文件下载）
 
 ```bash
-pyinstaller --onefile --windowed --name file_downloader --icon icon/wjxz.ico --add-data "icon;icon" --hidden-import curl_cffi file_downloader.py
+pyinstaller --onefile --windowed --name wjxz --icon icon/wjxz.ico --add-data "icon;icon" --hidden-import curl_cffi wjxz.py
 ```
 
 - `--icon icon/wjxz.ico`：设置 exe 程序图标
@@ -622,7 +640,7 @@ pyinstaller --onefile --windowed --name file_downloader --icon icon/wjxz.ico --a
 - 打包后的 exe 文件位于 `dist/` 目录下
 - 如果增强模式打包失败或运行时不可用，程序会自动回退到标准 `requests` 模式
 - 建议在打包前先执行 `pip install -r requirements.txt` 和 `pip install ".[enhanced]"` 确保所有依赖已安装
-- 对于 `main.exe`，请确保 `app/` 目录及其子模块（`core/`、`ui/`、`utils/`）均被正确包含
+- 对于 `wjfkxz.exe`，请确保 `app/` 目录及其子模块（`core/`、`ui/`、`utils/`）均被正确包含
 
 ## 问题反馈
 
@@ -630,7 +648,7 @@ pyinstaller --onefile --windowed --name file_downloader --icon icon/wjxz.ico --a
 
 - **GitHub Issues**：[提交 Issue](https://github.com/zsh-cn/fkxz/issues)
 - 提交时请尽量提供以下信息：
-  - 使用的程序版本（`cli.exe` / `main.exe` / `file_splitter.exe` / `file_downloader.exe` 或源码运行）
+  - 使用的程序版本（`cli.exe` / `wjfkxz.exe` / `wjfk.exe` / `wjxz.exe` 或源码运行）
   - 操作系统版本
   - 问题的详细描述和复现步骤
   - 相关的错误信息或截图

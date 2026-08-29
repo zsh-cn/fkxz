@@ -29,6 +29,7 @@ class SplitterPage(BasePage):
         self._update_after_id = None
         self._splitter = FileSplitter(callbacks={
             'on_progress': self._on_progress,
+            'on_chunk_progress': self._on_chunk_progress,
             'on_status': self._on_status,
             'on_error': self._on_error,
             'on_complete': self._on_complete,
@@ -186,6 +187,8 @@ class SplitterPage(BasePage):
         if path:
             self._file_entry.delete(0, tk.END)
             self._file_entry.insert(0, path)
+            self._progress['value'] = 0
+            self._status_label.config(text='就绪', fg=FG_SECONDARY)
             self._update_file_info()
             self._validate_input()
 
@@ -197,6 +200,8 @@ class SplitterPage(BasePage):
             self._validate_input()
 
     def _on_input_change(self, event=None):
+        self._progress['value'] = 0
+        self._status_label.config(text='就绪', fg=FG_SECONDARY)
         self._schedule_file_info_update()
         self._validate_input()
 
@@ -235,6 +240,9 @@ class SplitterPage(BasePage):
         self._progress['value'] = 0
 
     def _on_progress(self, value, maximum):
+        self.after(0, lambda: self._progress.configure(value=value, maximum=maximum))
+
+    def _on_chunk_progress(self, value, maximum):
         self.after(0, lambda: self._progress.configure(value=value, maximum=maximum))
 
     def _on_status(self, text, color='#333333'):

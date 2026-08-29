@@ -60,23 +60,23 @@
             </div>
 
             <div class="download-card">
-                <div class="download-icon"><img src="icons/wjfkxz.ico" alt="main"></div>
-                <h3>聚合程序</h3>
-                <span class="file-name">main.exe</span>
+                <div class="download-icon"><img src="icons/wjfkxz.ico" alt="wjfkxz"></div>
+                <h3>文件分块下载</h3>
+                <span class="file-name">wjfkxz.exe</span>
                 <p class="card-desc">集成侧边栏导航的图形界面，文件分块与文件下载两大功能</p>
-                <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="main.exe">
+                <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="wjfkxz.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
                 </a>
-                <a class="backup-link" href="https://y.zhshh.cn/fkxz/main.exe" target="_blank" rel="noopener">备用源下载</a>
+                <a class="backup-link" href="https://y.zhshh.cn/fkxz/wjfkxz.exe" target="_blank" rel="noopener">备用源下载</a>
             </div>
 
             <div class="download-card">
-                <div class="download-icon"><img src="icons/wjfk.ico" alt="splitter"></div>
-                <h3>文件拆分器</h3>
-                <span class="file-name">file_splitter.exe</span>
+                <div class="download-icon"><img src="icons/wjfk.ico" alt="wjfk"></div>
+                <h3>文件分块</h3>
+                <span class="file-name">wjfk.exe</span>
                 <p class="card-desc">独立程序，专注于大文件拆分，生成 .fk 分片和 .fkx 信息文件</p>
-                <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="file_splitter.exe">
+                <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="wjfk.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
                 </a>
@@ -84,11 +84,11 @@
             </div>
 
             <div class="download-card">
-                <div class="download-icon"><img src="icons/wjxz.ico" alt="downloader"></div>
-                <h3>文件下载器</h3>
-                <span class="file-name">file_downloader.exe</span>
+                <div class="download-icon"><img src="icons/wjxz.ico" alt="wjxz"></div>
+                <h3>文件下载</h3>
+                <span class="file-name">wjxz.exe</span>
                 <p class="card-desc">独立程序，支持本地合并与远程下载（含增强模式）</p>
-                <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="file_downloader.exe">
+                <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="wjxz.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
                 </a>
@@ -97,7 +97,7 @@
         </div>
 
         <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted);">
-            <strong>注意</strong>：file_downloader.exe 的增强模式需要 curl_cffi 支持，已打包版本内置了增强模式能力。如果增强模式不可用，程序会自动回退到标准模式。
+            <strong>注意</strong>：wjxz.exe 的增强模式需要 curl_cffi 支持，已打包版本内置了增强模式能力。如果增强模式不可用，程序会自动回退到标准模式。
         </p>
     </div>
 </section>
@@ -203,14 +203,23 @@
 <span class="comment">REM 跳过SHA-256校验</span>
 <span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span> <span class="arg">-s</span></pre>
             </div>
+
+            <h4>断点续传</h4>
+            <p>下载时，每个分片会先保存到 <code>{输出目录}/{文件名}-fkxz/</code> 分片目录中。若下载中断（网络错误、手动取消等），已下载的分片会保留在该目录，不会丢失。</p>
+            <p>重新执行相同的 <code>download</code> 命令时，程序会自动检测分片目录：</p>
+            <ul>
+                <li>分片已存在且大小一致（<code>.fkx</code> 信息文件包含分片 SHA-256 时还会进行校验），直接跳过，仅下载缺失分片</li>
+                <li>分片不完整（大小不符或校验失败），自动重新下载该分片</li>
+            </ul>
+            <p>全部下载完成后才合并文件并自动清理分片目录，实现断点续传。</p>
         </div>
 
         <div class="usage-detail">
-            <h3>main.exe — 聚合 GUI 程序</h3>
+            <h3>wjfkxz.exe — 文件分块下载</h3>
             <p class="detail-subtitle">集成式图形界面，采用侧边栏导航设计，将文件分块与文件下载两大功能整合在一个窗口中</p>
 
             <h4>启动</h4>
-            <p>双击 <code>main.exe</code> 即可启动，无需任何命令行参数。</p>
+            <p>双击 <code>wjfkxz.exe</code> 即可启动，无需任何命令行参数。</p>
 
             <h4>界面功能</h4>
             <ul>
@@ -223,6 +232,7 @@
                 <li>侧边栏一键切换功能页面</li>
                 <li>文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 .fk 分片，远程模式自动下载分片后合并</li>
                 <li>实时分块进度 + 总进度 + 下载速度显示</li>
+                <li>远程下载支持断点续传：中断后分片保留，重新下载自动跳过已下载分片</li>
                 <li>文件信息预览（文件名、大小、分片数）</li>
                 <li>支持取消操作</li>
                 <li>HiDPI 高 DPI 自适应</li>
@@ -231,11 +241,11 @@
         </div>
 
         <div class="usage-detail">
-            <h3>file_splitter.exe — 文件拆分器</h3>
-            <p class="detail-subtitle">独立的文件拆分 GUI 工具，专注于将大文件拆分为多个小分片</p>
+            <h3>wjfk.exe — 文件分块</h3>
+            <p class="detail-subtitle">独立的文件分块 GUI 工具，专注于将大文件拆分为多个小分片</p>
 
             <h4>启动</h4>
-            <p>双击 <code>file_splitter.exe</code> 即可启动。</p>
+            <p>双击 <code>wjfk.exe</code> 即可启动。</p>
 
             <h4>使用步骤</h4>
             <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
@@ -255,11 +265,11 @@
         </div>
 
         <div class="usage-detail">
-            <h3>file_downloader.exe — 文件下载/合并器</h3>
-            <p class="detail-subtitle">独立的文件下载与合并 GUI 工具，支持本地合并和远程下载两种模式</p>
+            <h3>wjxz.exe — 文件下载</h3>
+            <p class="detail-subtitle">独立的文件下载 GUI 工具，支持本地合并和远程下载两种模式</p>
 
             <h4>启动</h4>
-            <p>双击 <code>file_downloader.exe</code> 即可启动。</p>
+            <p>双击 <code>wjxz.exe</code> 即可启动。</p>
 
             <h4>本地模式</h4>
             <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
@@ -277,6 +287,8 @@
                 <li>点击"开始下载"</li>
             </ol>
             <p>程序会自动下载 .fkx 信息文件、逐个下载 .fk 分片、合并还原并校验 SHA-256。</p>
+
+            <p><strong>断点续传</strong>：下载中断（网络错误、手动取消等）后，已下载的分片会保留在 <code>{输出目录}/{文件名}-fkxz/</code> 分片目录中。再次点击"开始下载"时，程序会自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片，全部下载完成后自动清理分片目录。</p>
 
             <h4>增强模式</h4>
             <ul>

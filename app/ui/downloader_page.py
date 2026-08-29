@@ -83,7 +83,7 @@ class DownloaderPage(BasePage):
         input_frame.pack(fill=tk.X)
         input_frame.columnconfigure(1, weight=1)
 
-        self._build_field(input_frame, '文件信息 URL (.fkx)', '_url_entry', self._browse_local_fkx, 0, 0, show_browse=False)
+        self._build_field(input_frame, '文件信息 URL (.fkx)', '_url_entry', self._browse_local_fkx, 0, 0, show_browse=True)
         self._build_field(input_frame, '输出目录', '_output_entry', self._browse_output, 2, 0)
 
         enhanced_frame = tk.Frame(input_frame, bg=BG_CARD)
@@ -180,6 +180,8 @@ class DownloaderPage(BasePage):
         if path:
             self._url_entry.delete(0, tk.END)
             self._url_entry.insert(0, path)
+            self._chunk_progress['value'] = 0
+            self._total_progress['value'] = 0
             self._on_input_change()
 
     def _browse_output(self):
@@ -211,6 +213,9 @@ class DownloaderPage(BasePage):
             self.after_cancel(self._info_after_id)
             self._info_after_id = None
         if self._cancel_btn.cget('state') != 'normal':
+            self._chunk_progress['value'] = 0
+            self._total_progress['value'] = 0
+            self._download_detail.config(text='')
             self._info_after_id = self.after(500, self._parse_and_display_info)
 
     def _reset_info_labels(self):
@@ -336,6 +341,8 @@ class DownloaderPage(BasePage):
     def _on_status(self, text, color='#333333'):
         if not self._running and color == ERROR:
             color = FG_SECONDARY
+        if text == "正在校验SHA-256...":
+            self.after(0, lambda: self._cancel_btn.config(text='跳过'))
         self.after(0, lambda: self._status_label.configure(text=text, fg=color))
 
     def _on_error(self, message):
@@ -387,14 +394,14 @@ class DownloaderPage(BasePage):
     def _reset_ui(self):
         self._running = False
         self._on_input_change()
-        self._cancel_btn.config(state=tk.DISABLED)
+        self._cancel_btn.config(state=tk.DISABLED, text='取消')
         self._download_detail.config(text='')
         self._chunk_progress['value'] = 0
         self._total_progress['value'] = 0
 
     def _finalize_ui(self, cancelled=False):
         self._running = False
-        self._cancel_btn.config(state=tk.DISABLED)
+        self._cancel_btn.config(state=tk.DISABLED, text='取消')
         self._on_input_change()
         if cancelled:
             self._download_detail.config(text='')

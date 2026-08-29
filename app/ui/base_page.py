@@ -19,13 +19,15 @@ class BasePage(ttk.Frame):
         entry_row.columnconfigure(0, weight=1)
 
         entry = ttk.Entry(entry_row, font=('Microsoft YaHei UI', 10))
-        entry.grid(row=0, column=0, sticky='ew', padx=(0, 10))
+        entry.grid(row=0, column=0, sticky='ew', padx=(0, 10), ipady=2)
         entry.bind('<KeyRelease>', self._on_input_change)
+        entry.bind('<<Paste>>', lambda e: entry.after(10, self._on_input_change))  # type: ignore[arg-type]
+        entry.bind('<<Cut>>', lambda e: entry.after(10, self._on_input_change))  # type: ignore[arg-type]
         setup_context_menu(entry, on_change=self._on_input_change)
         setattr(self, attr, entry)
 
         if show_browse:
-            RoundedButton(entry_row, text='浏览', command=browse_cb, width=80, height=34,
+            RoundedButton(entry_row, text='浏览', command=browse_cb, width=80, height=36,
                           bg='#F3F4F6', fg=FG_PRIMARY).grid(row=0, column=1)
 
     def _progress_row(self, parent, label, attr, row):

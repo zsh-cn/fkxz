@@ -29,6 +29,10 @@ class FileMerger(BaseWorker):
                 self._emit_error(f"本地文件不存在: {fkx_path}")
                 return
 
+            if not fkx_path.endswith('.fkx'):
+                self._emit_error("输入必须是.fkx文件")
+                return
+
             if not output_dir:
                 self._emit_error("请选择输出目录")
                 return
@@ -109,6 +113,9 @@ class FileMerger(BaseWorker):
                             if total_size > 0:
                                 percentage = merged_bytes[0] / total_size
                                 self._emit_chunk_progress(percentage * 100, 100)
+                                self._emit_status(
+                                    f"正在合并文件... {format_size(merged_bytes[0])} / {format_size(total_size)}"
+                                )
 
             if cancelled:
                 try:
@@ -134,10 +141,19 @@ class FileMerger(BaseWorker):
                         if total_size > 0:
                             percentage = sha256_bytes[0] / total_size
                             self._emit_chunk_progress(percentage * 100, 100)
+                            self._emit_status(
+                                f"正在校验SHA-256... {format_size(sha256_bytes[0])} / {format_size(total_size)}"
+                            )
 
                 if sha256_cancelled:
-                    self._emit_status("已取消SHA-256检验", '#cc6600')
-                    self._emit_complete({'cancelled': True, 'sha256_cancelled': True})
+                    self._emit_progress(num_chunks, num_chunks)
+                    self._emit_chunk_progress(100, 100)
+                    self._emit_status("合并成功（已跳过SHA-256检验）", '#006600')
+                    self._emit_complete({
+                        'mode': '本地',
+                        'file_name': safe_filename,
+                        'output_path': output_path,
+                    })
                     return
 
                 if actual_sha256.hexdigest() != fkx_info['sha256']:
