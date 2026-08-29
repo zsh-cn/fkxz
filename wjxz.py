@@ -727,14 +727,17 @@ class FileDownloaderApp:
         
         if not self.fkx_path:
             self.show_error("请输入文件信息URL或本地路径")
+            self._last_chunk_error = "请输入文件信息URL或本地路径"
             self.clear_file_info()
             return None
         if not self.fkx_path.endswith('.fkx'):
             self.show_error("输入必须是.fkx文件")
+            self._last_chunk_error = "输入必须是.fkx文件"
             self.clear_file_info()
             return None
         if not self.output_dir:
             self.show_error("请选择输出目录")
+            self._last_chunk_error = "请选择输出目录"
             return None
         
         self.fkx_path = self._resolve_local_path(self.fkx_path)
@@ -756,9 +759,11 @@ class FileDownloaderApp:
                 fkx_local_path = self.fkx_path[7:]
             if not os.path.exists(fkx_local_path):
                 self.show_error(f"本地文件不存在: {fkx_local_path}")
+                self._last_chunk_error = f"本地文件不存在: {fkx_local_path}"
                 return None, None, None
             if not os.path.isfile(fkx_local_path):
                 self.show_error(f"路径不是文件: {fkx_local_path}")
+                self._last_chunk_error = f"路径不是文件: {fkx_local_path}"
                 return None, None, None
             fkx_content = self.read_local_fkx(fkx_local_path)
         else:
@@ -767,6 +772,7 @@ class FileDownloaderApp:
         if self.is_cancelled or not fkx_content:
             if not fkx_content:
                 self.show_error("无法获取文件信息")
+                self._last_chunk_error = "无法获取文件信息"
             return None, None, None
 
         self.update_status("状态: 正在解析文件信息...")
@@ -774,6 +780,7 @@ class FileDownloaderApp:
 
         if 'filename' not in fkx_info or 'chunks' not in fkx_info:
             self.show_error("文件信息格式不正确")
+            self._last_chunk_error = "文件信息格式不正确"
             return None, None, None
         
         return fkx_info, fkx_local_path, fkx_content
@@ -799,6 +806,7 @@ class FileDownloaderApp:
                 os.makedirs(self.output_dir)
             except Exception as e:
                 self.show_error(f"无法创建输出目录: {str(e)}")
+                self._last_chunk_error = f"无法创建输出目录: {str(e)}"
                 return None, None
         
         self.downloaded_chunks = {}
@@ -866,8 +874,10 @@ class FileDownloaderApp:
                 chunk_path = os.path.join(base_path, chunk_info['filename'])
                 chunk_path = os.path.normpath(chunk_path)
                 if not os.path.exists(chunk_path):
-                    self.show_error(f"分片文件不存在: {chunk_info['filename']}")
-                    return False
+                    if not self.ask_retry("合并失败", f"分片文件不存在: {chunk_info['filename']}\n是否重试？"):
+                        self._last_chunk_error = f"分片文件不存在: {chunk_info['filename']}"
+                        return False
+                    continue
                 self.downloaded_chunks[i] = chunk_path
                 self.downloaded_size += chunk_info['size']
                 self.progress_total['value'] = i + 1
@@ -883,12 +893,14 @@ class FileDownloaderApp:
                 chunk_info = fkx_info['chunks'][i]
                 self.update_status(f"状态: 正在下载分片 {i+1}/{num_chunks}: {chunk_info['filename']}")
                 self._downloaded_before_chunk = self.downloaded_size
+                self.progress_chunk['value'] = 0
                 result = self.download_chunk(base_path, chunk_info, i, self.chunk_dir,
                                             self.chunk_progress_callback)
                 if result is None:
                     if self.is_cancelled:
                         return False
                     if not self.ask_retry("下载失败", f"分片 {i+1}/{num_chunks} 下载失败\n原因: {self._last_chunk_error}\n是否重试？"):
+                        self._last_chunk_error = f"分片 {i+1}/{num_chunks} 下载失败: {self._last_chunk_error}"
                         return False
                     continue
                 self.progress_total['value'] = i + 1
@@ -976,10 +988,12 @@ class FileDownloaderApp:
         output_path = None
         try:
             self._use_enhanced = self.enhanced_mode.get()
+            self._last_chunk_error = ""
             
             inputs = self._validate_download_inputs()
             if inputs is None:
-                self.reset_ui("状态: 下载失败")
+                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                self.reset_ui(f"状态: 下载失败{error_detail}")
                 return
             fkx_path, output_dir = inputs  # type: ignore[reportAssignmentType]
             
@@ -991,20 +1005,44 @@ class FileDownloaderApp:
             
             fkx_info, fkx_local_path, fkx_content = self._get_or_fetch_fkx_info()
             if fkx_info is None:
-                if self.is_local:
-                    self.reset_ui("状态: 合并失败" if not self.is_cancelled else "状态: 已取消合并")
+                if self.is_cancelled:
+                    if self.is_local:
+                        self.reset_ui("状态: 已取消合并")
+                    else:
+                        self.reset_ui("状态: 已取消下载")
+                    return
+                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                if not self.is_local:
+                    if self.ask_retry("下载失败", f"获取文件信息失败{error_detail}\n是否重试？"):
+                        fkx_info, fkx_local_path, fkx_content = self._get_or_fetch_fkx_info()
+                        if fkx_info is None:
+                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                            self.reset_ui(f"状态: 下载失败{error_detail2}")
+                            return
+                    else:
+                        self.reset_ui(f"状态: 下载失败{error_detail}")
+                        return
                 else:
-                    self.reset_ui("状态: 下载失败" if not self.is_cancelled else "状态: 已取消下载")
-                return
+                    self.reset_ui(f"状态: 合并失败{error_detail}")
+                    return
             
             base_path, num_chunks = self._setup_download_state(fkx_info, fkx_content, fkx_local_path)
             
             if base_path is None:
-                if self.is_local:
-                    self.reset_ui("状态: 合并失败")
+                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                if not self.is_local:
+                    if self.ask_retry("下载失败", f"初始化下载状态失败{error_detail}\n是否重试？"):
+                        base_path, num_chunks = self._setup_download_state(fkx_info, fkx_content, fkx_local_path)
+                        if base_path is None:
+                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                            self.reset_ui(f"状态: 下载失败{error_detail2}")
+                            return
+                    else:
+                        self.reset_ui(f"状态: 下载失败{error_detail}")
+                        return
                 else:
-                    self.reset_ui("状态: 下载失败")
-                return
+                    self.reset_ui(f"状态: 合并失败{error_detail}")
+                    return
             
             def _set_buttons():
                 self.start_button.config(state=tk.DISABLED)
@@ -1018,19 +1056,44 @@ class FileDownloaderApp:
                     else:
                         self.reset_ui("状态: 已取消下载")
                     return
-                if self.is_local:
-                    self.reset_ui("状态: 合并失败")
+                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                if not self.is_local:
+                    if self.ask_retry("下载失败", f"下载分片失败{error_detail}\n是否重试？"):
+                        self._last_chunk_error = ""
+                        if not self._collect_chunks(fkx_info, base_path, num_chunks):
+                            if self.is_cancelled:
+                                self.reset_ui("状态: 已取消下载")
+                                return
+                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                            self.reset_ui(f"状态: 下载已中断{error_detail2}")
+                            return
+                    else:
+                        self.reset_ui(f"状态: 下载已中断{error_detail}")
+                        return
                 else:
-                    self.reset_ui("状态: 下载已中断")
-                return
+                    self.reset_ui(f"状态: 合并失败{error_detail}")
+                    return
             
             if len(self.downloaded_chunks) != num_chunks:
-                self.show_error(f"下载不完整: 期望{num_chunks}个分片，实际下载{len(self.downloaded_chunks)}个")
+                error_msg = f"下载不完整: 期望{num_chunks}个分片，实际下载{len(self.downloaded_chunks)}个"
+                self.show_error(error_msg)
+                self._last_chunk_error = error_msg
                 if not self.is_local:
-                    self.reset_ui("状态: 下载已中断")
+                    if self.ask_retry("下载失败", f"{error_msg}\n是否重试？"):
+                        self._last_chunk_error = ""
+                        if not self._collect_chunks(fkx_info, base_path, num_chunks):
+                            if self.is_cancelled:
+                                self.reset_ui("状态: 已取消下载")
+                                return
+                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
+                            self.reset_ui(f"状态: 下载已中断{error_detail2}")
+                            return
+                    else:
+                        self.reset_ui(f"状态: 下载已中断 - {error_msg}")
+                        return
                 else:
-                    self.reset_ui("状态: 合并失败")
-                return
+                    self.reset_ui(f"状态: 合并失败 - {error_msg}")
+                    return
             
             output_path = self._merge_chunks(fkx_info, num_chunks)
             if output_path is None:
@@ -1052,7 +1115,7 @@ class FileDownloaderApp:
                     if not self.is_local:
                         self.reset_ui("状态: SHA-256校验失败")
                     else:
-                        self.reset_ui("状态: 合并失败")
+                        self.reset_ui("状态: 合并失败 - SHA-256校验失败")
                     return
                 self.root.after(0, lambda: self.cancel_button.config(text="取消"))
             
@@ -1083,13 +1146,19 @@ class FileDownloaderApp:
                 messagebox.showinfo("完成", f"文件合并完成！\n模式: {mode_text}{enhanced_text}\n文件名: {safe_filename}\n保存位置: {output_path}")
             self.root.after(0, show_completion)
         except Exception as e:
-            self.show_error(f"下载线程异常: {str(e)}")
+            error_msg = f"下载线程异常: {str(e)}"
+            self.show_error(error_msg)
+            self._last_chunk_error = error_msg
             if output_path is not None and os.path.exists(output_path):
                 os.remove(output_path)
-            if self.is_local:
-                self.reset_ui("状态: 合并失败")
+            if not self.is_local:
+                if self.ask_retry("下载失败", f"{error_msg}\n是否重试？"):
+                    self._last_chunk_error = ""
+                    self.download_and_merge(verify_sha256)
+                    return
+                self.reset_ui(f"状态: 下载失败 - {error_msg}")
             else:
-                self.reset_ui("状态: 下载失败")
+                self.reset_ui(f"状态: 合并失败 - {error_msg}")
     
     def download_fkx(self, url):
         response = self.download_single(url)

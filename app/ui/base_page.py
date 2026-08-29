@@ -27,8 +27,10 @@ class BasePage(ttk.Frame):
         setattr(self, attr, entry)
 
         if show_browse:
-            RoundedButton(entry_row, text='浏览', command=browse_cb, width=80, height=36,
-                          bg='#F3F4F6', fg=FG_PRIMARY).grid(row=0, column=1)
+            browse_btn = RoundedButton(entry_row, text='浏览', command=browse_cb, width=80, height=36,
+                                       bg='#F3F4F6', fg=FG_PRIMARY)
+            browse_btn.grid(row=0, column=1)
+            setattr(self, f'{attr}_browse_btn', browse_btn)
 
     def _progress_row(self, parent, label, attr, row):
         tk.Label(parent, text=label, font=('Microsoft YaHei UI', 10),

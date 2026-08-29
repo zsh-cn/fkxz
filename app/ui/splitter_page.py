@@ -15,7 +15,10 @@ class SplitterPage(BasePage):
     _splitter: FileSplitter
     _file_entry: ttk.Entry
     _output_entry: ttk.Entry
+    _file_entry_browse_btn: RoundedButton
+    _output_entry_browse_btn: RoundedButton
     _chunk_var: tk.StringVar
+    _chunk_entry: ttk.Entry
     _filesize_label: tk.Label
     _chunkcount_label: tk.Label
     _progress: RoundedProgressBar
@@ -81,6 +84,7 @@ class SplitterPage(BasePage):
                                 font=('Microsoft YaHei UI', 10),
                                 validate='key', validatecommand=vcmd)
         chunk_entry.pack(side=tk.LEFT, padx=(12, 8))
+        self._chunk_entry = chunk_entry
         setup_context_menu(chunk_entry)
 
         tk.Label(size_frame, text='范围 1 - 1024 MB', font=('Microsoft YaHei UI', 9),
@@ -227,6 +231,11 @@ class SplitterPage(BasePage):
         self._start_btn.config(state=tk.DISABLED)
         self._cancel_btn.config(state=tk.NORMAL)
         self._progress['value'] = 0
+        self._file_entry.config(state=tk.DISABLED)
+        self._output_entry.config(state=tk.DISABLED)
+        self._file_entry_browse_btn.config(state=tk.DISABLED)
+        self._output_entry_browse_btn.config(state=tk.DISABLED)
+        self._chunk_entry.config(state=tk.DISABLED)
         self._splitter.split_async(
             self._file_entry.get().strip(),
             self._output_entry.get().strip(),
@@ -269,12 +278,22 @@ class SplitterPage(BasePage):
         if self._update_after_id is not None:
             self.after_cancel(self._update_after_id)
             self._update_after_id = None
+        self._file_entry.config(state=tk.NORMAL)
+        self._output_entry.config(state=tk.NORMAL)
+        self._file_entry_browse_btn.config(state=tk.NORMAL)
+        self._output_entry_browse_btn.config(state=tk.NORMAL)
+        self._chunk_entry.config(state=tk.NORMAL)
         self._validate_input()
         self._cancel_btn.config(state=tk.DISABLED)
         self._progress['value'] = 0
 
     def _finalize_ui(self, cancelled=False):
         self._cancel_btn.config(state=tk.DISABLED)
+        self._file_entry.config(state=tk.NORMAL)
+        self._output_entry.config(state=tk.NORMAL)
+        self._file_entry_browse_btn.config(state=tk.NORMAL)
+        self._output_entry_browse_btn.config(state=tk.NORMAL)
+        self._chunk_entry.config(state=tk.NORMAL)
         if cancelled:
             self._progress['value'] = 0
             self._status_label.config(text='分块已取消', fg=ERROR)

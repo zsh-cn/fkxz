@@ -22,7 +22,7 @@ def merge_chunks(chunk_sources, output_path, num_chunks, total_size=0):
                     if total_size > 0:
                         print_progress(merged_bytes[0], total_size,
                                        prefix="合并: ",
-                                       suffix=f"{format_size(merged_bytes[0])}/{format_size(total_size)}")
+                                       percent_text=f"{format_size(merged_bytes[0])}/{format_size(total_size)}")
                     else:
                         print_progress(i + 1, num_chunks,
                                        prefix="合并: ",
@@ -96,7 +96,7 @@ def cmd_merge(args):
                 if total_size > 0:
                     print_progress(sha256_bytes[0], total_size,
                                    prefix="校验: ",
-                                   suffix=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}")
+                                   percent_text=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}")
         sys.stdout.write("\n")
         sys.stdout.flush()
         if actual_sha256.hexdigest() != fkx_info['sha256']:

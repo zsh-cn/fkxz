@@ -195,7 +195,7 @@ async function downloadAndMerge(startOffset) {
         if (useFileSystemAccess) {
             try {
                 fileHandle = await window.showSaveFilePicker({ suggestedName: sanitizedName, types: [{ description: '所有文件', accept: { '*/*': [] } }] });
-                writer = await fileHandle.createWritable({ mode: 'readwrite' });
+                writer = await fileHandle.createWritable();
             } catch (e) {
                 if (e.name === 'AbortError') { resetDownloadState(); return; }
                 throw new Error('无法获取文件写入权限: ' + e.message);

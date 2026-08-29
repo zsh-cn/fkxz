@@ -1,13 +1,18 @@
 import os
 import sys
+import shutil
 from cli.utils import _clear_line_prefix, format_size, print_progress, calculate_sha256
 
 
 def _report_file_sha256_progress(processed, total):
     pct = min(processed / total * 100, 100) if total > 0 else 100
-    sys.stdout.write(
-        f"{_clear_line_prefix()}    SHA-256: {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 5
-    )
+    line = f"{_clear_line_prefix()}    SHA-256: {format_size(processed)}/{format_size(total)} ({pct:.1f}%)"
+    try:
+        term_width = shutil.get_terminal_size().columns
+        line = line.ljust(term_width)
+    except Exception:
+        line = line + " " * 10
+    sys.stdout.write(line)
     sys.stdout.flush()
 
 

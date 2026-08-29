@@ -54,7 +54,7 @@ function formatSize(bytes) {
 }
 
 function getBaseUrl(url) {
-    const parsed = new URL(url);
+    const parsed = new URL(url, window.location.href);
     const pathParts = parsed.pathname.split('/');
     pathParts.pop();
     return parsed.origin + pathParts.join('/') + '/';

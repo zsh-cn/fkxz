@@ -381,8 +381,10 @@ class FileDownloader(BaseWorker):
                     chunk_path = os.path.normpath(chunk_path)
 
                     if not os.path.exists(chunk_path):
-                        self._emit_error(f"分片文件不存在: {chunk_info['filename']}")
-                        return
+                        if not self._ask_retry("合并失败", f"分片文件不存在: {chunk_info['filename']}\n是否重试？"):
+                            self._emit_error(f"分片文件不存在: {chunk_info['filename']}")
+                            return
+                        continue
 
                     downloaded_chunks[i] = chunk_path
                     downloaded_size += chunk_info['size']
@@ -429,6 +431,7 @@ class FileDownloader(BaseWorker):
                         continue
 
                     self._emit_status(f"正在下载分片 {i+1}/{num_chunks}: {chunk_info['filename']}")
+                    self._emit_chunk_progress(0, 100)
 
                     chunk_filename = self._validate_chunk_filename(chunk_info['filename'])
                     chunk_url = urljoin(base_url, chunk_filename)
@@ -458,7 +461,7 @@ class FileDownloader(BaseWorker):
 
                             if not self._ask_retry("下载失败", f"分片 {i+1}/{num_chunks} 下载失败\n原因: {self._last_chunk_error}\n是否重试？"):
                                 self._close_session()
-                                self._emit_status("下载已中断（分片已保留）", '#cc6600')
+                                self._emit_status(f"下载已中断（分片已保留） - {self._last_chunk_error}", '#cc6600')
                                 self._emit_complete({'cancelled': True})
                                 return
 
@@ -480,8 +483,12 @@ class FileDownloader(BaseWorker):
             if len(downloaded_chunks) != num_chunks:
                 if not is_local:
                     self._close_session()
-                    self._emit_status("下载已中断（分片已保留）", '#cc6600')
-                    self._emit_complete({'cancelled': True})
+                    error_msg = f"下载不完整: 期望{num_chunks}个分片，实际下载{len(downloaded_chunks)}个"
+                    if not self._ask_retry("下载失败", f"{error_msg}\n是否重试？"):
+                        self._emit_status(f"下载已中断（分片已保留） - {error_msg}", '#cc6600')
+                        self._emit_complete({'cancelled': True})
+                        return
+                    self._download(fkx_url, output_dir, enhanced, verify_sha256)
                     return
                 self._emit_error(f"下载不完整: 期望{num_chunks}个分片，实际下载{len(downloaded_chunks)}个")
                 self._close_session()
@@ -593,7 +600,11 @@ class FileDownloader(BaseWorker):
 
         except Exception as e:
             self._close_session()
-            self._emit_error(f"下载过程发生错误: {str(e)}")
+            error_msg = f"下载过程发生错误: {str(e)}"
+            if not self._ask_retry("下载失败", f"{error_msg}\n是否重试？"):
+                self._emit_error(error_msg)
+            else:
+                self._download(fkx_url, output_dir, enhanced, verify_sha256)
 
     def _on_chunk_progress(self, downloaded, chunk_size, downloaded_before, start_time):
         total_downloaded = downloaded_before + downloaded

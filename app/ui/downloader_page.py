@@ -21,6 +21,8 @@ class DownloaderPage(BasePage):
     _info_after_id: str | None
     _url_entry: ttk.Entry
     _output_entry: ttk.Entry
+    _url_entry_browse_btn: RoundedButton
+    _output_entry_browse_btn: RoundedButton
     _filename_label: tk.Label
     _filesize_label: tk.Label
     _chunks_label: tk.Label
@@ -318,6 +320,12 @@ class DownloaderPage(BasePage):
         self._chunk_progress['value'] = 0
         self._total_progress['value'] = 0
         self._download_detail.config(text='')
+        self._url_entry.config(state=tk.DISABLED)
+        self._output_entry.config(state=tk.DISABLED)
+        self._url_entry_browse_btn.config(state=tk.DISABLED)
+        self._output_entry_browse_btn.config(state=tk.DISABLED)
+        self._enhanced_cb.config(state=tk.DISABLED)
+        self._verify_sha256_cb.config(state=tk.DISABLED)
         self._downloader.download_async(
             text,
             output,
@@ -347,7 +355,19 @@ class DownloaderPage(BasePage):
 
     def _on_error(self, message):
         self.after(0, lambda: self._status_label.configure(text=message, fg=ERROR))
-        self.after(0, self._on_input_change)
+        self.after(0, lambda: (
+            self._cancel_btn.config(state=tk.DISABLED, text='取消'),
+            self._start_btn.config(state=tk.NORMAL),
+            self._chunk_progress.config(value=0),
+            self._total_progress.config(value=0),
+            self._download_detail.config(text=''),
+            self._url_entry.config(state=tk.NORMAL),
+            self._output_entry.config(state=tk.NORMAL),
+            self._url_entry_browse_btn.config(state=tk.NORMAL),
+            self._output_entry_browse_btn.config(state=tk.NORMAL),
+            self._verify_sha256_cb.config(state=tk.NORMAL),
+        ))
+        self.after(0, lambda: self._update_path_type_ui(self._url_entry.get().strip()))
 
     def _on_complete(self, result):
         cancelled = result.get('cancelled', False) if result else False
@@ -402,11 +422,16 @@ class DownloaderPage(BasePage):
     def _finalize_ui(self, cancelled=False, result=None):
         self._running = False
         self._cancel_btn.config(state=tk.DISABLED, text='取消')
+        self._url_entry.config(state=tk.NORMAL)
+        self._output_entry.config(state=tk.NORMAL)
+        self._url_entry_browse_btn.config(state=tk.NORMAL)
+        self._output_entry_browse_btn.config(state=tk.NORMAL)
+        self._verify_sha256_cb.config(state=tk.NORMAL)
         if cancelled:
             self._download_detail.config(text='')
             self._chunk_progress['value'] = 0
             self._total_progress['value'] = 0
-            self._on_input_change()
+            self._start_btn.config(state=tk.NORMAL)
         else:
             self._start_btn.config(state=tk.NORMAL)
             mode = result.get('mode', '') if result else ''
@@ -416,12 +441,15 @@ class DownloaderPage(BasePage):
                 status_text = '合并完成'
             self._status_label.config(text=status_text, fg=SUCCESS)
             self._download_detail.config(text='')
+        self._update_path_type_ui(self._url_entry.get().strip())
 
 
 class MergerPage(BasePage):
     _merger: FileMerger
     _fkx_entry: ttk.Entry
     _output_entry: ttk.Entry
+    _fkx_entry_browse_btn: RoundedButton
+    _output_entry_browse_btn: RoundedButton
     _filename_label: tk.Label
     _filesize_label: tk.Label
     _chunks_label: tk.Label
@@ -600,6 +628,11 @@ class MergerPage(BasePage):
         self._cancel_btn.config(state=tk.NORMAL)
         self._chunk_progress['value'] = 0
         self._total_progress['value'] = 0
+        self._fkx_entry.config(state=tk.DISABLED)
+        self._output_entry.config(state=tk.DISABLED)
+        self._fkx_entry_browse_btn.config(state=tk.DISABLED)
+        self._output_entry_browse_btn.config(state=tk.DISABLED)
+        self._verify_sha256_cb.config(state=tk.DISABLED)
         self._merger.merge_async(
             self._fkx_entry.get().strip(),
             self._output_entry.get().strip(),
@@ -626,7 +659,17 @@ class MergerPage(BasePage):
 
     def _on_error(self, message):
         self.after(0, lambda: self._status_label.configure(text=message, fg=ERROR))
-        self.after(0, self._reset_ui)
+        self.after(0, lambda: (
+            self._cancel_btn.config(state=tk.DISABLED, text='取消'),
+            self._start_btn.config(state=tk.NORMAL),
+            self._chunk_progress.config(value=0),
+            self._total_progress.config(value=0),
+            self._fkx_entry.config(state=tk.NORMAL),
+            self._output_entry.config(state=tk.NORMAL),
+            self._fkx_entry_browse_btn.config(state=tk.NORMAL),
+            self._output_entry_browse_btn.config(state=tk.NORMAL),
+            self._verify_sha256_cb.config(state=tk.NORMAL),
+        ))
 
     def _on_complete(self, result):
         cancelled = result.get('cancelled', False) if result else False
@@ -652,6 +695,11 @@ class MergerPage(BasePage):
 
     def _finalize_ui(self, cancelled=False):
         self._cancel_btn.config(state=tk.DISABLED, text='取消')
+        self._fkx_entry.config(state=tk.NORMAL)
+        self._output_entry.config(state=tk.NORMAL)
+        self._fkx_entry_browse_btn.config(state=tk.NORMAL)
+        self._output_entry_browse_btn.config(state=tk.NORMAL)
+        self._verify_sha256_cb.config(state=tk.NORMAL)
         if cancelled:
             self._chunk_progress['value'] = 0
             self._total_progress['value'] = 0

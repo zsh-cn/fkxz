@@ -260,6 +260,8 @@ class FileSplitterApp:
         entry_output = self.output_entry.get().strip()
         if entry_output:
             self.output_dir = os.path.abspath(entry_output)
+        else:
+            self.output_dir = ""
 
         if not self.file_path:
             self.update_status("状态: 请选择要分块的文件", foreground="#cc0000")
@@ -369,6 +371,7 @@ class FileSplitterApp:
     def split_file(self):
         inputs = self._validate_split_inputs()
         if inputs is None:
+            self.file_info_label.config(text="")
             self.reset_ui()
             return
 

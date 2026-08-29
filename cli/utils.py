@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import hashlib
 from typing import Any
 
@@ -59,15 +60,23 @@ def calculate_sha256(file_path, progress_callback=None):
 
 
 def _clear_line_prefix():
-    return "\r\033[K" if sys.stdout.isatty() else "\r"
+    return "\r"
 
 
-def print_progress(current, total, prefix="", suffix=""):
+def print_progress(current, total, prefix="", suffix="", percent_text=None):
     bar_len = 40
     filled = int(bar_len * current / total) if total > 0 else 0
     bar = '#' * filled + '-' * (bar_len - filled)
-    percent = (current / total * 100) if total > 0 else 0
-    sys.stdout.write(f"{_clear_line_prefix()}{prefix}[{bar}] {percent:.1f}% {suffix}" + " " * 5)
+    if percent_text is None:
+        percent = (current / total * 100) if total > 0 else 0
+        percent_text = f"{percent:.1f}%"
+    line = f"{_clear_line_prefix()}{prefix}[{bar}] {percent_text} {suffix}"
+    try:
+        term_width = shutil.get_terminal_size().columns
+        line = line.ljust(term_width)
+    except Exception:
+        line = line + " " * 20
+    sys.stdout.write(line)
     sys.stdout.flush()
 
 
