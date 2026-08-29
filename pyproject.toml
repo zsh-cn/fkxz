@@ -5,7 +5,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 [project]
 name = "fkxz"
 version = "3.5.0"
-description = "文件分块下载 - 大文件分片传输工具，将大文件拆分为多个小分片，支持本地合并与远程下载合并"
+description = "文件分块下载 - 大文件分片传输工具，将大文件分块为多个小分片，支持本地合并与远程下载合并"
 readme = "README.md"
 license = { text = "MPL-2.0" }
 requires-python = ">=3.8"

@@ -4,7 +4,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from theme import (
     BG_PAGE, BG_CARD, FG_PRIMARY, FG_SECONDARY, FG_TERTIARY,
-    BORDER, ERROR,
+    BORDER, ERROR, SUCCESS,
 )
 from utils.helpers import format_size, RoundedButton, RoundedProgressBar, setup_context_menu
 from ui.base_page import BasePage
@@ -53,7 +53,7 @@ class SplitterPage(BasePage):
 
         tk.Label(
             header,
-            text='将大文件拆分为多个分片，生成 .fk 分片文件和 .fkx 信息文件',
+            text='将大文件分块为多个分片，生成 .fk 分片文件和 .fkx 信息文件',
             font=('Microsoft YaHei UI', 10),
             fg=FG_SECONDARY,
             bg=BG_PAGE,
@@ -121,7 +121,7 @@ class SplitterPage(BasePage):
         progress_inner.pack(fill=tk.X)
         progress_inner.columnconfigure(0, weight=1)
 
-        tk.Label(progress_inner, text='拆分进度', font=('Microsoft YaHei UI', 10),
+        tk.Label(progress_inner, text='分块进度', font=('Microsoft YaHei UI', 10),
                  fg=FG_SECONDARY, bg=BG_CARD).grid(row=0, column=0, sticky='w', pady=(0, 6))
         self._progress = RoundedProgressBar(progress_inner)
         self._progress.grid(row=1, column=0, sticky='ew', pady=(0, 12))
@@ -133,7 +133,7 @@ class SplitterPage(BasePage):
         btn_frame = tk.Frame(self, bg=BG_PAGE)
         btn_frame.grid(row=4, column=0, sticky='ew', padx=32, pady=(0, 28))
 
-        self._start_btn = RoundedButton(btn_frame, text='开始拆分', command=self._start, width=120, height=38,
+        self._start_btn = RoundedButton(btn_frame, text='开始分块', command=self._start, width=120, height=38,
                                         state='disabled')
         self._start_btn.pack(side=tk.LEFT, padx=(0, 12))
 
@@ -258,7 +258,7 @@ class SplitterPage(BasePage):
         if not cancelled:
             self.after(0, lambda: messagebox.showinfo(
                 '完成',
-                f"文件拆分完成！\n\n文件名: {result['file_name']}\n"
+                f"文件分块完成！\n\n文件名: {result['file_name']}\n"
                 f"文件大小: {format_size(result['file_size'])}\n"
                 f"分片数: {result['num_chunks']}\n"
                 f"信息文件: {result['fkx_filename']}\n"
@@ -275,7 +275,10 @@ class SplitterPage(BasePage):
 
     def _finalize_ui(self, cancelled=False):
         self._cancel_btn.config(state=tk.DISABLED)
-        self._validate_input()
         if cancelled:
             self._progress['value'] = 0
-            self._status_label.config(text='拆分已取消', fg=ERROR)
+            self._status_label.config(text='分块已取消', fg=ERROR)
+            self._validate_input()
+        else:
+            self._start_btn.config(state=tk.NORMAL)
+            self._status_label.config(text='分块完成', fg=SUCCESS)

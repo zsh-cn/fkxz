@@ -11,7 +11,7 @@ class FileSplitter(BaseWorker):
             if self._is_cancelled:
                 self._is_cancelled = False
             if self._thread is not None and self._thread.is_alive():
-                self._emit_status("正在取消之前的拆分...", '#cc0000')
+                self._emit_status("正在取消之前的分块...", '#cc0000')
                 return
             self._thread = threading.Thread(
                 target=self._split,
@@ -28,7 +28,7 @@ class FileSplitter(BaseWorker):
             output_dir = os.path.abspath(output_dir)
 
             if not file_path or not os.path.exists(file_path):
-                self._emit_error("请选择要拆分的文件")
+                self._emit_error("请选择要分块的文件")
                 return
 
             if not os.path.isfile(file_path):
@@ -77,7 +77,7 @@ class FileSplitter(BaseWorker):
                     for i in range(num_chunks):
                         if self._is_cancelled:
                             self._cleanup(fkx_path, chunk_paths)
-                            self._emit_status("拆分已取消", '#cc0000')
+                            self._emit_status("分块已取消", '#cc0000')
                             self._emit_complete({'cancelled': True})
                             return
 
@@ -96,7 +96,7 @@ class FileSplitter(BaseWorker):
                         )
                         if self._is_cancelled or chunk_sha256 is None:
                             self._cleanup(fkx_path, chunk_paths)
-                            self._emit_status("拆分已取消", '#cc0000')
+                            self._emit_status("分块已取消", '#cc0000')
                             self._emit_complete({'cancelled': True})
                             return
 
@@ -109,11 +109,11 @@ class FileSplitter(BaseWorker):
                         fkx_file.flush()
 
                         self._emit_progress(i + 1, num_chunks)
-                        self._emit_status(f"正在拆分 {i+1}/{num_chunks}")
+                        self._emit_status(f"正在分块 {i+1}/{num_chunks}")
 
             if self._is_cancelled:
                 self._cleanup(fkx_path, chunk_paths)
-                self._emit_status("拆分已取消", '#cc0000')
+                self._emit_status("分块已取消", '#cc0000')
                 self._emit_complete({'cancelled': True})
                 return
 
@@ -126,7 +126,7 @@ class FileSplitter(BaseWorker):
             )
             if self._is_cancelled or file_sha256 is None:
                 self._cleanup(fkx_path, chunk_paths)
-                self._emit_status("拆分已取消", '#cc0000')
+                self._emit_status("分块已取消", '#cc0000')
                 self._emit_complete({'cancelled': True})
                 return
 
@@ -134,7 +134,7 @@ class FileSplitter(BaseWorker):
                 fkx_file.write(f"sha256={file_sha256}\n")
 
             self._emit_progress(num_chunks, num_chunks)
-            self._emit_status(f"拆分完成！已生成 {num_chunks} 个分片", '#006600')
+            self._emit_status(f"分块完成！已生成 {num_chunks} 个分片", '#006600')
             self._emit_complete({
                 'file_name': file_name,
                 'file_size': file_size,
@@ -146,7 +146,7 @@ class FileSplitter(BaseWorker):
         except Exception as e:
             if fkx_path:
                 self._cleanup(fkx_path, chunk_paths)
-            self._emit_error(f"拆分过程发生错误: {str(e)}")
+            self._emit_error(f"分块过程发生错误: {str(e)}")
 
     def _cleanup(self, fkx_path, chunk_paths):
         for path in chunk_paths:

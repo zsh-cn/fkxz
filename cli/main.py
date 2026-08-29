@@ -27,8 +27,8 @@ def main():
 
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
-    parser_split = subparsers.add_parser('split', help='拆分文件为分片')
-    parser_split.add_argument('-i', '--input', required=True, help='要拆分的文件路径')
+    parser_split = subparsers.add_parser('split', help='分块文件为分片')
+    parser_split.add_argument('-i', '--input', required=True, help='要分块的文件路径')
     parser_split.add_argument('-o', '--output', required=True, help='输出目录')
     parser_split.add_argument('-c', '--chunk-size', type=int, default=10,
                               help='每个分片大小(MB), 范围1-1024, 默认10')

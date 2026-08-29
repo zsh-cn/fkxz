@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>下载</title>
-<meta name="description" content="下载 fkxz 已打包程序，无需安装 Python 环境，开箱即用">
+<meta name="description" content="下载文件分块下载已打包程序，无需安装 Python 环境，开箱即用">
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -51,7 +51,7 @@
                 <div class="download-icon"><img src="icons/wjfkxz-cli.ico" alt="cli"></div>
                 <h3>命令行工具</h3>
                 <span class="file-name">cli.exe</span>
-                <p class="card-desc">命令行版，支持 split / merge / download 命令，适合批处理和脚本自动化</p>
+                <p class="card-desc">命令行版，支持 split / merge / download 命令</p>
                 <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="cli.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
@@ -63,7 +63,7 @@
                 <div class="download-icon"><img src="icons/wjfkxz.ico" alt="wjfkxz"></div>
                 <h3>文件分块下载</h3>
                 <span class="file-name">wjfkxz.exe</span>
-                <p class="card-desc">集成侧边栏导航的图形界面，文件分块与文件下载两大功能</p>
+                <p class="card-desc">集成侧边栏导航的图形界面，包含文件分块与文件下载两大功能</p>
                 <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="wjfkxz.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
@@ -75,7 +75,7 @@
                 <div class="download-icon"><img src="icons/wjfk.ico" alt="wjfk"></div>
                 <h3>文件分块</h3>
                 <span class="file-name">wjfk.exe</span>
-                <p class="card-desc">独立程序，专注于大文件拆分，生成 .fk 分片和 .fkx 信息文件</p>
+                <p class="card-desc">独立程序，功能为文件分块</p>
                 <a class="download-btn" href="https://github.com/zsh-cn/fkxz/releases/latest" data-asset="wjfk.exe">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     下载
@@ -97,7 +97,7 @@
         </div>
 
         <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted);">
-            <strong>注意</strong>：wjxz.exe 的增强模式需要 curl_cffi 支持，已打包版本内置了增强模式能力。如果增强模式不可用，程序会自动回退到标准模式。
+            <strong>注意</strong>：增强模式需要 <code>curl_cffi</code> 支持，已打包版本内置了增强模式能力。
         </p>
     </div>
 </section>
@@ -135,19 +135,19 @@
             <p class="detail-subtitle">提供 split / merge / download 三个子命令，适合批处理和脚本自动化场景</p>
 
             <h4>基本用法</h4>
-            <p>打开命令提示符（cmd）或 PowerShell，进入 cli.exe 所在目录：</p>
+            <p>打开命令提示符（cmd）或 PowerShell，进入 <code>cli.exe</code> 所在目录：</p>
             <div class="code-block">
 <pre><span class="cmd">cli.exe</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">"D:\video.mp4"</span> <span class="arg">-o</span> <span class="path">"D:\chunks"</span> <span class="arg">-c</span> 10
 <span class="cmd">cli.exe</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">"D:\chunks\video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span>
 <span class="cmd">cli.exe</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">"https://example.com/files/video.mp4.fkx"</span> <span class="arg">-o</span> <span class="path">"D:\output"</span></pre>
             </div>
 
-            <h4>split（拆分文件）— 参数说明</h4>
+            <h4>split（分块文件）— 参数说明</h4>
             <div class="table-wrap">
                 <table>
                     <thead><tr><th>参数</th><th>说明</th><th>必填</th></tr></thead>
                     <tbody>
-                        <tr><td><code>-i, --input</code></td><td>要拆分的文件路径</td><td>是</td></tr>
+                        <tr><td><code>-i, --input</code></td><td>要分块的文件路径</td><td>是</td></tr>
                         <tr><td><code>-o, --output</code></td><td>输出目录</td><td>是</td></tr>
                         <tr><td><code>-c, --chunk-size</code></td><td>分片大小（MB），范围 1-1024，默认 10</td><td>否</td></tr>
                     </tbody>
@@ -159,7 +159,7 @@
                 <table>
                     <thead><tr><th>参数</th><th>说明</th><th>必填</th></tr></thead>
                     <tbody>
-                        <tr><td><code>-i, --input</code></td><td>.fkx 信息文件路径</td><td>是</td></tr>
+                        <tr><td><code>-i, --input</code></td><td><code>.fkx</code> 信息文件路径</td><td>是</td></tr>
                         <tr><td><code>-o, --output</code></td><td>输出目录</td><td>是</td></tr>
                         <tr><td><code>-s, --skip-sha256</code></td><td>跳过SHA-256校验</td><td>否</td></tr>
                     </tbody>
@@ -171,9 +171,9 @@
                 <table>
                     <thead><tr><th>参数</th><th>说明</th><th>必填</th></tr></thead>
                     <tbody>
-                        <tr><td><code>-u, --url</code></td><td>.fkx 信息文件的 URL</td><td>是</td></tr>
+                        <tr><td><code>-u, --url</code></td><td><code>.fkx</code> 信息文件的 URL</td><td>是</td></tr>
                         <tr><td><code>-o, --output</code></td><td>输出目录</td><td>是</td></tr>
-                        <tr><td><code>-e, --enhanced</code></td><td>启用增强模式（浏览器指纹伪装）</td><td>否</td></tr>
+                        <tr><td><code>-e, --enhanced</code></td><td>启用增强模式（浏览器模拟）</td><td>否</td></tr>
                         <tr><td><code>-t, --timeout</code></td><td>请求超时时间（秒），默认 120</td><td>否</td></tr>
                         <tr><td><code>-s, --skip-sha256</code></td><td>跳过SHA-256校验</td><td>否</td></tr>
                     </tbody>
@@ -182,7 +182,7 @@
 
             <h4>使用示例</h4>
             <div class="code-block">
-<pre><span class="comment">REM 将 video.mp4 拆分为 10MB 的分片</span>
+<pre><span class="comment">REM 将 video.mp4 分块为 10MB 的分片</span>
 <span class="cmd">cli.exe</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">"D:\video.mp4"</span> <span class="arg">-o</span> <span class="path">"D:\chunks"</span> <span class="arg">-c</span> 10
 
 <span class="comment">REM 本地合并分片</span>
@@ -223,45 +223,45 @@
 
             <h4>界面功能</h4>
             <ul>
-                <li><strong>文件分块</strong>：选择文件 → 设置输出目录 → 调整分片大小（1-1024 MB）→ 点击"开始拆分"</li>
-                <li><strong>文件下载</strong>：输入 .fkx 文件 URL 或选择本地 .fkx 文件（自动识别）→ 设置输出目录 → 可选启用增强模式 → 点击"开始下载"/"开始合并"</li>
+                <li><strong>文件分块</strong>：选择文件 → 设置输出目录 → 调整分片大小（1-1024 MB）→ 点击"开始分块"</li>
+                <li><strong>文件下载</strong>：输入 <code>.fkx</code> 文件 URL 或选择本地 <code>.fkx</code> 文件→ 设置输出目录 → 可选启用增强模式/SHA-256检验 → 点击"开始下载"/"开始合并"</li>
             </ul>
 
             <h4>特性</h4>
             <ul>
                 <li>侧边栏一键切换功能页面</li>
-                <li>文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 .fk 分片，远程模式自动下载分片后合并</li>
+                <li>文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 <code>.fk</code> 分片，远程模式自动下载分片后合并</li>
                 <li>实时分块进度 + 总进度 + 下载速度显示</li>
-                <li>远程下载支持断点续传：中断后分片保留，重新下载自动跳过已下载分片</li>
+                <li>远程下载支持断点续传：中断后分片保留，重新下载自动跳过已下载分片（大小 + SHA-256 检验）</li>
                 <li>文件信息预览（文件名、大小、分片数）</li>
                 <li>支持取消操作</li>
                 <li>HiDPI 高 DPI 自适应</li>
-                <li>右键上下文菜单（剪切/复制/粘贴/全选）</li>
+                <li>右键菜单（剪切/复制/粘贴/全选）</li>
             </ul>
         </div>
 
         <div class="usage-detail">
             <h3>wjfk.exe — 文件分块</h3>
-            <p class="detail-subtitle">独立的文件分块 GUI 工具，专注于将大文件拆分为多个小分片</p>
+            <p class="detail-subtitle">独立的文件分块 GUI 工具，专注于将大文件分块为多个小分片</p>
 
             <h4>启动</h4>
             <p>双击 <code>wjfk.exe</code> 即可启动。</p>
 
             <h4>使用步骤</h4>
             <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
-                <li>点击"浏览"选择要拆分的文件</li>
+                <li>点击"浏览"选择要分块的文件</li>
                 <li>点击"浏览"选择输出目录</li>
                 <li>设置每个分片的大小（1-1024 MB，默认 10 MB）</li>
-                <li>界面会自动显示文件大小和预计分片数</li>
-                <li>点击"开始拆分"</li>
+                <li>界面会自动显示文件大小和分片数</li>
+                <li>点击"开始分块"</li>
             </ol>
 
-            <p style="margin-top:12px;">拆分完成后会在输出目录生成：</p>
+            <p style="margin-top:12px;">分块完成后会在输出目录生成：</p>
             <ul>
                 <li><code>{文件名}-1.fk</code>、<code>{文件名}-2.fk</code>、... — 分片文件</li>
                 <li><code>{文件名}.fkx</code> — 信息文件</li>
             </ul>
-            <p style="margin-top:12px;">将 .fk 分片和 .fkx 文件上传到服务器（保持相同目录结构），即可通过 .fkx 文件的 URL 分享给他人下载。</p>
+            <p style="margin-top:12px;">将 <code>.fk</code> 分片和 <code>.fkx</code> 文件上传到服务器（保持相同目录结构），即可通过 <code>.fkx</code> 文件的 URL 分享给他人下载。</p>
         </div>
 
         <div class="usage-detail">
@@ -273,27 +273,27 @@
 
             <h4>本地模式</h4>
             <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
-                <li>点击"浏览"选择本地 .fkx 信息文件</li>
+                <li>点击"浏览"选择本地 <code>.fkx</code> 信息文件</li>
                 <li>点击"浏览"选择输出目录</li>
                 <li>点击"开始合并"</li>
             </ol>
-            <p>程序会自动读取同目录下的 .fk 分片并合并还原。</p>
+            <p>程序会自动读取同目录下的 <code>.fk</code> 分片并合并还原。</p>
 
             <h4>远程模式</h4>
             <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
-                <li>在输入框中填入 .fkx 文件的完整 URL（如 <code>https://example.com/files/video.mp4.fkx</code>）</li>
+                <li>在输入框中填入 <code>.fkx</code> 文件的完整 URL（如 <code>https://example.com/files/video.mp4.fkx</code>）</li>
                 <li>点击"浏览"选择输出目录</li>
-                <li>勾选或取消"启用增强模式"（默认勾选）</li>
+                <li>勾选或取消"启用增强模式/启用SHA-256检验"（默认勾选）</li>
                 <li>点击"开始下载"</li>
             </ol>
-            <p>程序会自动下载 .fkx 信息文件、逐个下载 .fk 分片、合并还原并校验 SHA-256。</p>
+            <p>程序会自动下载 <code>.fkx</code> 信息文件、逐个下载 <code>.fk</code> 分片、合并还原并校验 SHA-256。</p>
 
             <p><strong>断点续传</strong>：下载中断（网络错误、手动取消等）后，已下载的分片会保留在 <code>{输出目录}/{文件名}-fkxz/</code> 分片目录中。再次点击"开始下载"时，程序会自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片，全部下载完成后自动清理分片目录。</p>
 
             <h4>增强模式</h4>
             <ul>
-                <li><strong>默认启用</strong>：勾选后使用 curl_cffi 模拟 Chrome 浏览器指纹，自动伪装浏览器请求头，可绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</li>
-                <li><strong>取消勾选</strong>：使用标准 requests 库进行下载</li>
+                <li><strong>默认启用</strong>：勾选后使用 <code>curl_cffi</code> 模拟 Chrome 浏览器，自动模拟浏览器请求头，可绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</li>
+                <li><strong>取消勾选</strong>：使用标准 <code>requests</code> 库进行下载</li>
             </ul>
         </div>
     </div>

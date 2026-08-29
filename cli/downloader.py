@@ -9,7 +9,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from cli.utils import (
-    BROWSER_HEADERS, HAS_CURL_CFFI, curl_requests,
+    _clear_line_prefix, BROWSER_HEADERS, HAS_CURL_CFFI, curl_requests,
     format_size, sanitize_filename, calculate_sha256, parse_fkx, print_progress
 )
 
@@ -116,7 +116,7 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
 def _report_sha256_progress(processed, total):
     pct = min(processed / total * 100, 100) if total > 0 else 100
     sys.stdout.write(
-        f"\r\033[K    校验中... {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 5
+        f"{_clear_line_prefix()}    校验中... {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 5
     )
     sys.stdout.flush()
 

@@ -1,12 +1,12 @@
 import os
 import sys
-from cli.utils import format_size, print_progress, calculate_sha256
+from cli.utils import _clear_line_prefix, format_size, print_progress, calculate_sha256
 
 
 def _report_file_sha256_progress(processed, total):
     pct = min(processed / total * 100, 100) if total > 0 else 100
     sys.stdout.write(
-        f"\r\033[K    SHA-256: {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 5
+        f"{_clear_line_prefix()}    SHA-256: {format_size(processed)}/{format_size(total)} ({pct:.1f}%)" + " " * 5
     )
     sys.stdout.flush()
 
@@ -88,7 +88,7 @@ def cmd_split(args):
                     fkx_file.flush()
 
                     print_progress(i + 1, num_chunks,
-                                   prefix=f"拆分: ",
+                                   prefix=f"分块: ",
                                    suffix=f"{i+1}/{num_chunks}")
 
         sys.stdout.write("\n")
@@ -104,7 +104,7 @@ def cmd_split(args):
         with open(fkx_path, 'a', encoding='utf-8') as f:
             f.write(f"sha256={file_sha256}\n")
 
-        sys.stdout.write(f"\n拆分完成！\n")
+        sys.stdout.write(f"\n分块完成！\n")
         sys.stdout.write(f"  分片数: {num_chunks}\n")
         sys.stdout.write(f"  信息文件: {fkx_filename}\n")
         sys.stdout.write(f"  SHA-256: {file_sha256}\n")

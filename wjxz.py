@@ -183,7 +183,7 @@ class FileDownloaderApp:
         self.browse_output_btn.grid(row=3, column=2, pady=(0, 5))
         self._setup_context_menu(self.output_entry)
         
-        self.enhanced_checkbox = ttk.Checkbutton(url_frame, text="启用增强模式 (curl_cffi浏览器指纹模拟)", variable=self.enhanced_mode)
+        self.enhanced_checkbox = ttk.Checkbutton(url_frame, text="启用增强模式 (curl_cffi浏览器模拟)", variable=self.enhanced_mode)
         self.enhanced_checkbox.grid(row=4, column=0, sticky=tk.W, pady=5)
 
         self.verify_sha256_checkbox = ttk.Checkbutton(url_frame, text="启用SHA-256检验", variable=self.verify_sha256_var)
@@ -726,7 +726,7 @@ class FileDownloaderApp:
         self.output_dir = self.output_entry.get().strip()
         
         if not self.fkx_path:
-            self.show_error("请输入文件信息的URL或本地路径")
+            self.show_error("请输入文件信息URL或本地路径")
             self.clear_file_info()
             return None
         if not self.fkx_path.endswith('.fkx'):
@@ -874,7 +874,7 @@ class FileDownloaderApp:
                 self.progress_chunk['value'] = 100
                 self.update_download_status(self.downloaded_size, self.total_download_size, 0)
         else:
-            self.update_status(f"状态: 正在顺序下载分片 (共{num_chunks}个)")
+            self.update_status(f"状态: 正在下载分片 (共{num_chunks}个)")
             self.download_detail_label.config(text="")
             i = 0
             while i < num_chunks:
@@ -1016,18 +1016,18 @@ class FileDownloaderApp:
                     if self.is_local:
                         self.reset_ui("状态: 已取消合并")
                     else:
-                        self.reset_ui("状态: 已取消下载（分片已保留）")
+                        self.reset_ui("状态: 已取消下载")
                     return
                 if self.is_local:
                     self.reset_ui("状态: 合并失败")
                 else:
-                    self.reset_ui("状态: 下载已中断（分片已保留）")
+                    self.reset_ui("状态: 下载已中断")
                 return
             
             if len(self.downloaded_chunks) != num_chunks:
                 self.show_error(f"下载不完整: 期望{num_chunks}个分片，实际下载{len(self.downloaded_chunks)}个")
                 if not self.is_local:
-                    self.reset_ui("状态: 下载已中断（分片已保留）")
+                    self.reset_ui("状态: 下载已中断")
                 else:
                     self.reset_ui("状态: 合并失败")
                 return
@@ -1037,7 +1037,7 @@ class FileDownloaderApp:
                 if self.is_local:
                     self.reset_ui("状态: 已取消合并")
                 else:
-                    self.reset_ui("状态: 已取消下载（分片已保留）")
+                    self.reset_ui("状态: 已取消下载")
                 return
             
             sha_skipped = False
@@ -1050,7 +1050,7 @@ class FileDownloaderApp:
                     if os.path.exists(output_path):
                         os.remove(output_path)
                     if not self.is_local:
-                        self.reset_ui("状态: SHA-256校验失败（分片已保留）")
+                        self.reset_ui("状态: SHA-256校验失败")
                     else:
                         self.reset_ui("状态: 合并失败")
                     return

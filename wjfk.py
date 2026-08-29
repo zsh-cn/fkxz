@@ -101,12 +101,12 @@ class FileSplitterApp:
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        input_frame = ttk.LabelFrame(main_frame, text="输入配置", padding="10")
+        input_frame = ttk.LabelFrame(main_frame, text="分块配置", padding="10")
         input_frame.pack(fill=tk.X, pady=5)
         input_frame.columnconfigure(1, weight=1)
         input_frame.columnconfigure(2, minsize=130)
         
-        ttk.Label(input_frame, text="选择要拆分的文件:").grid(row=0, column=0, sticky=tk.E, pady=5)
+        ttk.Label(input_frame, text="选择要分块的文件:").grid(row=0, column=0, sticky=tk.E, pady=5)
         self.file_entry = ttk.Entry(input_frame)
         self.file_entry.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW, ipady=2)
         self.file_entry.bind('<KeyRelease>', self._on_file_entry_change)
@@ -123,7 +123,7 @@ class FileSplitterApp:
         self.output_browse_btn.grid(row=1, column=2, pady=5)
         self._setup_context_menu(self.output_entry)
         
-        ttk.Label(input_frame, text="每个分片大小(MB):").grid(row=2, column=0, sticky=tk.E, pady=5)
+        ttk.Label(input_frame, text="分片大小(MB):").grid(row=2, column=0, sticky=tk.E, pady=5)
         self.chunk_size_var = tk.IntVar(value=10)
         self.chunk_spinbox = ttk.Spinbox(input_frame, from_=1, to=1024, textvariable=self.chunk_size_var, width=10)
         self.chunk_spinbox.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
@@ -134,7 +134,7 @@ class FileSplitterApp:
         
         ttk.Label(input_frame, text="(范围: 1-1024 MB)").grid(row=2, column=2, sticky=tk.W, pady=5)
         
-        control_frame = ttk.LabelFrame(main_frame, text="拆分状态", padding="10")
+        control_frame = ttk.LabelFrame(main_frame, text="分块状态", padding="10")
         control_frame.pack(fill=tk.X, pady=5)
         control_frame.columnconfigure(0, weight=1)
         
@@ -150,10 +150,10 @@ class FileSplitterApp:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=10)
         
-        self.start_button = ttk.Button(button_frame, text="开始拆分", command=self.start_split, width=20)
+        self.start_button = ttk.Button(button_frame, text="开始分块", command=self.start_split, width=20)
         self.start_button.pack(side=tk.LEFT, padx=5)
         
-        self.cancel_button = ttk.Button(button_frame, text="取消拆分", command=self.cancel_split, width=15, state=tk.DISABLED)
+        self.cancel_button = ttk.Button(button_frame, text="取消分块", command=self.cancel_split, width=15, state=tk.DISABLED)
         self.cancel_button.pack(side=tk.LEFT, padx=5)
     
     def _on_file_entry_change(self, event=None):
@@ -262,7 +262,7 @@ class FileSplitterApp:
             self.output_dir = os.path.abspath(entry_output)
 
         if not self.file_path:
-            self.update_status("状态: 请选择要拆分的文件", foreground="#cc0000")
+            self.update_status("状态: 请选择要分块的文件", foreground="#cc0000")
             return None
         if not os.path.exists(self.file_path):
             self.update_status("状态: 所选文件不存在", foreground="#cc0000")
@@ -309,7 +309,7 @@ class FileSplitterApp:
                 with open(self.file_path, 'rb') as f:
                     for i in range(num_chunks):
                         if self.is_cancelled:
-                            self.update_status("状态: 拆分已取消", foreground="#cc0000")
+                            self.update_status("状态: 分块已取消", foreground="#cc0000")
                             return False, chunk_paths
 
                         chunk_data = f.read(self.chunk_size)
@@ -326,17 +326,17 @@ class FileSplitterApp:
                             cancel_check=lambda: self.is_cancelled
                         )
                         if self.is_cancelled or chunk_sha256 is None:
-                            self.update_status("状态: 拆分已取消", foreground="#cc0000")
+                            self.update_status("状态: 分块已取消", foreground="#cc0000")
                             return False, chunk_paths
 
                         fkx_file.write(f"chunk_{i+1}={chunk_filename},{len(chunk_data)},{chunk_sha256}\n")
                         fkx_file.flush()
 
                         self.progress['value'] = i + 1
-                        self.update_status(f"状态: 正在拆分 {i+1}/{num_chunks}")
+                        self.update_status(f"状态: 正在分块 {i+1}/{num_chunks}")
             return True, chunk_paths
         except Exception as e:
-            self.update_status(f"状态: 拆分过程发生错误: {str(e)}", foreground="#cc0000")
+            self.update_status(f"状态: 分块过程发生错误: {str(e)}", foreground="#cc0000")
             return False, chunk_paths
 
     def _finalize_split(self, file_name, file_size, num_chunks, fkx_path, chunk_paths):
@@ -351,7 +351,7 @@ class FileSplitterApp:
 
         if self.is_cancelled or file_sha256 is None:
             self._cleanup(fkx_path, chunk_paths)
-            self.update_status("状态: 拆分已取消", foreground="#cc0000")
+            self.update_status("状态: 分块已取消", foreground="#cc0000")
             self.progress['value'] = 0
             self.reset_ui()
             return
@@ -361,10 +361,10 @@ class FileSplitterApp:
 
         self.progress['maximum'] = num_chunks
         self.progress['value'] = num_chunks
-        self.update_status(f"状态: 拆分完成！已生成 {num_chunks} 个分片", foreground="#006600")
+        self.update_status(f"状态: 分块完成！已生成 {num_chunks} 个分片", foreground="#006600")
         self.reset_ui()
         fkx_filename = os.path.basename(fkx_path)
-        messagebox.showinfo("完成", f"文件拆分完成！\n文件名: {file_name}\n文件大小: {self.format_size(file_size)}\n分片数: {num_chunks}\n信息文件: {fkx_filename}\n保存位置: {self.output_dir}")
+        messagebox.showinfo("完成", f"文件分块完成！\n文件名: {file_name}\n文件大小: {self.format_size(file_size)}\n分片数: {num_chunks}\n信息文件: {fkx_filename}\n保存位置: {self.output_dir}")
 
     def split_file(self):
         inputs = self._validate_split_inputs()

@@ -37,7 +37,7 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
         <div class="info-row"><span class="info-label">文件名：</span><span class="info-value" id="fileName">-</span></div>
         <div class="info-row"><span class="info-label">文件大小：</span><span class="info-value" id="fileSize">-</span></div>
         <div class="info-row" id="resumeRow" style="display:none;">
-            <span class="info-label">已保存进度：</span>
+            <span class="info-label">下载进度：</span>
             <span class="info-value" id="resumeProgress">-</span>
         </div>
     </div>
@@ -164,7 +164,7 @@ async function resumeFromSession(saved) {
     document.getElementById('fileSize').textContent = formatSize(totalSize);
     document.getElementById('resumeProgress').textContent = formatSize(resumeOffset);
     document.getElementById('resumeRow').style.display = 'flex';
-    updateProgress(resumeOffset, totalSize, '已保存进度 ' + formatSize(resumeOffset) + '/' + formatSize(totalSize));
+    updateProgress(resumeOffset, totalSize, '下载进度 ' + formatSize(resumeOffset) + '/' + formatSize(totalSize));
     document.getElementById('downloadBtn').disabled = false;
     document.getElementById('resumeBtn').classList.add('show');
     return true;

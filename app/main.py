@@ -28,8 +28,8 @@ class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("文件分块下载")
-        self.root.geometry("1100x800")
-        self.root.minsize(960, 600)
+        self.root.geometry("1000x800")
+        self.root.minsize(800, 800)
         self.root.configure(bg=BG_PAGE)
 
         icon_path = _get_icon_path()

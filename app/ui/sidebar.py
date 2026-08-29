@@ -37,7 +37,7 @@ class Sidebar(ttk.Frame):
         inner.pack(fill=tk.BOTH, expand=True, pady=(8, 8))
 
         items = [
-            ('文件分块', '将大文件拆分为多个分片'),
+            ('文件分块', '将大文件分块为多个分片'),
             ('文件下载', '从本地或远程URL获取分片并合并还原文件'),
         ]
 

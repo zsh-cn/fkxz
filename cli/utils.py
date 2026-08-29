@@ -58,12 +58,16 @@ def calculate_sha256(file_path, progress_callback=None):
     return sha256_hash.hexdigest()
 
 
+def _clear_line_prefix():
+    return "\r\033[K" if sys.stdout.isatty() else "\r"
+
+
 def print_progress(current, total, prefix="", suffix=""):
     bar_len = 40
     filled = int(bar_len * current / total) if total > 0 else 0
     bar = '#' * filled + '-' * (bar_len - filled)
     percent = (current / total * 100) if total > 0 else 0
-    sys.stdout.write(f"\r\033[K{prefix}[{bar}] {percent:.1f}% {suffix}" + " " * 5)
+    sys.stdout.write(f"{_clear_line_prefix()}{prefix}[{bar}] {percent:.1f}% {suffix}" + " " * 5)
     sys.stdout.flush()
 
 
