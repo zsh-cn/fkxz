@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import hashlib
 from cli.utils import format_size, sanitize_filename, calculate_sha256, parse_fkx, print_progress
 
@@ -10,7 +11,9 @@ def read_local_fkx(file_path):
 
 
 def merge_chunks(chunk_sources, output_path, num_chunks, total_size=0):
+    merge_start = time.time()
     merged_bytes = [0]
+    last_report = [0.0]
     with open(output_path, 'wb') as out_f:
         for i in range(num_chunks):
             chunk_path = chunk_sources[i]
@@ -19,14 +22,20 @@ def merge_chunks(chunk_sources, output_path, num_chunks, total_size=0):
                 for chunk in iter(lambda: chunk_f.read(65536), b""):
                     out_f.write(chunk)
                     merged_bytes[0] += len(chunk)
-                    if total_size > 0:
-                        print_progress(merged_bytes[0], total_size,
-                                       prefix="合并: ",
-                                       percent_text=f"{format_size(merged_bytes[0])}/{format_size(total_size)}")
-                    else:
-                        print_progress(i + 1, num_chunks,
-                                       prefix="合并: ",
-                                       suffix=f"{i+1}/{num_chunks}")
+                    now = time.time()
+                    if now - last_report[0] >= 0.3 or (total_size > 0 and merged_bytes[0] >= total_size):
+                        last_report[0] = now
+                        elapsed = now - merge_start
+                        speed = merged_bytes[0] / elapsed if elapsed > 0 else 0
+                        if total_size > 0:
+                            print_progress(merged_bytes[0], total_size,
+                                           prefix="合并: ",
+                                           percent_text=f"{format_size(merged_bytes[0])}/{format_size(total_size)}",
+                                           speed=speed)
+                        else:
+                            print_progress(i + 1, num_chunks,
+                                           prefix="合并: ",
+                                           suffix=f"{i+1}/{num_chunks}")
     sys.stdout.write("\n")
     sys.stdout.flush()
 
@@ -87,16 +96,23 @@ def cmd_merge(args):
     if 'sha256' in fkx_info and not getattr(args, 'skip_sha256', False):
         sys.stdout.write("正在校验SHA-256...\n")
         sys.stdout.flush()
+        verify_start = time.time()
         actual_sha256 = hashlib.sha256()
         sha256_bytes = [0]
+        last_report = [0.0]
         with open(output_path, 'rb') as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 actual_sha256.update(chunk)
                 sha256_bytes[0] += len(chunk)
-                if total_size > 0:
+                now = time.time()
+                if total_size > 0 and (now - last_report[0] >= 0.3 or sha256_bytes[0] >= total_size):
+                    last_report[0] = now
+                    elapsed = now - verify_start
+                    speed = sha256_bytes[0] / elapsed if elapsed > 0 else 0
                     print_progress(sha256_bytes[0], total_size,
                                    prefix="校验: ",
-                                   percent_text=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}")
+                                   percent_text=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}",
+                                   speed=speed)
         sys.stdout.write("\n")
         sys.stdout.flush()
         if actual_sha256.hexdigest() != fkx_info['sha256']:

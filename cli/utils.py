@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import shutil
 import hashlib
 from typing import Any
@@ -63,14 +64,18 @@ def _clear_line_prefix():
     return "\r"
 
 
-def print_progress(current, total, prefix="", suffix="", percent_text=None):
+def print_progress(current, total, prefix="", suffix="", percent_text=None, speed=None):
     bar_len = 40
     filled = int(bar_len * current / total) if total > 0 else 0
     bar = '#' * filled + '-' * (bar_len - filled)
     if percent_text is None:
         percent = (current / total * 100) if total > 0 else 0
         percent_text = f"{percent:.1f}%"
-    line = f"{_clear_line_prefix()}{prefix}[{bar}] {percent_text} {suffix}"
+    line = f"{_clear_line_prefix()}{prefix}[{bar}] {percent_text}"
+    if speed is not None:
+        line += f" | {format_size(int(speed))}/s"
+    if suffix:
+        line += f" {suffix}"
     try:
         term_width = shutil.get_terminal_size().columns
         line = line.ljust(term_width)
@@ -78,6 +83,25 @@ def print_progress(current, total, prefix="", suffix="", percent_text=None):
         line = line + " " * 20
     sys.stdout.write(line)
     sys.stdout.flush()
+
+
+class SpeedTracker:
+    def __init__(self, window=2.0):
+        self.window = window
+        self.samples = []
+
+    def update(self, total_bytes):
+        self.samples.append((time.time(), total_bytes))
+
+    def recent_speed(self):
+        now = time.time()
+        cutoff = now - self.window
+        self.samples = [(t, b) for t, b in self.samples if t >= cutoff]
+        if len(self.samples) >= 2:
+            dt = self.samples[-1][0] - self.samples[0][0]
+            db = self.samples[-1][1] - self.samples[0][1]
+            return db / dt if dt > 0 else 0
+        return None
 
 
 def parse_fkx(content):

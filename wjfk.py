@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import hashlib
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -239,13 +240,16 @@ class FileSplitterApp:
                     progress_callback(processed, file_size)
         return sha256_hash.hexdigest()
     
-    def _on_split_sha256_progress(self, processed, total):
+    def _on_split_sha256_progress(self, processed, total, start_time=None):
         def update():
             if total > 0:
                 self.progress['value'] = processed / total * 100
-            self.status_label.config(
-                text=f"状态: 正在计算文件SHA-256... {self.format_size(processed)} / {self.format_size(total)}"
-            )
+            text = f"状态: 正在计算文件SHA-256... {self.format_size(processed)} / {self.format_size(total)}"
+            if start_time is not None:
+                elapsed = time.time() - start_time
+                speed = processed / elapsed if elapsed > 0 else 0
+                text += f" | {self.format_size(int(speed))}/s"
+            self.status_label.config(text=text)
             self.root.update_idletasks()
         self.root.after(0, update)
 
@@ -344,11 +348,12 @@ class FileSplitterApp:
     def _finalize_split(self, file_name, file_size, num_chunks, fkx_path, chunk_paths):
         self.update_status("状态: 正在计算文件SHA-256...")
         self.progress['maximum'] = 100
+        _sha256_start = time.time()
 
         file_sha256 = self.calculate_sha256(
             self.file_path,
             cancel_check=lambda: self.is_cancelled,
-            progress_callback=lambda p, t: self._on_split_sha256_progress(p, t)
+            progress_callback=lambda p, t: self._on_split_sha256_progress(p, t, _sha256_start)
         )
 
         if self.is_cancelled or file_sha256 is None:
@@ -433,9 +438,12 @@ class FileSplitterApp:
 
 if __name__ == "__main__":
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
-        pass
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
     
     root = tk.Tk()
     
@@ -447,4 +455,19 @@ if __name__ == "__main__":
         pass
     
     app = FileSplitterApp(root)
+    
+    try:
+        if hasattr(root, 'tk') and hasattr(root.tk, 'call'):
+            scale_factor = root.tk.call('tk', 'scaling')
+        else:
+            scale_factor = 1.0
+    except Exception:
+        scale_factor = 1.0
+    
+    if scale_factor > 1.5:
+        root.update_idletasks()
+        req_width = max(650, root.winfo_reqwidth())
+        req_height = max(380, root.winfo_reqheight())
+        root.geometry(f"{req_width}x{req_height}")
+    
     root.mainloop()

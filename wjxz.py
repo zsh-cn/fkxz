@@ -89,6 +89,9 @@ class FileDownloaderApp:
         self.verify_sha256_var = tk.BooleanVar(value=True)
         self._use_enhanced = True
         self._last_chunk_error = ""
+        self._speed_samples = []
+        self._retry_needed = False
+        self._failed = False
         
         self.create_widgets()
     
@@ -420,7 +423,9 @@ class FileDownloaderApp:
             else:
                 self.enhanced_checkbox.config(state=tk.DISABLED)
             self.verify_sha256_checkbox.config(state=tk.NORMAL)
-            if self.file_info and 'chunks' in self.file_info:
+            if self._retry_needed:
+                self.start_button.config(state=tk.NORMAL, text="重试")
+            elif self.file_info and 'chunks' in self.file_info:
                 button_text = "开始合并" if self.is_local else "开始下载"
                 self.start_button.config(state=tk.NORMAL, text=button_text)
             else:
@@ -473,19 +478,6 @@ class FileDownloaderApp:
             self.update_status(f"状态: 网络错误 - {str(e)[:50]}", foreground="#cc0000")
             return None
 
-    def ask_retry(self, title, message):
-        result = [False]
-        event = threading.Event()
-
-        def show_dialog():
-            if messagebox.askretrycancel(title, message):
-                result[0] = True
-            event.set()
-
-        self.root.after(0, show_dialog)
-        event.wait()
-        return result[0]
-    
     def read_local_fkx(self, file_path):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -565,7 +557,7 @@ class FileDownloaderApp:
                         fh_ref[0].write(data)  # type: ignore[reportOptionalMemberAccess]
                         downloaded_bytes[0] += len(data)
                         d = downloaded_bytes[0]
-                        if d - last_reported[0] >= 65536 or d >= chunk_size:
+                        if d - last_reported[0] >= 16384 or d >= chunk_size:
                             last_reported[0] = d
                             if progress_callback:
                                 progress_callback(d, chunk_size, len(data))
@@ -704,11 +696,17 @@ class FileDownloaderApp:
     def chunk_progress_callback(self, downloaded, chunk_size, chunk_len=0):
         total_downloaded = self._downloaded_before_chunk + downloaded
         
-        elapsed = time.time() - self.download_start_time
-        if elapsed > 0:
-            speed = total_downloaded / elapsed
+        now = time.time()
+        self._speed_samples.append((now, total_downloaded))
+        cutoff = now - 2.0
+        self._speed_samples = [(t, b) for t, b in self._speed_samples if t >= cutoff]
+        if len(self._speed_samples) >= 2:
+            window_time = self._speed_samples[-1][0] - self._speed_samples[0][0]
+            window_bytes = self._speed_samples[-1][1] - self._speed_samples[0][1]
+            speed = window_bytes / window_time if window_time > 0 else 0
         else:
-            speed = 0
+            elapsed = now - self.download_start_time
+            speed = total_downloaded / elapsed if elapsed > 0 else 0
         
         self.update_chunk_progress(downloaded, chunk_size)
         self.update_download_status(total_downloaded, self.total_download_size, speed)
@@ -874,10 +872,8 @@ class FileDownloaderApp:
                 chunk_path = os.path.join(base_path, chunk_info['filename'])
                 chunk_path = os.path.normpath(chunk_path)
                 if not os.path.exists(chunk_path):
-                    if not self.ask_retry("合并失败", f"分片文件不存在: {chunk_info['filename']}\n是否重试？"):
-                        self._last_chunk_error = f"分片文件不存在: {chunk_info['filename']}"
-                        return False
-                    continue
+                    self._last_chunk_error = f"分片文件不存在: {chunk_info['filename']}"
+                    return False
                 self.downloaded_chunks[i] = chunk_path
                 self.downloaded_size += chunk_info['size']
                 self.progress_total['value'] = i + 1
@@ -886,6 +882,8 @@ class FileDownloaderApp:
         else:
             self.update_status(f"状态: 正在下载分片 (共{num_chunks}个)")
             self.download_detail_label.config(text="")
+            self._speed_samples = []
+            self.download_start_time = time.time()
             i = 0
             while i < num_chunks:
                 if self.is_cancelled:
@@ -899,10 +897,8 @@ class FileDownloaderApp:
                 if result is None:
                     if self.is_cancelled:
                         return False
-                    if not self.ask_retry("下载失败", f"分片 {i+1}/{num_chunks} 下载失败\n原因: {self._last_chunk_error}\n是否重试？"):
-                        self._last_chunk_error = f"分片 {i+1}/{num_chunks} 下载失败: {self._last_chunk_error}"
-                        return False
-                    continue
+                    self._last_chunk_error = f"分片 {i+1}/{num_chunks} 下载失败: {self._last_chunk_error}"
+                    return False
                 self.progress_total['value'] = i + 1
                 self.progress_chunk['value'] = 100
                 self.root.update_idletasks()
@@ -917,6 +913,9 @@ class FileDownloaderApp:
         self.update_status("状态: 正在合并文件...")
         merged_bytes = [0]
         cancelled = False
+        merge_start = time.time()
+        last_report_time = [merge_start]
+        last_report_bytes = [0]
         with open(output_path, 'wb') as f:
             for i in range(num_chunks):
                 if self.is_cancelled:
@@ -928,12 +927,17 @@ class FileDownloaderApp:
                     for chunk in iter(lambda: chunk_file.read(65536), b""):
                         f.write(chunk)
                         merged_bytes[0] += len(chunk)
-                        if self.total_download_size > 0:
+                        now = time.time()
+                        if now - last_report_time[0] >= 0.3 or merged_bytes[0] >= self.total_download_size:
+                            elapsed = now - merge_start
+                            speed = merged_bytes[0] / elapsed if elapsed > 0 else 0
+                            last_report_time[0] = now
+                            last_report_bytes[0] = merged_bytes[0]
                             def update_progress():
-                                percentage = merged_bytes[0] / self.total_download_size
+                                percentage = merged_bytes[0] / self.total_download_size if self.total_download_size > 0 else 0
                                 self.progress_chunk['value'] = percentage * 100
                                 self.download_detail_label.config(
-                                    text=f"合并中: {self.format_size(merged_bytes[0])} / {self.format_size(self.total_download_size)}"
+                                    text=f"合并: {self.format_size(merged_bytes[0])} / {self.format_size(self.total_download_size)} | {self.format_size(int(speed))}/s"
                                 )
                                 self.root.update_idletasks()
                             self.root.after(0, update_progress)
@@ -957,13 +961,16 @@ class FileDownloaderApp:
                     progress_callback(processed, file_size)
         return sha256_hash.hexdigest()
 
-    def _on_sha256_progress(self, processed, total):
+    def _on_sha256_progress(self, processed, total, start_time=None):
         def update():
             if total > 0:
                 self.progress_chunk['value'] = processed / total * 100
-            self.download_detail_label.config(
-                text=f"校验中: {self.format_size(processed)} / {self.format_size(total)}"
-            )
+            text = f"校验: {self.format_size(processed)} / {self.format_size(total)}"
+            if start_time is not None:
+                elapsed = time.time() - start_time
+                speed = processed / elapsed if elapsed > 0 else 0
+                text += f" | {self.format_size(int(speed))}/s"
+            self.download_detail_label.config(text=text)
             self.root.update_idletasks()
         self.root.after(0, update)
 
@@ -972,13 +979,18 @@ class FileDownloaderApp:
         file_size = os.path.getsize(output_path)
         actual_sha256 = hashlib.sha256()
         processed = 0
+        verify_start = time.time()
+        last_report = [0.0]
         with open(output_path, 'rb') as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 if self.is_cancelled:
                     return "cancelled"
                 actual_sha256.update(chunk)
                 processed += len(chunk)
-                self._on_sha256_progress(processed, file_size)
+                now = time.time()
+                if now - last_report[0] >= 0.3 or processed >= file_size:
+                    last_report[0] = now
+                    self._on_sha256_progress(processed, file_size, verify_start)
         if actual_sha256.hexdigest() != expected_sha256:
             self.show_error("文件SHA-256校验失败")
             return "failed"
@@ -993,7 +1005,7 @@ class FileDownloaderApp:
             inputs = self._validate_download_inputs()
             if inputs is None:
                 error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                self.reset_ui(f"状态: 下载失败{error_detail}")
+                self._set_retry_ui(f"状态: 下载失败{error_detail}")
                 return
             fkx_path, output_dir = inputs  # type: ignore[reportAssignmentType]
             
@@ -1007,42 +1019,26 @@ class FileDownloaderApp:
             if fkx_info is None:
                 if self.is_cancelled:
                     if self.is_local:
-                        self.reset_ui("状态: 已取消合并")
+                        self._set_retry_ui("状态: 已取消合并")
                     else:
-                        self.reset_ui("状态: 已取消下载")
+                        self._set_retry_ui("状态: 已取消下载")
                     return
                 error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                if not self.is_local:
-                    if self.ask_retry("下载失败", f"获取文件信息失败{error_detail}\n是否重试？"):
-                        fkx_info, fkx_local_path, fkx_content = self._get_or_fetch_fkx_info()
-                        if fkx_info is None:
-                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                            self.reset_ui(f"状态: 下载失败{error_detail2}")
-                            return
-                    else:
-                        self.reset_ui(f"状态: 下载失败{error_detail}")
-                        return
+                if self.is_local:
+                    self._set_retry_ui(f"状态: 合并失败{error_detail}")
                 else:
-                    self.reset_ui(f"状态: 合并失败{error_detail}")
-                    return
+                    self._set_retry_ui(f"状态: 下载失败{error_detail}")
+                return
             
             base_path, num_chunks = self._setup_download_state(fkx_info, fkx_content, fkx_local_path)
             
             if base_path is None:
                 error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                if not self.is_local:
-                    if self.ask_retry("下载失败", f"初始化下载状态失败{error_detail}\n是否重试？"):
-                        base_path, num_chunks = self._setup_download_state(fkx_info, fkx_content, fkx_local_path)
-                        if base_path is None:
-                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                            self.reset_ui(f"状态: 下载失败{error_detail2}")
-                            return
-                    else:
-                        self.reset_ui(f"状态: 下载失败{error_detail}")
-                        return
+                if self.is_local:
+                    self._set_retry_ui(f"状态: 合并失败{error_detail}")
                 else:
-                    self.reset_ui(f"状态: 合并失败{error_detail}")
-                    return
+                    self._set_retry_ui(f"状态: 下载失败{error_detail}")
+                return
             
             def _set_buttons():
                 self.start_button.config(state=tk.DISABLED)
@@ -1052,55 +1048,33 @@ class FileDownloaderApp:
             if not self._collect_chunks(fkx_info, base_path, num_chunks):
                 if self.is_cancelled:
                     if self.is_local:
-                        self.reset_ui("状态: 已取消合并")
+                        self._set_retry_ui("状态: 已取消合并")
                     else:
-                        self.reset_ui("状态: 已取消下载")
+                        self._set_retry_ui("状态: 已取消下载")
                     return
                 error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                if not self.is_local:
-                    if self.ask_retry("下载失败", f"下载分片失败{error_detail}\n是否重试？"):
-                        self._last_chunk_error = ""
-                        if not self._collect_chunks(fkx_info, base_path, num_chunks):
-                            if self.is_cancelled:
-                                self.reset_ui("状态: 已取消下载")
-                                return
-                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                            self.reset_ui(f"状态: 下载已中断{error_detail2}")
-                            return
-                    else:
-                        self.reset_ui(f"状态: 下载已中断{error_detail}")
-                        return
+                if self.is_local:
+                    self._set_retry_ui(f"状态: 合并失败{error_detail}")
                 else:
-                    self.reset_ui(f"状态: 合并失败{error_detail}")
-                    return
+                    self._set_retry_ui(f"状态: 下载已中断{error_detail}")
+                return
             
             if len(self.downloaded_chunks) != num_chunks:
                 error_msg = f"下载不完整: 期望{num_chunks}个分片，实际下载{len(self.downloaded_chunks)}个"
                 self.show_error(error_msg)
                 self._last_chunk_error = error_msg
-                if not self.is_local:
-                    if self.ask_retry("下载失败", f"{error_msg}\n是否重试？"):
-                        self._last_chunk_error = ""
-                        if not self._collect_chunks(fkx_info, base_path, num_chunks):
-                            if self.is_cancelled:
-                                self.reset_ui("状态: 已取消下载")
-                                return
-                            error_detail2 = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                            self.reset_ui(f"状态: 下载已中断{error_detail2}")
-                            return
-                    else:
-                        self.reset_ui(f"状态: 下载已中断 - {error_msg}")
-                        return
+                if self.is_local:
+                    self._set_retry_ui(f"状态: 合并失败 - {error_msg}")
                 else:
-                    self.reset_ui(f"状态: 合并失败 - {error_msg}")
-                    return
+                    self._set_retry_ui(f"状态: 下载已中断 - {error_msg}")
+                return
             
             output_path = self._merge_chunks(fkx_info, num_chunks)
             if output_path is None:
                 if self.is_local:
-                    self.reset_ui("状态: 已取消合并")
+                    self._set_retry_ui("状态: 已取消合并")
                 else:
-                    self.reset_ui("状态: 已取消下载")
+                    self._set_retry_ui("状态: 已取消下载")
                 return
             
             sha_skipped = False
@@ -1113,14 +1087,16 @@ class FileDownloaderApp:
                     if os.path.exists(output_path):
                         os.remove(output_path)
                     if not self.is_local:
-                        self.reset_ui("状态: SHA-256校验失败")
+                        self._set_retry_ui("状态: SHA-256校验失败")
                     else:
-                        self.reset_ui("状态: 合并失败 - SHA-256校验失败")
+                        self._set_retry_ui("状态: 合并失败 - SHA-256校验失败")
                     return
                 self.root.after(0, lambda: self.cancel_button.config(text="取消"))
             
             if not self.is_local:
                 self.cleanup_chunk_dir(self.output_dir)
+            self._retry_needed = False
+            self._failed = False
             
             def _on_success():
                 self.progress_total['value'] = num_chunks
@@ -1151,14 +1127,33 @@ class FileDownloaderApp:
             self._last_chunk_error = error_msg
             if output_path is not None and os.path.exists(output_path):
                 os.remove(output_path)
-            if not self.is_local:
-                if self.ask_retry("下载失败", f"{error_msg}\n是否重试？"):
-                    self._last_chunk_error = ""
-                    self.download_and_merge(verify_sha256)
-                    return
-                self.reset_ui(f"状态: 下载失败 - {error_msg}")
+            if self.is_local:
+                self._set_retry_ui(f"状态: 合并失败 - {error_msg}")
             else:
-                self.reset_ui(f"状态: 合并失败 - {error_msg}")
+                self._set_retry_ui(f"状态: 下载失败 - {error_msg}")
+
+    def _set_retry_ui(self, status_text):
+        self._retry_needed = True
+        self._failed = True
+        def _retry():
+            self.progress_chunk['value'] = 0
+            self.progress_total['value'] = 0
+            self.download_detail_label.config(text="")
+            self.cancel_button.config(state=tk.DISABLED, text="取消")
+            self.start_button.config(state=tk.NORMAL, text="重试")
+            self.url_entry.config(state=tk.NORMAL)
+            self.output_entry.config(state=tk.NORMAL)
+            self.browse_fkx_btn.config(state=tk.NORMAL)
+            self.browse_output_btn.config(state=tk.NORMAL)
+            if self.is_local:
+                self.enhanced_checkbox.config(state=tk.DISABLED)
+            elif HAS_CURL_CFFI:
+                self.enhanced_checkbox.config(state=tk.NORMAL)
+            else:
+                self.enhanced_checkbox.config(state=tk.DISABLED)
+            self.verify_sha256_checkbox.config(state=tk.NORMAL)
+            self.update_status(status_text, foreground="#cc0000")
+        self.root.after(0, _retry)
     
     def download_fkx(self, url):
         response = self.download_single(url)
@@ -1173,6 +1168,8 @@ class FileDownloaderApp:
         return None
     
     def start_download(self):
+        self._retry_needed = False
+        self._failed = False
         verify_sha256 = self.verify_sha256_var.get()
         self.download_thread = threading.Thread(target=self.download_and_merge, args=(verify_sha256,))
         self.download_thread.start()
@@ -1194,9 +1191,12 @@ class FileDownloaderApp:
 
 if __name__ == "__main__":
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
-        pass
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
     
     root = tk.Tk()
     
@@ -1208,4 +1208,19 @@ if __name__ == "__main__":
         pass
     
     app = FileDownloaderApp(root)
+    
+    try:
+        if hasattr(root, 'tk') and hasattr(root.tk, 'call'):
+            scale_factor = root.tk.call('tk', 'scaling')
+        else:
+            scale_factor = 1.0
+    except Exception:
+        scale_factor = 1.0
+    
+    if scale_factor > 1.5:
+        root.update_idletasks()
+        req_width = max(650, root.winfo_reqwidth())
+        req_height = max(650, root.winfo_reqheight())
+        root.geometry(f"{req_width}x{req_height}")
+    
     root.mainloop()

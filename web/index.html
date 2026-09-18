@@ -17,15 +17,10 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
 .info-value { color: #1a73e8; font-weight: 500; }
 .progress-section { display: none; margin-bottom: 16px; }
 .progress-section.show { display: block; }
-.progress-bar { height: 6px; background: #e8f0fe; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
-.progress-bar.hidden { display: none; }
-.progress-fill { height: 100%; background: #4285f4; width: 0%; }
 .progress-text { font-size: 12px; color: #666; text-align: center; }
 
 .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; background: #4285f4; color: white; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-cancel { background: #ea4335; display: none; }
-.btn-cancel.show { display: block; }
 .btn-resume { background: #34a853; display: none; margin-top: 8px; }
 .btn-resume.show { display: block; }
 </style>
@@ -42,17 +37,15 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
         </div>
     </div>
     <div class="progress-section" id="progressSection">
-        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
         <div class="progress-text" id="progressText">准备中...</div>
     </div>
 
     <button class="btn" id="downloadBtn" disabled>下载</button>
-    <button class="btn btn-cancel" id="cancelBtn">取消下载</button>
     <button class="btn btn-resume" id="resumeBtn">继续下载</button>
 </div>
 <script>
-let fkxInfo = null, baseUrl = '', isDownloading = false, abortController = null;
-let resumeOffset = 0;
+let fkxInfo = null, baseUrl = '', resumeOffset = 0;
+let _fkxParam = null;
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -61,7 +54,7 @@ function formatSize(bytes) {
 }
 
 function getBaseUrl(url) {
-    const parsed = new URL(url);
+    const parsed = new URL(url, window.location.href);
     const pathParts = parsed.pathname.split('/');
     pathParts.pop();
     return parsed.origin + pathParts.join('/') + '/';
@@ -82,12 +75,6 @@ function parseFkx(content) {
         } else info[key] = value.trim();
     }
     return info;
-}
-
-function updateProgress(current, total, text) {
-    document.getElementById('progressSection').classList.add('show');
-    document.getElementById('progressFill').style.width = total > 0 ? ((current / total) * 100).toFixed(1) + '%' : '0%';
-    document.getElementById('progressText').textContent = text || '';
 }
 
 function showMessage(text) {
@@ -121,226 +108,75 @@ async function parseFkxUrl(url) {
     }
 }
 
-function saveResumeState(offset) {
-    if (offset > 0 && fkxInfo) {
-        sessionStorage.setItem('fkx_resume', JSON.stringify({
-            url: fkxInfo._url,
-            offset: offset,
-            chunks: fkxInfo.chunks.map(c => c.filename + ',' + c.size).join('\n'),
-            filename: fkxInfo.filename
-        }));
-    }
-}
-
-function loadResumeState() {
-    const data = sessionStorage.getItem('fkx_resume');
-    if (!data) return null;
-    try {
-        const state = JSON.parse(data);
-        return {
-            url: state.url,
-            offset: state.offset,
-            chunks: state.chunks.split('\n').map(l => {
-                const p = l.split(',');
-                return { filename: p[0].trim(), size: parseInt(p[1]) || 0 };
-            }),
-            filename: state.filename
-        };
-    } catch (e) {
-        return null;
-    }
-}
-
-async function resumeFromSession(saved) {
-    if (!saved) return false;
-    resumeOffset = saved.offset || 0;
-    fkxInfo = {
-        chunks: saved.chunks,
-        filename: saved.filename,
-        _url: saved.url
-    };
-    const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
-    document.getElementById('fileName').textContent = fkxInfo.filename;
-    document.getElementById('fileSize').textContent = formatSize(totalSize);
-    document.getElementById('resumeProgress').textContent = formatSize(resumeOffset);
-    document.getElementById('resumeRow').style.display = 'flex';
-    updateProgress(resumeOffset, totalSize, '下载进度 ' + formatSize(resumeOffset) + '/' + formatSize(totalSize));
-    document.getElementById('downloadBtn').disabled = false;
-    document.getElementById('resumeBtn').classList.add('show');
-    return true;
-}
-
-async function downloadAndMerge(startOffset) {
-    const offset = startOffset || 0;
-    if (!fkxInfo?.chunks?.length || isDownloading) return;
-    isDownloading = true;
-    abortController = new AbortController();
+function startDownload(offset) {
+    if (!fkxInfo?.chunks?.length) return;
     const btn = document.getElementById('downloadBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
     const resumeBtn = document.getElementById('resumeBtn');
-    btn.style.display = 'none';
-    cancelBtn.classList.add('show');
-    resumeBtn.classList.remove('show');
+    btn.disabled = true;
+    resumeBtn.disabled = true;
 
-    const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
-    const useFileSystemAccess = 'showSaveFilePicker' in window;
-    const progressBar = document.getElementById('progressFill').parentElement;
-    if (!useFileSystemAccess) progressBar.classList.add('hidden');
-    let fileHandle = null, writer = null, blobParts = [], downloaded = offset;
-    let speedLastTime = Date.now(), speedLastBytes = offset, speedStr = '';
+    const fkxUrl = /^https?:\/\//i.test(_fkxParam) ? _fkxParam : new URL(_fkxParam, window.location.href).href;
+    const absoluteFkxUrl = new URL(fkxUrl, window.location.origin + window.location.pathname).href;
+    const downloadUrl = new URL('./fkxz', window.location.href);
+    downloadUrl.searchParams.set('fkx', absoluteFkxUrl);
+    if (offset > 0) downloadUrl.searchParams.set('resume', String(offset));
 
-    try {
-        const sanitizedName = fkxInfo.filename.replace(/[<>:"/\\|?*]/g, '_');
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;';
+    document.body.appendChild(iframe);
 
-        if (useFileSystemAccess) {
-            try {
-                fileHandle = await window.showSaveFilePicker({ suggestedName: sanitizedName, types: [{ description: '所有文件', accept: { '*/*': [] } }] });
-                writer = await fileHandle.createWritable();
-            } catch (e) {
-                if (e.name === 'AbortError') { resetDownloadState(); return; }
-                throw new Error('无法获取文件写入权限: ' + e.message);
-            }
-            if (offset > 0 && writer) {
-                await writer.seek(offset);
-            }
+    iframe.src = downloadUrl.href;
+
+    showMessage('下载已开始，请查看浏览器下载栏');
+    setTimeout(() => {
+        btn.disabled = false;
+        resumeBtn.disabled = false;
+        if (iframe.parentNode) iframe.remove();
+    }, 5000);
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+    if ('serviceWorker' in navigator) {
+        try {
+            const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+            await navigator.serviceWorker.ready;
+            console.log('SW 已注册:', reg.scope);
+        } catch (e) {
+            showMessage('Service Worker 注册失败: ' + e.message);
         }
-
-        let cumulativeSize = 0;
-        let startIdx = 0;
-        for (let i = 0; i < fkxInfo.chunks.length; i++) {
-            if (cumulativeSize + fkxInfo.chunks[i].size > offset) {
-                startIdx = i;
-                break;
-            }
-            cumulativeSize += fkxInfo.chunks[i].size;
-        }
-        const skipInFirstChunk = offset - cumulativeSize;
-
-        if (offset > 0) {
-            updateProgress(offset, totalSize, '恢复中... ' + formatSize(offset) + '/' + formatSize(totalSize));
-            await new Promise(r => setTimeout(r, 100));
-        }
-
-        for (let i = startIdx; i < fkxInfo.chunks.length; i++) {
-            if (abortController.signal.aborted) throw new DOMException('已取消', 'AbortError');
-            const chunk = fkxInfo.chunks[i];
-            const chunkRes = await fetch(baseUrl + chunk.filename, {
-                signal: abortController.signal,
-                headers: i === startIdx && skipInFirstChunk > 0 ? { 'Range': 'bytes=' + skipInFirstChunk + '-' } : {}
-            });
-            if (!chunkRes.ok) throw new Error('下载失败: ' + chunk.filename);
-
-            const reader = chunkRes.body.getReader();
-            const buffers = [];
-            let chunkLoaded = 0;
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (abortController.signal.aborted) { reader.cancel(); throw new DOMException('已取消', 'AbortError'); }
-                buffers.push(value);
-                chunkLoaded += value.length;
-                const now = Date.now();
-                const currentBytes = offset + chunkLoaded;
-                if (now - speedLastTime > 500) {
-                    const elapsed = (now - speedLastTime) / 1000;
-                    if (elapsed > 0) speedStr = '  ·  ' + formatSpeed((currentBytes - speedLastBytes) / elapsed);
-                    speedLastTime = now;
-                    speedLastBytes = currentBytes;
-                }
-                updateProgress(currentBytes, totalSize, formatSize(currentBytes) + '/' + formatSize(totalSize) + speedStr);
-            }
-
-            const chunkBlob = new Blob(buffers);
-            if (useFileSystemAccess && writer) await writer.write(await chunkBlob.arrayBuffer());
-            else blobParts.push(chunkBlob);
-            downloaded = offset + chunkLoaded;
-            saveResumeState(downloaded);
-        }
-
-        updateProgress(totalSize, totalSize, '合并中...');
-
-        if (useFileSystemAccess && writer) {
-            await writer.close();
-        } else {
-            const merged = new Blob(blobParts);
-            const url = URL.createObjectURL(merged);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = sanitizedName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-        sessionStorage.removeItem('fkx_resume');
-        updateProgress(totalSize, totalSize, '下载完成');
-    } catch (e) {
-        if (e.name === 'AbortError') {
-            if (writer) {
-                try { await writer.abort(); console.log('写入器已中止'); } catch (e2) { console.warn('中止写入器失败:', e2); }
-                try { await fileHandle.remove(); console.log('临时文件已清理'); } catch (e2) { console.warn('清理临时文件失败:', e2); }
-            }
-            updateProgress(0, totalSize, '下载已取消');
-        } else {
-            showMessage('下载失败: ' + e.message);
-            if (writer) try { await writer.close(); } catch (e2) { console.warn('关闭写入器失败:', e2); }
-        }
-    } finally {
-        resetDownloadState();
     }
-}
 
-function resetDownloadState() {
-    isDownloading = false;
-    abortController = null;
-    const btn = document.getElementById('downloadBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const resumeBtn = document.getElementById('resumeBtn');
-    btn.style.display = '';
-    btn.disabled = false;
-    cancelBtn.classList.remove('show');
-    resumeBtn.classList.remove('show');
-    if (!('showSaveFilePicker' in window)) {
-        document.getElementById('progressFill').parentElement.classList.remove('hidden');
-    }
-}
-
-function cancelDownload() {
-    if (abortController) {
-        abortController.abort();
-    }
-}
-
-function formatSpeed(bytesPerSecond) {
-    if (bytesPerSecond < 1024) return bytesPerSecond.toFixed(0) + ' B/s';
-    if (bytesPerSecond < 1024 * 1024) return (bytesPerSecond / 1024).toFixed(1) + ' KB/s';
-    return (bytesPerSecond / 1024 / 1024).toFixed(1) + ' MB/s';
-}
-
-window.addEventListener('DOMContentLoaded', () => {
     const fkxParam = new URLSearchParams(window.location.search).get('fkx');
-    const saved = loadResumeState();
-    if (saved && fkxParam) {
-        fkxInfo = {
-            chunks: saved.chunks,
-            filename: saved.filename,
-            _url: saved.url || fkxParam
-        };
-        resumeFromSession(saved);
-        return;
-    }
+    const saved = sessionStorage.getItem('fkx_resume');
     if (fkxParam) {
-        const fkxUrl = /^https?:\/\//i.test(fkxParam) ? fkxParam : new URL(fkxParam, window.location.href).href;
-        fkxInfo = fkxInfo || {};
-        fkxInfo._url = fkxUrl;
-        parseFkxUrl(fkxUrl);
+        _fkxParam = fkxParam;
+        if (saved) {
+            try {
+                const state = JSON.parse(saved);
+                resumeOffset = state.offset || 0;
+                fkxInfo = {
+                    chunks: state.chunks.split('\n').map(l => {
+                        const p = l.split(',');
+                        return { filename: p[0].trim(), size: parseInt(p[1]) || 0 };
+                    }),
+                    filename: state.filename
+                };
+                const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
+                document.getElementById('fileName').textContent = fkxInfo.filename;
+                document.getElementById('fileSize').textContent = formatSize(totalSize);
+                document.getElementById('resumeProgress').textContent = formatSize(resumeOffset);
+                document.getElementById('resumeRow').style.display = 'flex';
+                document.getElementById('downloadBtn').disabled = false;
+                document.getElementById('resumeBtn').classList.add('show');
+                return;
+            } catch (e) { sessionStorage.removeItem('fkx_resume'); }
+        }
+        parseFkxUrl(fkxParam);
     } else {
         showMessage('缺少文件参数');
     }
-    document.getElementById('downloadBtn').addEventListener('click', () => downloadAndMerge(0));
-    document.getElementById('cancelBtn').addEventListener('click', cancelDownload);
-    document.getElementById('resumeBtn').addEventListener('click', () => downloadAndMerge(resumeOffset));
+    document.getElementById('downloadBtn').addEventListener('click', () => startDownload(0));
+    document.getElementById('resumeBtn').addEventListener('click', () => startDownload(resumeOffset));
 });
 </script>
 </body>

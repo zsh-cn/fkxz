@@ -10,7 +10,8 @@ from requests.adapters import HTTPAdapter
 
 from cli.utils import (
     _clear_line_prefix, BROWSER_HEADERS, HAS_CURL_CFFI, curl_requests,
-    format_size, sanitize_filename, calculate_sha256, parse_fkx, print_progress
+    format_size, sanitize_filename, calculate_sha256, parse_fkx, print_progress,
+    SpeedTracker
 )
 
 
@@ -37,14 +38,22 @@ def download_fkx(url, session, enhanced, timeout=120):
         return None
 
 
-def _report_download_progress(downloaded, chunk_size, downloaded_before, total_size, start_time, current_chunk, num_chunks):
+def _report_download_progress(downloaded, chunk_size, downloaded_before, total_size, start_time, current_chunk, num_chunks, speed_tracker=None):
     total_downloaded = downloaded_before + downloaded
-    elapsed = time.time() - start_time
-    speed = total_downloaded / elapsed if elapsed > 0 else 0
+    if speed_tracker is not None:
+        speed_tracker.update(total_downloaded)
+        speed = speed_tracker.recent_speed()
+        if speed is None:
+            elapsed = time.time() - start_time
+            speed = total_downloaded / elapsed if elapsed > 0 else 0
+    else:
+        elapsed = time.time() - start_time
+        speed = total_downloaded / elapsed if elapsed > 0 else 0
     print_progress(total_downloaded, total_size,
                    prefix="下载: ",
                    percent_text=f"{format_size(total_downloaded)}/{format_size(total_size)}",
-                   suffix=f"{current_chunk + 1}/{num_chunks} | {format_size(int(speed))}/s")
+                   suffix=f"{current_chunk + 1}/{num_chunks}",
+                   speed=speed)
 
 
 def _validate_download_size(downloaded, chunk_size, chunk_path):
@@ -62,7 +71,7 @@ def _validate_download_size(downloaded, chunk_size, chunk_path):
 
 def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_referer, timeout=120,
                           downloaded_before=0, total_size=0, start_time=None,
-                          current_chunk=0, num_chunks=1):
+                          current_chunk=0, num_chunks=1, speed_tracker=None):
     headers = {}
     if enhanced:
         headers = dict(BROWSER_HEADERS)
@@ -86,7 +95,7 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
                 if chunk_size > 0 and downloaded[0] - last_report[0] >= 65536:
                     _report_download_progress(downloaded[0], chunk_size,
                                               downloaded_before, total_size, start_time,
-                                              current_chunk, num_chunks)
+                                              current_chunk, num_chunks, speed_tracker)
                     last_report[0] = downloaded[0]
 
             with open(chunk_path, 'wb') as f:
@@ -104,7 +113,7 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
                     if chunk_size > 0 and downloaded[0] - last_report[0] >= 65536:
                         _report_download_progress(downloaded[0], chunk_size,
                                                   downloaded_before, total_size, start_time,
-                                                  current_chunk, num_chunks)
+                                                  current_chunk, num_chunks, speed_tracker)
                         last_report[0] = downloaded[0]
 
         if not _validate_download_size(downloaded[0], chunk_size, chunk_path):
@@ -163,7 +172,7 @@ def _ask_retry_cli(prompt):
 
 def download_chunk(base_url, chunk_info, chunk_index, chunk_dir, session, enhanced, base_referer, timeout=120,
                    downloaded_before=0, total_size=0, start_time=None,
-                   num_chunks=1):
+                   num_chunks=1, speed_tracker=None):
     existing = _check_existing_chunk(chunk_dir, chunk_info)
     if existing:
         return True, existing
@@ -182,7 +191,7 @@ def download_chunk(base_url, chunk_info, chunk_index, chunk_dir, session, enhanc
     while True:
         success = download_chunk_stream(chunk_url, chunk_path, chunk_size, session, enhanced, base_referer,
                                         timeout, downloaded_before, total_size, start_time,
-                                        chunk_index, num_chunks)
+                                        chunk_index, num_chunks, speed_tracker)
         if success and os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
             return True, chunk_path
 
@@ -293,6 +302,7 @@ def cmd_download(args):
     downloaded_chunks = {}
     download_start_time = time.time()
     total_downloaded = 0
+    speed_tracker = SpeedTracker()
 
     i = 0
     while i < num_chunks:
@@ -300,7 +310,7 @@ def cmd_download(args):
         success, chunk_path = download_chunk(base_url, chunk_info, i, chunk_dir,
                                              session, enhanced, base_referer, timeout,
                                              total_downloaded, total_size, download_start_time,
-                                             num_chunks)
+                                             num_chunks, speed_tracker)
         if not success:
             sys.stdout.write(f"\n分片 {i+1} 下载失败\n")
             sys.stdout.flush()
@@ -334,16 +344,23 @@ def cmd_download(args):
     if 'sha256' in fkx_info and not getattr(args, 'skip_sha256', False):
         sys.stdout.write("正在校验SHA-256...\n")
         sys.stdout.flush()
+        verify_start = time.time()
         actual_sha256 = hashlib.sha256()
         sha256_bytes = [0]
+        last_report = [0.0]
         with open(output_path, 'rb') as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 actual_sha256.update(chunk)
                 sha256_bytes[0] += len(chunk)
-                if total_size > 0:
+                now = time.time()
+                if total_size > 0 and (now - last_report[0] >= 0.3 or sha256_bytes[0] >= total_size):
+                    last_report[0] = now
+                    elapsed = now - verify_start
+                    speed = sha256_bytes[0] / elapsed if elapsed > 0 else 0
                     print_progress(sha256_bytes[0], total_size,
                                    prefix="校验: ",
-                                   percent_text=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}")
+                                   percent_text=f"{format_size(sha256_bytes[0])}/{format_size(total_size)}",
+                                   speed=speed)
         sys.stdout.write("\n")
         sys.stdout.flush()
         if actual_sha256.hexdigest() != fkx_info['sha256']:

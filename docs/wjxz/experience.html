@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>在线体验</title>
-<meta name="description" content="在线体验文件分块下载，支持标准模式和 Service Worker 模式">
+<meta name="description" content="在线体验文件分块下载，使用 Service Worker 模式，浏览器端流式合并下载">
 <link rel="icon" href="../favicon.png" type="image/png">
 <link rel="stylesheet" href="../css/style.css">
 <style>
@@ -271,19 +271,6 @@
             </div>
 
             <div class="mode-grid">
-                <a class="mode-card" id="standardMode" href="#" target="_blank" rel="noopener">
-                    <div class="mode-icon"></div>
-                    <span class="mode-badge standard">稳定</span>
-                    <h3>标准模式</h3>
-                    <p class="mode-desc">纯前端实现，支持流式下载和实时进度显示。自动检测 File System Access API，支持取消下载。</p>
-                    <div class="mode-tag">
-                        <span>流式下载</span>
-                        <span>实时进度</span>
-                        <span>取消支持</span>
-                    </div>
-                    <span class="mode-action">开始体验 →</span>
-                </a>
-
                 <a class="mode-card" id="swMode" href="#" target="_blank" rel="noopener">
                     <div class="mode-icon"></div>
                     <span class="mode-badge sw">推荐</span>
@@ -300,12 +287,11 @@
 
             <div class="cors-notice">
                 <h3>跨域限制说明</h3>
-                <p>由于浏览器安全策略，两种模式对跨域资源有不同的限制：</p>
+                <p>由于浏览器安全策略，使用 Service Worker 模式有以下限制：</p>
                 <ul>
-                    <li><strong>标准模式</strong>：需要目标服务器返回 <code>Access-Control-Allow-Origin</code> 响应头。如果服务器未配置 CORS，将无法获取 .fkx 文件和分片数据。</li>
                     <li><strong>Service Worker 模式</strong>：通过 SW 代理请求，可以绕过部分 CORS 限制。但 <strong>首次访问</strong> 时 SW 可能尚未激活，可能需要刷新页面后重试。</li>
                     <li><strong>HTTPS 要求</strong>：Service Worker 模式必须在 HTTPS 环境下使用（localhost 除外）。</li>
-                    <li><strong>解决方案</strong>：如果遇到跨域问题，建议使用 <a href="../download.html">桌面版程序</a> 或部署 <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a> 作为代理。</li>
+                    <li><strong>解决方案</strong>：如果遇到跨域问题，建议使用 <a href="../download.html">桌面版程序</a>。</li>
                 </ul>
             </div>
         </div>
@@ -331,7 +317,6 @@
 <script>
 (function() {
     var urlInput = document.getElementById('fkxUrl');
-    var standardMode = document.getElementById('standardMode');
     var swMode = document.getElementById('swMode');
 
     function getFkxUrl() {
@@ -346,14 +331,10 @@
     function updateLinks() {
         var fkxUrl = getFkxUrl();
         if (fkxUrl) {
-            standardMode.href = 'index.html?fkx=' + encodeURIComponent(fkxUrl);
-            swMode.href = 'sw.html?fkx=' + encodeURIComponent(fkxUrl);
-            standardMode.classList.remove('disabled');
+            swMode.href = 'index.html?fkx=' + encodeURIComponent(fkxUrl);
             swMode.classList.remove('disabled');
         } else {
-            standardMode.href = '#';
             swMode.href = '#';
-            standardMode.classList.add('disabled');
             swMode.classList.add('disabled');
         }
     }

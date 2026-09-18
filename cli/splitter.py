@@ -1,12 +1,17 @@
 import os
 import sys
+import time
 import shutil
 from cli.utils import _clear_line_prefix, format_size, print_progress, calculate_sha256
 
 
-def _report_file_sha256_progress(processed, total):
+def _report_file_sha256_progress(processed, total, start_time=None):
     pct = min(processed / total * 100, 100) if total > 0 else 100
     line = f"{_clear_line_prefix()}    SHA-256: {format_size(processed)}/{format_size(total)} ({pct:.1f}%)"
+    if start_time is not None:
+        elapsed = time.time() - start_time
+        speed = processed / elapsed if elapsed > 0 else 0
+        line += f" | {format_size(int(speed))}/s"
     try:
         term_width = shutil.get_terminal_size().columns
         line = line.ljust(term_width)
@@ -100,9 +105,10 @@ def cmd_split(args):
 
         sys.stdout.write("正在计算文件SHA-256...\n")
         sys.stdout.flush()
+        _sha256_start = time.time()
         file_sha256 = calculate_sha256(
             file_path,
-            progress_callback=lambda p, t: _report_file_sha256_progress(p, t)
+            progress_callback=lambda p, t: _report_file_sha256_progress(p, t, _sha256_start)
         )
         sys.stdout.write("\n")
 

@@ -77,7 +77,7 @@
             </div>
             <div class="feature-card">
                 <h3>多端支持</h3>
-                <p>提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式</p>
+                <p>提供命令行工具（CLI）、独立 GUI 程序、网页端工具等多种使用方式</p>
             </div>
             <div class="feature-card">
                 <h3>跨平台</h3>
@@ -113,24 +113,12 @@
                 </ul>
             </div>
             <div class="platform-card">
-                <h3>聚合 GUI 程序</h3>
-                <p style="margin-bottom:10px;">Tkinter 现代化图形界面，采用侧边栏导航设计，集成文件分块与文件下载两大功能于一体。</p>
-                <ul>
-                    <li>侧边栏导航，两页无缝切换</li>
-                    <li>文件下载页面自动识别本地/远程模式</li>
-                    <li>实时分块进度 + 总进度 + 下载速度</li>
-                    <li>远程下载支持断点续传</li>
-                    <li>文件信息预览（文件名、大小、分片数）</li>
-                    <li>支持取消操作</li>
-                    <li>右键上下文菜单</li>
-                </ul>
-            </div>
-            <div class="platform-card">
                 <h3>独立 GUI 程序</h3>
-                <p style="margin-bottom:10px;">两个独立的 Tkinter 图形界面工具，分别专注于分块和下载/合并。</p>
+                <p style="margin-bottom:10px;">一个聚合程序与两个独立工具，满足不同使用场景。</p>
                 <ul>
-                    <li><strong>wjfk.py</strong>：文件分块</li>
-                    <li><strong>wjxz.py</strong>：文件下载</li>
+                    <li><strong>wjfkxz.exe</strong>：聚合程序，集成文件分块与文件下载，侧边栏一键切换</li>
+                    <li><strong>wjfk.exe</strong>：独立程序，功能为文件分块</li>
+                    <li><strong>wjxz.exe</strong>：独立程序，支持本地合并与远程下载（含增强模式）</li>
                     <li>支持本地模式和远程模式</li>
                     <li>SHA-256 完整性校验</li>
                     <li>断点续传：下载中断后分片保留</li>
@@ -141,9 +129,7 @@
                 <h3>网页端工具</h3>
                 <p style="margin-bottom:10px;">轻量级浏览器端工具，无需安装任何软件。</p>
                 <ul>
-                    <li><strong>index.html</strong>：浏览器端文件下载器</li>
-                    <li><strong>sw.js + sw.html</strong>：Service Worker 下载器</li>
-                    <li><strong>worker.js</strong>：Cloudflare Workers 后端</li>
+                    <li><strong>index.html + sw.js</strong>：Service Worker 下载器</li>
                     <li>纯前端实现，无需后端支持</li>
                     <li>支持流式下载和实时进度</li>
                 </ul>
@@ -199,15 +185,14 @@
 <span class="comment"># 安装依赖</span>
 <span class="cmd">pip install -r</span> <span class="path">requirements.txt</span>
 
-<span class="comment"># 启动聚合 GUI</span>
-<span class="cmd">python</span> <span class="path">app/main.py</span>
-
-<span class="comment"># 或使用 CLI</span>
+<span class="comment"># 使用 CLI</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
 
 <span class="comment"># 或使用独立 GUI</span>
 <span class="cmd">python</span> <span class="path">wjfk.py</span>
-<span class="cmd">python</span> <span class="path">wjxz.py</span></pre>
+<span class="cmd">python</span> <span class="path">wjxz.py</span>
+<span class="comment"># 或使用聚合 GUI</span>
+<span class="cmd">python</span> <span class="path">main.py</span></pre>
                 </div>
             </div>
 
@@ -265,7 +250,7 @@
                 <h3>GitHub Issues</h3>
                 <p style="margin-bottom:4px;">提交 Issue 时请尽量提供以下信息：</p>
                 <ul style="list-style:none;padding:0;font-size:13px;color:var(--text-secondary);line-height:2;">
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / wjfkxz.exe / wjfk.exe / wjxz.exe 或源码运行）</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / wjfk.exe / wjxz.exe 或源码运行）</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统版本</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>问题的详细描述和复现步骤</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>相关的错误信息或截图</li>

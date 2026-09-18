@@ -8,7 +8,7 @@
 - **文件下载**：支持本地 `.fkx` 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验
 - **断点续传**：远程下载中断后已下载的分片自动保留，重新下载时自动跳过已完整下载的分片（大小 + SHA-256 校验），仅下载缺失分片，无需从头开始
 - **增强模式**：集成 `curl_cffi` 浏览器模拟，可模拟 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-\* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护
-- **多端支持**：提供命令行工具（CLI）、聚合 GUI 程序（集成侧边栏）、独立 GUI 程序、网页端工具等多种使用方式
+- **多端支持**：提供命令行工具（CLI）、独立 GUI 程序、网页端工具等多种使用方式
 - **跨平台**：Python 工具支持 Windows / Linux / macOS；网页端工具支持所有现代浏览器
 - **实时进度**：终端进度条 / GUI 进度条，实时显示分块进度、总进度和下载速度
 - **自动清理**：远程下载完成后自动清理临时分片文件
@@ -32,24 +32,6 @@ fkxz/
 │   ├── merger.py                  # merge 命令实现
 │   └── downloader.py              # download 命令实现
 │
-├── app/                           # 聚合 GUI 应用 (Tkinter, 带侧边栏导航)
-│   ├── main.py                    # GUI 入口，集成文件分块与文件下载两大功能
-│   ├── theme.py                   # 主题配色常量
-│   ├── core/                      # 核心业务逻辑
-│   │   ├── __init__.py
-│   │   ├── base_worker.py         # Worker 基类（线程管理）
-│   │   ├── splitter.py            # 文件分块核心逻辑
-│   │   └── downloader.py          # 文件下载核心逻辑（本地合并+远程下载）
-│   ├── ui/                        # 图形界面组件
-│   │   ├── __init__.py
-│   │   ├── base_page.py           # 页面基类（通用 UI 布局）
-│   │   ├── sidebar.py             # 侧边栏导航
-│   │   ├── splitter_page.py       # 文件分块页面
-│   │   └── downloader_page.py     # 文件下载页面（本地合并+远程下载）
-│   └── utils/                     # 工具函数
-│       ├── __init__.py
-│       └── helpers.py             # 文件格式化、校验、FKX 解析、自定义组件
-│
 ├── icon/                          # 图标资源
 │   ├── wjfk.ico                   # 文件分块图标（.ico 用于打包程序图标）
 │   ├── wjfk.png                   # 文件分块图标（.png 用于窗口、任务栏图标）
@@ -61,10 +43,8 @@ fkxz/
 │
 ├── web/                           # 网页端工具
 │   ├── favicon.png                # 网站图标
-│   ├── index.html                 # 网页端文件下载器
-│   ├── sw.html                    # Service Worker 下载器页面
-│   ├── sw.js                      # Service Worker 脚本
-│   └── worker.js                  # Cloudflare Workers 脚本
+│   ├── index.html                 # Service Worker 下载器页面
+│   └── sw.js                      # Service Worker 脚本
 │
 ├── docs/                          # 项目官网 (GitHub Pages)
 │   ├── index.html                 # 官网主页
@@ -87,6 +67,7 @@ fkxz/
 │
 ├── wjfk.py                        # 独立文件分块程序 (GUI)
 ├── wjxz.py                        # 独立文件合并/下载程序 (GUI, 支持增强模式)
+├── main.py                        # 聚合程序，集成文件分块与文件下载 (GUI)
 ├── pyproject.toml                 # 项目元数据与构建配置
 ├── requirements.txt               # Python 依赖（兼容传统 pip install -r）
 ├── LICENSE                        # MPL 2.0 许可证
@@ -97,12 +78,12 @@ fkxz/
 
 如果您不想安装 Python 环境，可以直接下载已打包好的 Windows 可执行程序（`.exe`），开箱即用。
 
-前往 [Releases 页面](https://github.com/zsh-cn/fkxz/releases) 下载最新版本，或访问 [项目官网](https://zsh-cn.github.io/fkxz/) 查看各版本信息和在线体验。提供以下四个独立的可执行程序：
+前往 [Releases 页面](https://github.com/zsh-cn/fkxz/releases) 下载最新版本，或访问 [项目官网](https://zsh-cn.github.io/fkxz/) 查看各版本信息和在线体验。提供以下可执行程序：
 
 | 程序 | 文件名 | 说明 |
 |------|--------|------|
 | 命令行工具 | `cli.exe` | 命令行版，支持 split / merge / download 命令 |
-| 文件分块下载 | `wjfkxz.exe` | 集成侧边栏导航的图形界面，包含文件分块与文件下载两大功能 |
+| 文件分块下载 | `wjfkxz.exe` | 聚合程序，集成文件分块与文件下载，侧边栏一键切换 |
 | 文件分块 | `wjfk.exe` | 独立程序，功能为文件分块 |
 | 文件下载 | `wjxz.exe` | 独立程序，支持本地合并与远程下载（含增强模式） |
 
@@ -192,27 +173,20 @@ cli.exe download -u "https://example.com/files/video.mp4.fkx" -o "D:\output" -s
 
 ### wjfkxz.exe — 文件分块下载
 
-`wjfkxz.exe` 是集成式图形界面，采用侧边栏导航设计，将文件分块与文件下载两大功能整合在一个窗口中。
+`wjfkxz.exe` 是聚合程序，集成文件分块与文件下载两大功能，通过侧边栏一键切换。
 
 #### 启动
 
-双击 `wjfkxz.exe` 即可启动，无需任何命令行参数。
+双击 `wjfkxz.exe` 即可启动。
 
-#### 界面功能
+#### 使用步骤
 
-- **文件分块**：选择文件 → 设置输出目录 → 调整分片大小（1-1024 MB）→ 点击"开始分块"
-- **文件下载**：输入 `.fkx` 文件 URL 或选择本地 `.fkx` 文件→ 设置输出目录 → 可选启用增强模式/SHA-256检验 → 点击"开始下载"/"开始合并"
+1. 启动后左侧边栏显示"文件分块"和"文件下载"两个功能入口
+2. 点击"文件分块"进入分块界面，操作同 `wjfk.exe`
+3. 点击"文件下载"进入下载界面，操作同 `wjxz.exe`
+4. 无需开启多个窗口，在侧边栏即可随时切换
 
-#### 特性
-
-- 侧边栏一键切换功能页面
-- 文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 `.fk` 分片，远程模式自动下载分片后合并
-- 实时分块进度 + 总进度 + 下载速度显示
-- 远程下载支持断点续传：中断后分片保留，重新下载自动跳过已下载分片（大小 + SHA-256 检验）
-- 文件信息预览（文件名、大小、分片数）
-- 支持取消操作
-- HiDPI 高 DPI 自适应
-- 右键菜单（剪切/复制/粘贴/全选）
+各功能的详细操作请参考下方 `wjfk.exe` 和 `wjxz.exe` 的使用说明。
 
 ---
 
@@ -307,7 +281,9 @@ python -m venv .venv        # 创建虚拟环境（可选）
 .venv\Scripts\activate      # Windows
 # source .venv/bin/activate  # Linux / macOS
 pip install -r requirements.txt
-python app/main.py             # 启动 GUI
+python wjfk.py                 # 启动分块 GUI
+python wjxz.py                 # 启动下载 GUI
+python main.py                 # 启动聚合 GUI
 ```
 
 ### 方式三：直接下载 exe（无需 Python 环境）
@@ -334,26 +310,14 @@ python app/main.py             # 启动 GUI
 - 下载完成后自动清理临时文件
 - 支持断点续传：分片保存在本地分片目录，中断后重新下载自动跳过已下载分片
 
-### 聚合 GUI 程序 — `app/main.py`
-
-Tkinter 现代化图形界面，采用侧边栏导航设计，集成两大功能于一体：
-
-- **文件分块**：选择文件 → 设置分片大小 → 一键分块，生成 `.fk` 分片和 `.fkx` 信息文件
-- **文件下载**：输入 `.fkx` 文件 URL 或选择本地 `.fkx` 文件（自动识别本地/远程模式）→ 可选增强模式 → 下载/合并分片并还原
-
-**特性：**
-- 侧边栏导航，两页无缝切换
-- 文件下载页面自动识别本地/远程模式，本地模式自动合并同目录下 `.fk` 分片，远程模式自动下载分片后合并
-- 自定义圆角进度条和按钮组件，现代化视觉风格
-- HiDPI 高 DPI 自适应（Windows）
-- 实时分块进度 + 总进度 + 下载速度显示
-- 远程模式支持 curl_cffi 浏览器模拟（绕过反爬虫）
-- 远程下载支持断点续传（分片保留，重新下载自动跳过已下载分片）
-- 文件信息预览（文件名、大小、分片数）
-- 支持取消操作
-- 右键菜单（剪切/复制/粘贴/全选）
-
 ### 独立 GUI 工具
+
+#### main.py — 聚合程序
+
+Tkinter 图形界面，集成文件分块与文件下载两大功能，通过侧边栏实现功能切换。
+
+- 左侧边栏持久化显示"文件分块"和"文件下载"两个功能入口
+- 点击侧边栏按钮即可在两项功能之间切换，无需开启多个窗口
 
 #### wjfk.py — 文件分块
 
@@ -377,33 +341,14 @@ Tkinter 图形界面，读取 `.fkx` 信息文件，获取所有分片并合并�
 
 ### 网页端工具 — `web/`
 
-#### worker.js — Cloudflare Workers 后端
-
-部署在 Cloudflare Workers 上的 HTTP 服务，接收 `?fkx=` 参数，流式合并分片并提供直链下载。
-
-- 自动解析 `.fkx` 文件获取分片列表
-- 使用 `FixedLengthStream` 流式合并
-- 自动设置 `Content-Disposition` 触发浏览器下载
-- 支持跨域（CORS）
-- 注：此脚本不适用于大文件
-
-#### index.html — 网页端文件下载器
-
-轻量级的浏览器端文件下载器，支持通过 URL 参数直接解析 `.fkx` 文件并下载合并后的完整文件。
-
-- 纯前端实现，无需后端支持
-- 支持流式下载和实时进度显示
-- 自动检测并使用 File System Access API（现代浏览器）
-- 支持回退到传统下载方式
-- 注：此网页不支持跨域下载
-#### sw.js + sw.html — Service Worker 下载器
+#### sw.js + index.html — Service Worker 下载器
 
 基于 Service Worker 的浏览器端文件下载器，通过 SW 拦截请求并在浏览器端流式合并分片后返回完整文件。
 
 - **sw.js**：Service Worker 脚本，拦截 `/fkxz` 路径的请求，解析 `.fkx` 文件获取分片列表，逐个抓取 `.fk` 分片并通过 `ReadableStream` 流式合并，最终以单个文件形式返回给浏览器下载。
-- **sw.html**：配套前端页面，自动注册 Service Worker，解析 `.fkx` 文件并展示文件信息，点击下载按钮后通过 SW 代理完成流式合并下载。
+- **index.html**：配套前端页面，自动注册 Service Worker，解析 `.fkx` 文件并展示文件信息，点击下载按钮后通过 SW 代理完成流式合并下载。
 
-相比 `index.html`，Service Worker 方案的优势在于：
+Service Worker 方案的优势在于：
 - 无需 File System Access API，兼容性更好
 - 合并过程在 SW 后台线程完成，不阻塞主线程
 - 直接触发浏览器原生下载行为，用户体验更流畅
@@ -470,16 +415,6 @@ python cli/main.py download -u https://example.com/files/video.mp4.fkx -o ./outp
 - `-t, --timeout`：请求超时时间（秒），默认 120（可选）
 - `-s, --skip-sha256`：跳过SHA-256校验（可选）
 
-### 聚合 GUI 程序
-
-```bash
-python app/main.py
-```
-
-启动后通过左侧导航栏切换功能：
-- **文件分块**：选择文件、输出目录和分片大小，点击"开始分块"
-- **文件下载**：选择 `.fkx` 信息文件或输入 `.fkx` 文件 URL、选择输出目录，可选启用增强模式/SHA-256检验，点击"开始下载"
-
 ### 独立 GUI 工具
 
 #### 分块文件
@@ -500,28 +435,22 @@ python wjxz.py
 
 在输入框中填入 `.fkx` 文件的本地路径或完整 URL，选择输出目录。界面默认勾选**增强模式**（使用 curl_cffi 浏览器模拟以绕过反爬虫），和**启用SHA-256检验**。可根据需要取消勾选切换为标准模式/跳过SHA-256检验。点击"开始合并"（本地）或"开始下载"（远程）。
 
+#### 聚合程序（分块 + 下载）
+
+```bash
+python main.py
+```
+
+启动后左侧边栏显示"文件分块"和"文件下载"两个功能入口，点击侧边栏按钮即可切换。无需开启多个窗口。
+
 ### 网页端方式
 
-#### 方式一：使用 Cloudflare Workers
-
-1. 部署 `web/worker.js` 到 Cloudflare Workers
-2. 访问 `https://your-worker.workers.dev/?fkx=https://example.com/file.fkx`
-
-#### 方式二：使用网页端下载器
-
-1. 将 `web/index.html` 部署到任意静态文件服务器
+1. 将 `web/index.html` 和 `web/sw.js` 部署到同一目录下的静态文件服务器
 2. 通过 URL 参数提供 `.fkx` 文件地址：
    `https://your-domain.com/index.html?fkx=https://example.com/file.fkx`
-- 使用时应注意浏览器跨域限制
-
-#### 方式三：使用 Service Worker 下载器
-
-1. 将 `web/sw.html` 和 `web/sw.js` 部署到同一目录下的静态文件服务器
-2. 通过 URL 参数提供 `.fkx` 文件地址：
-   `https://your-domain.com/sw.html?fkx=https://example.com/file.fkx`
 3. 页面自动解析文件信息，点击"下载"按钮即可触发 SW 流式合并下载
 - 要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）
-- `sw.js` 必须与 `sw.html` 同源部署
+- `sw.js` 必须与 `index.html` 同源部署
 
 ## 环境要求
 
@@ -530,7 +459,6 @@ python wjxz.py
 | 组件 | 最低版本 | 依赖 |
 |------|---------|------|
 | CLI 工具 (`cli/`) | Python 3.8+ | `requests` |
-| 聚合 GUI (`app/`) | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
 | 独立 GUI | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
 | 增强模式 | Python 3.8+ | `requests` + `curl_cffi` |
 
@@ -547,10 +475,6 @@ pip install -r requirements.txt
 
 - `requests`：HTTP 请求库（必需）
 - `curl_cffi`：浏览器模拟库（可选，用于增强模式绕过反爬虫）
-
-### Cloudflare Workers（可选）
-
-- Cloudflare Workers 账户
 
 ### 网页端
 
@@ -603,17 +527,6 @@ pyinstaller --onefile --console --name cli --icon icon/wjfkxz-cli.ico cli/main.p
 - `--name cli`：输出文件名为 `cli.exe`
 - `--icon icon/wjfkxz-cli.ico`：设置 exe 程序图标
 
-#### 打包 wjfkxz.exe（聚合 GUI 程序）
-
-```bash
-pyinstaller --onefile --windowed --name wjfkxz --icon icon/wjfkxz.ico --add-data "icon;icon" --add-data "app;app" app/main.py
-```
-
-- `--windowed`：窗口程序（不显示命令行窗口）
-- `--icon icon/wjfkxz.ico`：设置 exe 程序图标
-- `--add-data "app;app"`：将 app 模块打包进去
-- 任务栏/窗口图标：`icon/wjfkxz.png`（通过 `--add-data` 打包，程序运行时自动加载）
-
 #### 打包 wjfk.exe（文件分块）
 
 ```bash
@@ -622,6 +535,16 @@ pyinstaller --onefile --windowed --name wjfk --icon icon/wjfk.ico --add-data "ic
 
 - `--icon icon/wjfk.ico`：设置 exe 程序图标
 - 任务栏/窗口图标：`icon/wjfk.png`（通过 `--add-data` 打包，程序运行时自动加载）
+
+#### 打包 wjfkxz.exe（聚合程序）
+
+```bash
+pyinstaller --onefile --windowed --name wjfkxz --icon icon/wjfkxz.ico --add-data "icon;icon" main.py
+```
+
+- `--icon icon/wjfkxz.ico`：设置 exe 程序图标
+- `--add-data "icon;icon"`：打包图标资源（窗口/任务栏图标 `icon/wjfkxz.png`）
+- `wjfk.py`、`wjxz.py` 的导入由 PyInstaller 自动分析并打包，无需额外配置
 
 #### 打包 wjxz.exe（文件下载）
 
@@ -638,7 +561,6 @@ pyinstaller --onefile --windowed --name wjxz --icon icon/wjxz.ico --add-data "ic
 - 打包后的 exe 文件位于 `dist/` 目录下
 - 如果增强模式打包失败或运行时不可用，程序会自动回退到标准 `requests` 模式
 - 建议在打包前先执行 `pip install -r requirements.txt` 和 `pip install ".[enhanced]"` 确保所有依赖已安装
-- 对于 `wjfkxz.exe`，请确保 `app/` 目录及其子模块（`core/`、`ui/`、`utils/`）均被正确包含
 
 ## 问题反馈
 
