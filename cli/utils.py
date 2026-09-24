@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import shutil
 import hashlib
 from typing import Any
 
@@ -61,7 +60,7 @@ def calculate_sha256(file_path, progress_callback=None):
 
 
 def _clear_line_prefix():
-    return "\r"
+    return "\r\033[K"
 
 
 def print_progress(current, total, prefix="", suffix="", percent_text=None, speed=None):
@@ -76,11 +75,6 @@ def print_progress(current, total, prefix="", suffix="", percent_text=None, spee
         line += f" | {format_size(int(speed))}/s"
     if suffix:
         line += f" {suffix}"
-    try:
-        term_width = shutil.get_terminal_size().columns
-        line = line.ljust(term_width)
-    except Exception:
-        line = line + " " * 20
     sys.stdout.write(line)
     sys.stdout.flush()
 

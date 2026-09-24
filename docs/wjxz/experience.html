@@ -184,6 +184,16 @@
     background: #dbeafe;
 }
 
+.url-input-row .btn {
+    white-space: nowrap;
+    min-width: 120px;
+}
+
+.url-input-row .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* CORS Notice */
 .cors-notice {
     background: #fff7ed;
@@ -260,29 +270,15 @@
     <section class="exp-section">
         <div class="container">
             <h1 class="exp-title">在线体验</h1>
-            <p class="exp-subtitle">选择一种模式，体验浏览器端文件下载</p>
+            <p class="exp-subtitle">输入 .fkx 文件地址，开始体验浏览器端文件下载</p>
 
             <div class="url-box">
                 <label for="fkxUrl">请输入 .fkx 文件地址</label>
                 <div class="url-input-row">
                     <input type="text" id="fkxUrl" placeholder="https://example.com/files/video.mp4.fkx" autocomplete="off">
+                    <button class="btn btn-primary" id="startDownloadBtn">开始下载</button>
                 </div>
-                <p class="url-hint">输入一个 .fkx 信息文件的完整 URL，然后选择下方的下载模式开始体验</p>
-            </div>
-
-            <div class="mode-grid">
-                <a class="mode-card" id="swMode" href="#" target="_blank" rel="noopener">
-                    <div class="mode-icon"></div>
-                    <span class="mode-badge sw">推荐</span>
-                    <h3>Service Worker 模式</h3>
-                    <p class="mode-desc">基于 Service Worker 拦截请求并流式合并分片。兼容性更好，不阻塞主线程，直接触发浏览器原生下载。</p>
-                    <div class="mode-tag">
-                        <span>SW 代理</span>
-                        <span>绕过 CORS</span>
-                        <span>原生下载</span>
-                    </div>
-                    <span class="mode-action">开始体验 →</span>
-                </a>
+                <p class="url-hint">输入一个 .fkx 信息文件的完整 URL，然后点击「开始下载」在新标签页中开始体验</p>
             </div>
 
             <div class="cors-notice">
@@ -317,7 +313,7 @@
 <script>
 (function() {
     var urlInput = document.getElementById('fkxUrl');
-    var swMode = document.getElementById('swMode');
+    var downloadBtn = document.getElementById('startDownloadBtn');
 
     function getFkxUrl() {
         var val = urlInput.value.trim();
@@ -328,18 +324,24 @@
         return val;
     }
 
-    function updateLinks() {
+    function updateButton() {
         var fkxUrl = getFkxUrl();
         if (fkxUrl) {
-            swMode.href = 'index.html?fkx=' + encodeURIComponent(fkxUrl);
-            swMode.classList.remove('disabled');
+            downloadBtn.disabled = false;
         } else {
-            swMode.href = '#';
-            swMode.classList.add('disabled');
+            downloadBtn.disabled = true;
         }
     }
 
-    urlInput.addEventListener('input', updateLinks);
+    downloadBtn.addEventListener('click', function() {
+        var fkxUrl = getFkxUrl();
+        if (fkxUrl) {
+            var targetUrl = 'index.html?fkx=' + encodeURIComponent(fkxUrl);
+            window.open(targetUrl, '_blank');
+        }
+    });
+
+    urlInput.addEventListener('input', updateButton);
 
     var saved = sessionStorage.getItem('fkxz_experience_url');
     if (saved) {
@@ -349,7 +351,7 @@
         sessionStorage.setItem('fkxz_experience_url', urlInput.value);
     });
 
-    updateLinks();
+    updateButton();
 })();
 </script>
 

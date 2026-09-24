@@ -48,9 +48,11 @@ let fkxInfo = null, baseUrl = '', resumeOffset = 0;
 let _fkxParam = null;
 
 function formatSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const k = 1024;
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), units.length - 1);
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
 }
 
 function getBaseUrl(url) {
@@ -115,6 +117,17 @@ function startDownload(offset) {
     btn.disabled = true;
     resumeBtn.disabled = true;
 
+    const onSwMessage = (event) => {
+        if (event.data && event.data.type === 'download-started') {
+            navigator.serviceWorker.removeEventListener('message', onSwMessage);
+            btn.disabled = false;
+            resumeBtn.disabled = false;
+            const iframe = document.getElementById('downloadFrame');
+            if (iframe && iframe.parentNode) iframe.remove();
+        }
+    };
+    navigator.serviceWorker.addEventListener('message', onSwMessage);
+
     const fkxUrl = /^https?:\/\//i.test(_fkxParam) ? _fkxParam : new URL(_fkxParam, window.location.href).href;
     const absoluteFkxUrl = new URL(fkxUrl, window.location.origin + window.location.pathname).href;
     const downloadUrl = new URL('./fkxz', window.location.href);
@@ -122,17 +135,21 @@ function startDownload(offset) {
     if (offset > 0) downloadUrl.searchParams.set('resume', String(offset));
 
     const iframe = document.createElement('iframe');
+    iframe.id = 'downloadFrame';
     iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;';
     document.body.appendChild(iframe);
 
     iframe.src = downloadUrl.href;
 
     showMessage('下载已开始，请查看浏览器下载栏');
+
     setTimeout(() => {
+        navigator.serviceWorker.removeEventListener('message', onSwMessage);
         btn.disabled = false;
         resumeBtn.disabled = false;
-        if (iframe.parentNode) iframe.remove();
-    }, 5000);
+        const frame = document.getElementById('downloadFrame');
+        if (frame && frame.parentNode) frame.remove();
+    }, 10000);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {

@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import shutil
 from cli.utils import _clear_line_prefix, format_size, print_progress, calculate_sha256
 
 
@@ -12,11 +11,6 @@ def _report_file_sha256_progress(processed, total, start_time=None):
         elapsed = time.time() - start_time
         speed = processed / elapsed if elapsed > 0 else 0
         line += f" | {format_size(int(speed))}/s"
-    try:
-        term_width = shutil.get_terminal_size().columns
-        line = line.ljust(term_width)
-    except Exception:
-        line = line + " " * 10
     sys.stdout.write(line)
     sys.stdout.flush()
 
@@ -58,7 +52,7 @@ def cmd_split(args):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    file_name = os.path.basename(file_path)
+    file_name = args.target_name if args.target_name else os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
     num_chunks = max(1, (file_size + chunk_size - 1) // chunk_size)
 

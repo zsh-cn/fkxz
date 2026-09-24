@@ -59,7 +59,7 @@ def _report_download_progress(downloaded, chunk_size, downloaded_before, total_s
 def _validate_download_size(downloaded, chunk_size, chunk_path):
     if chunk_size > 0 and downloaded != chunk_size:
         sys.stdout.write(
-            f"\r    警告: 下载大小不匹配 "
+            f"\r\033[K    警告: 下载大小不匹配 "
             f"(期望 {format_size(chunk_size)}, 实际 {format_size(downloaded)})\n"
         )
         sys.stdout.flush()
@@ -129,12 +129,6 @@ def download_chunk_stream(url, chunk_path, chunk_size, session, enhanced, base_r
 def _report_sha256_progress(processed, total):
     pct = min(processed / total * 100, 100) if total > 0 else 100
     line = f"{_clear_line_prefix()}    校验中... {format_size(processed)}/{format_size(total)} ({pct:.1f}%)"
-    try:
-        import shutil
-        term_width = shutil.get_terminal_size().columns
-        line = line.ljust(term_width)
-    except Exception:
-        line = line + " " * 10
     sys.stdout.write(line)
     sys.stdout.flush()
 
@@ -153,7 +147,7 @@ def _check_existing_chunk(chunk_dir, chunk_info):
             chunk_path,
             progress_callback=lambda p, t: _report_sha256_progress(p, t)
         )
-        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.write("\r\033[K")
         sys.stdout.flush()
         if actual_sha256 == chunk_info['sha256']:
             return chunk_path
@@ -312,13 +306,9 @@ def cmd_download(args):
                                              total_downloaded, total_size, download_start_time,
                                              num_chunks, speed_tracker)
         if not success:
-            sys.stdout.write(f"\n分片 {i+1} 下载失败\n")
+            sys.stdout.write(f"下载已中断（分片已保留在: {chunk_dir}）\n")
             sys.stdout.flush()
-            if not _ask_retry_cli("是否从失败处继续下载？"):
-                sys.stdout.write(f"下载已中断（分片已保留在: {chunk_dir}）\n")
-                sys.stdout.flush()
-                sys.exit(1)
-            continue
+            sys.exit(1)
 
         downloaded_chunks[i] = chunk_path
         total_downloaded += chunk_info['size']

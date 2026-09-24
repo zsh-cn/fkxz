@@ -133,6 +133,8 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
             'Accept-Ranges': 'bytes'
         };
 
+        notifyDownloadStarted();
+
         if (isRangeRequest || resumeOffset > 0) {
             headers['Content-Range'] = `bytes ${rangeStart}-${rangeEnd}/${totalSize}`;
             headers['Content-Length'] = String(rangeLength);
@@ -174,4 +176,10 @@ function getBaseUrl(url) {
     const pathParts = parsed.pathname.split('/');
     pathParts.pop();
     return parsed.origin + pathParts.join('/') + '/';
+}
+
+function notifyDownloadStarted() {
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'download-started' }));
+    });
 }

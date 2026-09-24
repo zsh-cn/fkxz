@@ -16,8 +16,8 @@ class FileSplitterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("文件分块")
-        self.root.geometry("650x380")
-        self.root.minsize(650, 380)
+        self.root.geometry("700x420")
+        self.root.minsize(700, 420)
         self.root.resizable(True, True)
 
         if getattr(sys, 'frozen', False):
@@ -30,6 +30,7 @@ class FileSplitterApp:
         
         self.file_path = ""
         self.output_dir = ""
+        self.target_name = ""
         self.chunk_size = 10 * 1024 * 1024
         self.split_thread = None
         self.is_cancelled = False
@@ -124,16 +125,22 @@ class FileSplitterApp:
         self.output_browse_btn.grid(row=1, column=2, pady=5)
         self._setup_context_menu(self.output_entry)
         
-        ttk.Label(input_frame, text="分片大小(MB):").grid(row=2, column=0, sticky=tk.E, pady=5)
+        ttk.Label(input_frame, text="目标文件名:").grid(row=2, column=0, sticky=tk.E, pady=5)
+        self.target_name_entry = ttk.Entry(input_frame)
+        self.target_name_entry.grid(row=2, column=1, padx=10, pady=5, sticky=tk.EW, ipady=2)
+        ttk.Label(input_frame, text="(可选，不填则使用源文件名)").grid(row=2, column=2, sticky=tk.W, pady=5)
+        self._setup_context_menu(self.target_name_entry)
+        
+        ttk.Label(input_frame, text="分片大小(MB):").grid(row=3, column=0, sticky=tk.E, pady=5)
         self.chunk_size_var = tk.IntVar(value=10)
         self.chunk_spinbox = ttk.Spinbox(input_frame, from_=1, to=1024, textvariable=self.chunk_size_var, width=10)
-        self.chunk_spinbox.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
+        self.chunk_spinbox.grid(row=3, column=1, padx=10, pady=5, sticky=tk.W)
         self._setup_context_menu(self.chunk_spinbox)
         self.chunk_spinbox.bind('<KeyRelease>', self._schedule_file_info_update)
         self.chunk_spinbox.bind('<<Increment>>', self._schedule_file_info_update)
         self.chunk_spinbox.bind('<<Decrement>>', self._schedule_file_info_update)
         
-        ttk.Label(input_frame, text="(范围: 1-1024 MB)").grid(row=2, column=2, sticky=tk.W, pady=5)
+        ttk.Label(input_frame, text="(范围: 1-1024 MB)").grid(row=3, column=2, sticky=tk.W, pady=5)
         
         control_frame = ttk.LabelFrame(main_frame, text="分块状态", padding="10")
         control_frame.pack(fill=tk.X, pady=5)
@@ -162,11 +169,17 @@ class FileSplitterApp:
         if self.file_path and os.path.isfile(self.file_path):
             self.progress['value'] = 0
             self.status_label.config(text="状态: 就绪", foreground="#333333")
+            self._update_target_name_from_file()
             self._schedule_file_info_update()
         elif not self.file_path:
             self.progress['value'] = 0
             self.status_label.config(text="状态: 就绪", foreground="#333333")
             self.file_info_label.config(text="")
+
+    def _update_target_name_from_file(self):
+        base_name = os.path.basename(self.file_path)
+        self.target_name_entry.delete(0, tk.END)
+        self.target_name_entry.insert(0, base_name)
 
     def _schedule_file_info_update(self, event=None):
         if hasattr(self, '_update_after_id'):
@@ -205,6 +218,7 @@ class FileSplitterApp:
             self.status_label.config(text="状态: 就绪", foreground="#333333")
             
             if os.path.exists(file_path):
+                self._update_target_name_from_file()
                 self._update_file_info()
             else:
                 self.file_info_label.config(text="")
@@ -267,6 +281,9 @@ class FileSplitterApp:
         else:
             self.output_dir = ""
 
+        entry_target = self.target_name_entry.get().strip()
+        self.target_name = entry_target if entry_target else ""
+
         if not self.file_path:
             self.update_status("状态: 请选择要分块的文件", foreground="#cc0000")
             return None
@@ -297,7 +314,7 @@ class FileSplitterApp:
                 self.update_status(f"状态: 无法创建输出目录: {str(e)}", foreground="#cc0000")
                 return None
         
-        file_name = os.path.basename(self.file_path)
+        file_name = self.target_name if self.target_name else os.path.basename(self.file_path)
         file_size = os.path.getsize(self.file_path)
         num_chunks = (file_size + self.chunk_size - 1) // self.chunk_size
         return (file_name, file_size, num_chunks)
@@ -388,6 +405,7 @@ class FileSplitterApp:
         self.file_browse_btn.config(state=tk.DISABLED)
         self.output_entry.config(state=tk.DISABLED)
         self.output_browse_btn.config(state=tk.DISABLED)
+        self.target_name_entry.config(state=tk.DISABLED)
         self.chunk_spinbox.config(state=tk.DISABLED)
         self.is_cancelled = False
 
@@ -434,6 +452,7 @@ class FileSplitterApp:
         self.file_browse_btn.config(state=tk.NORMAL)
         self.output_entry.config(state=tk.NORMAL)
         self.output_browse_btn.config(state=tk.NORMAL)
+        self.target_name_entry.config(state=tk.NORMAL)
         self.chunk_spinbox.config(state=tk.NORMAL)
 
 if __name__ == "__main__":
@@ -467,7 +486,7 @@ if __name__ == "__main__":
     if scale_factor > 1.5:
         root.update_idletasks()
         req_width = max(650, root.winfo_reqwidth())
-        req_height = max(380, root.winfo_reqheight())
+        req_height = max(420, root.winfo_reqheight())
         root.geometry(f"{req_width}x{req_height}")
     
     root.mainloop()
