@@ -15,8 +15,8 @@
 
 项目官网提供了项目介绍、下载页面、在线体验和文档页面，欢迎访问：
 
-- **主站**：[https://zsh-cn.github.io/fkxz/](https://zsh-cn.github.io/fkxz/)
-- **备用站**：[https://fkxz.zhshh.cn](https://fkxz.zhshh.cn)
+- **主站**：[https://fkxz.zhshh.cn](https://fkxz.zhshh.cn)
+- **备用站**：[https://zsh-cn.github.io/fkxz/](https://zsh-cn.github.io/fkxz/)
 
 ## 项目结构
 
@@ -74,7 +74,7 @@ fkxz/
 
 如果您不想安装 Python 环境，可以直接下载已打包的 Windows 可执行程序（`.exe`），开箱即用。
 
-前往 [Releases 页面](https://github.com/zsh-cn/fkxz/releases) 下载最新版本，或访问 [项目官网](https://zsh-cn.github.io/fkxz/) 通过备用源下载程序和在线使用网页版下载fkx文件。提供以下可执行程序：
+前往 [Releases 页面](https://github.com/zsh-cn/fkxz/releases) 下载最新版本，或访问 [项目官网](https://fkxz.zhshh.cn) 通过备用源下载程序和在线使用网页版下载fkx文件。提供以下可执行程序：
 
 | 类型 | 文件名 | 说明 |
 |------|--------|------|
