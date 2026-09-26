@@ -125,7 +125,7 @@ class FileSplitterApp:
         self.output_browse_btn.grid(row=1, column=2, pady=5)
         self._setup_context_menu(self.output_entry)
         
-        ttk.Label(input_frame, text="目标文件名:").grid(row=2, column=0, sticky=tk.E, pady=5)
+        ttk.Label(input_frame, text="输出文件名:").grid(row=2, column=0, sticky=tk.E, pady=5)
         self.target_name_entry = ttk.Entry(input_frame)
         self.target_name_entry.grid(row=2, column=1, padx=10, pady=5, sticky=tk.EW, ipady=2)
         ttk.Label(input_frame, text="(可选，不填则使用源文件名)").grid(row=2, column=2, sticky=tk.W, pady=5)

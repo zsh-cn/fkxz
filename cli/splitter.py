@@ -52,7 +52,7 @@ def cmd_split(args):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    file_name = args.target_name if args.target_name else os.path.basename(file_path)
+    file_name = args.output_name if args.output_name else os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
     num_chunks = max(1, (file_size + chunk_size - 1) // chunk_size)
 

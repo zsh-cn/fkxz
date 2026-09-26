@@ -65,7 +65,7 @@
             </div>
             <div class="feature-card">
                 <h3>文件下载</h3>
-                <p>支持本地 <code>.fkx</code> 合并还原与远程 URL 下载分片合并，自动识别输入类型，支持 SHA-256 完整性校验</p>
+                <p>支持本地 <code>.fkx</code> 合并还原与远程 URL 下载分片合并，支持 SHA-256 完整性校验</p>
             </div>
             <div class="feature-card">
                 <h3>断点续传</h3>
@@ -73,24 +73,17 @@
             </div>
             <div class="feature-card">
                 <h3>增强模式</h3>
-                <p>集成 <code>curl_cffi</code> 浏览器模拟，可模拟 Chrome 浏览器请求头（User-Agent、Sec-Ch-Ua、Sec-Fetch-\* 等），绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</p>
+                <p>集成 <code>curl_cffi</code> 浏览器模拟，可模拟 Chrome 浏览器请求头，绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</p>
             </div>
             <div class="feature-card">
                 <h3>多端支持</h3>
-                <p>提供命令行工具（CLI）、独立 GUI 程序、网页端工具等多种使用方式</p>
+                <p>提供命令行工具（CLI）、聚合 GUI 程序、独立 GUI 程序、网页端工具等多种使用方式</p>
             </div>
             <div class="feature-card">
                 <h3>跨平台</h3>
-                <p>Python 工具支持 Windows / Linux / macOS；网页端工具支持所有现代浏览器</p>
+                <p>Python 工具支持 Windows / Linux / macOS；网页端下载页面支持所有现代浏览器</p>
             </div>
-            <div class="feature-card">
-                <h3>实时进度</h3>
-                <p>终端进度条 / GUI 进度条，实时显示分块进度、总进度和下载速度</p>
-            </div>
-            <div class="feature-card">
-                <h3>自动清理</h3>
-                <p>远程下载完成后自动清理临时分片文件</p>
-            </div>
+            
         </div>
     </div>
 </section>
@@ -113,13 +106,22 @@
                 </ul>
             </div>
             <div class="platform-card">
-                <h3>独立 GUI 程序</h3>
-                <p style="margin-bottom:10px;">一个聚合程序与两个独立工具，满足不同使用场景。</p>
+                <h3>聚合 GUI 程序</h3>
+                <p style="margin-bottom:10px;">一个聚合入口，集成文件分块与文件下载两大功能。</p>
                 <ul>
                     <li><strong>wjfkxz.exe</strong>：聚合程序，集成文件分块与文件下载，侧边栏一键切换</li>
+                    <li>一个窗口完成分块与下载</li>
+                    <li>SHA-256 完整性校验</li>
+                    <li>断点续传：下载中断后分片保留</li>
+                    <li>增强模式：curl_cffi 浏览器模拟</li>
+                </ul>
+            </div>
+            <div class="platform-card">
+                <h3>独立 GUI 程序</h3>
+                <p style="margin-bottom:10px;">两个独立工具，各司其职，满足不同使用场景。</p>
+                <ul>
                     <li><strong>wjfk.exe</strong>：独立程序，功能为文件分块</li>
-                    <li><strong>wjxz.exe</strong>：独立程序，支持本地合并与远程下载（含增强模式）</li>
-                    <li>支持本地模式和远程模式</li>
+                    <li><strong>wjxz.exe</strong>：独立程序，支持本地合并与远程下载</li>
                     <li>SHA-256 完整性校验</li>
                     <li>断点续传：下载中断后分片保留</li>
                     <li>增强模式：curl_cffi 浏览器模拟</li>
@@ -141,58 +143,25 @@
 <section class="section">
     <div class="container">
         <h2 class="section-title">快速开始</h2>
-        <p class="section-subtitle">pip 安装、源码运行或直接下载，三种方式任选其一</p>
+        <p class="section-subtitle">源码运行或直接下载 exe，两种方式任选其一</p>
 
         <div class="tab-container">
             <div class="tabs">
-                <button class="tab-btn active" data-tab="pip">pip 安装</button>
-                <button class="tab-btn" data-tab="source">源码运行</button>
+                <button class="tab-btn active" data-tab="source">源码运行</button>
                 <button class="tab-btn" data-tab="exe">直接下载 exe</button>
             </div>
 
-            <div class="tab-panel active" data-tab="pip">
+            <div class="tab-panel active" data-tab="source">
                 <div class="code-block">
-<pre><span class="comment"># 克隆仓库</span>
-<span class="cmd">git clone</span> <span class="path">https://github.com/zsh-cn/fkxz.git</span>
+<pre><span class="cmd">git clone</span> <span class="path">https://github.com/zsh-cn/fkxz.git</span>
 <span class="cmd">cd</span> <span class="path">fkxz</span>
-
-<span class="comment"># 基础安装</span>
-<span class="cmd">pip install</span> <span class="path">.</span>
-
-<span class="comment"># 安装后直接使用 fkxz 命令</span>
-<span class="cmd">fkxz</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
-<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
-<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
-<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
-
-<span class="comment"># 如需增强模式（浏览器模拟）</span>
-<span class="cmd">pip install</span> <span class="path">".[enhanced]"</span>
-<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span></pre>
-                </div>
-            </div>
-
-            <div class="tab-panel" data-tab="source">
-                <div class="code-block">
-<pre><span class="comment"># 克隆仓库</span>
-<span class="cmd">git clone</span> <span class="path">https://github.com/zsh-cn/fkxz.git</span>
-<span class="cmd">cd</span> <span class="path">fkxz</span>
-
-<span class="comment"># 创建虚拟环境（可选）</span>
-<span class="cmd">python -m venv</span> <span class="path">.venv</span>
+<span class="cmd">python -m venv</span> <span class="path">.venv</span>        <span class="comment"># 创建虚拟环境（可选）</span>
 <span class="cmd">.venv\Scripts\activate</span>      <span class="comment"># Windows</span>
 <span class="comment"># source .venv/bin/activate  # Linux / macOS</span>
-
-<span class="comment"># 安装依赖</span>
 <span class="cmd">pip install -r</span> <span class="path">requirements.txt</span>
-
-<span class="comment"># 使用 CLI</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
-
-<span class="comment"># 或使用独立 GUI</span>
-<span class="cmd">python</span> <span class="path">wjfk.py</span>
-<span class="cmd">python</span> <span class="path">wjxz.py</span>
-<span class="comment"># 或使用聚合 GUI</span>
-<span class="cmd">python</span> <span class="path">main.py</span></pre>
+<span class="cmd">python</span> <span class="path">wjfk.py</span>                 <span class="comment"># 启动分块 GUI</span>
+<span class="cmd">python</span> <span class="path">wjxz.py</span>                 <span class="comment"># 启动下载 GUI</span>
+<span class="cmd">python</span> <span class="path">main.py</span>                 <span class="comment"># 启动聚合 GUI</span></pre>
                 </div>
             </div>
 
@@ -250,8 +219,8 @@
                 <h3>GitHub Issues</h3>
                 <p style="margin-bottom:4px;">提交 Issue 时请尽量提供以下信息：</p>
                 <ul style="list-style:none;padding:0;font-size:13px;color:var(--text-secondary);line-height:2;">
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / wjfk.exe / wjxz.exe 或源码运行）</li>
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统版本</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（cli.exe / wjfkxz.exe / wjfk.exe / wjxz.exe /源码运行或网页端下载页面）</li>
+                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统/浏览器版本</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>问题的详细描述和复现步骤</li>
                     <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>相关的错误信息或截图</li>
                 </ul>
@@ -266,12 +235,9 @@
         <h2 class="section-title">免责声明</h2>
         <p class="section-subtitle">使用前请仔细阅读</p>
         <div class="usage-detail">
-            <p style="font-size:14px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">本工具仅供学习、研究和个人合法用途。使用者应遵守所在国家/地区的法律法规及平台的服务条款，不得将本工具用于任何违法或侵权活动。</p>
+            <p style="font-size:14px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">本工具仅供学习、研究和个人合法用途。使用者应遵守所在国家/地区的法律法规及平台的服务条款，不得将本工具用于任何违法或侵权、违反平台规定的活动。</p>
             <ul>
-                <li>使用本工具下载文件时，请确保您拥有合法的下载权限，遵守目标网站的服务条款和 robots.txt 协议</li>
-                <li>增强模式（浏览器模拟）功能仅用于研究和学习浏览器技术，请勿用于绕过网站的安全防护措施进行未授权访问</li>
                 <li>本项目开发者不对使用者的任何不当行为承担责任，使用者需自行承担使用本工具所产生的一切后果和风险</li>
-                <li>本工具不提供任何形式的担保，使用过程中可能产生的数据丢失、文件损坏等问题，开发者不承担任何责任</li>
             </ul>
         </div>
     </div>
