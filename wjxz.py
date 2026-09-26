@@ -1019,9 +1019,9 @@ class FileDownloaderApp:
             if fkx_info is None:
                 if self.is_cancelled:
                     if self.is_local:
-                        self._set_retry_ui("状态: 已取消合并")
+                        self._set_retry_ui("状态: 已取消合并", is_cancel=True)
                     else:
-                        self._set_retry_ui("状态: 已取消下载")
+                        self._set_retry_ui("状态: 已取消下载", is_cancel=True)
                     return
                 error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
                 if self.is_local:
@@ -1048,9 +1048,9 @@ class FileDownloaderApp:
             if not self._collect_chunks(fkx_info, base_path, num_chunks):
                 if self.is_cancelled:
                     if self.is_local:
-                        self._set_retry_ui("状态: 已取消合并")
+                        self._set_retry_ui("状态: 已取消合并", is_cancel=True)
                     else:
-                        self._set_retry_ui("状态: 已取消下载")
+                        self._set_retry_ui("状态: 已取消下载", is_cancel=True)
                     return
                 error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
                 if self.is_local:
@@ -1072,9 +1072,9 @@ class FileDownloaderApp:
             output_path = self._merge_chunks(fkx_info, num_chunks)
             if output_path is None:
                 if self.is_local:
-                    self._set_retry_ui("状态: 已取消合并")
+                    self._set_retry_ui("状态: 已取消合并", is_cancel=True)
                 else:
-                    self._set_retry_ui("状态: 已取消下载")
+                    self._set_retry_ui("状态: 已取消下载", is_cancel=True)
                 return
             
             sha_skipped = False
@@ -1132,15 +1132,16 @@ class FileDownloaderApp:
             else:
                 self._set_retry_ui(f"状态: 下载失败 - {error_msg}")
 
-    def _set_retry_ui(self, status_text):
+    def _set_retry_ui(self, status_text, is_cancel=False):
         self._retry_needed = True
         self._failed = True
+        button_text = "开始合并" if self.is_local else "开始下载" if is_cancel else "重试"
         def _retry():
             self.progress_chunk['value'] = 0
             self.progress_total['value'] = 0
             self.download_detail_label.config(text="")
             self.cancel_button.config(state=tk.DISABLED, text="取消")
-            self.start_button.config(state=tk.NORMAL, text="重试")
+            self.start_button.config(state=tk.NORMAL, text=button_text)
             self.url_entry.config(state=tk.NORMAL)
             self.output_entry.config(state=tk.NORMAL)
             self.browse_fkx_btn.config(state=tk.NORMAL)

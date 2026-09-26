@@ -60,6 +60,11 @@
                         <td><code>requests</code></td>
                     </tr>
                     <tr>
+                        <td>聚合 GUI</td>
+                        <td>Python 3.8+</td>
+                        <td><code>requests</code>、<code>tkinter</code>（Linux 需 <code>apt install python3-tk</code>）</td>
+                    </tr>
+                    <tr>
                         <td>独立 GUI</td>
                         <td>Python 3.8+</td>
                         <td><code>requests</code>、<code>tkinter</code>（Linux 需 <code>apt install python3-tk</code>）</td>
@@ -75,12 +80,7 @@
 
         <h3 style="font-size:18px;font-weight:600;margin:24px 0 12px;">安装依赖</h3>
         <div class="code-block">
-<pre><span class="comment"># 使用 pyproject.toml（推荐）</span>
-<span class="cmd">pip install</span> <span class="path">.</span>              <span class="comment"># 基础安装</span>
-<span class="cmd">pip install</span> <span class="path">".[enhanced]"</span>  <span class="comment"># 含增强模式（curl_cffi）</span>
-
-<span class="comment"># 或使用 requirements.txt（传统方式）</span>
-<span class="cmd">pip install -r</span> <span class="path">requirements.txt</span></pre>
+<pre><span class="cmd">pip install -r</span> <span class="path">requirements.txt</span></pre>
         </div>
         <ul>
             <li><code>requests</code>：HTTP 请求库（必需）</li>
@@ -102,31 +102,23 @@
 
         <div class="usage-detail">
             <h3>命令行工具 (CLI)</h3>
-            <p class="detail-subtitle">安装后可使用 <code>fkxz</code> 命令，也可以直接运行源码</p>
+            <p class="detail-subtitle">直接运行源码 <code>python cli/main.py &lt;command&gt;</code>，或运行 <code>cli.exe --help</code> 可查看完整的命令与参数说明</p>
 
             <h4>分块文件</h4>
             <div class="code-block">
-<pre><span class="comment"># 安装后使用 fkxz 命令</span>
-<span class="cmd">fkxz</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10
-
-<span class="comment"># 或直接运行源码</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10</pre>
+<pre><span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10</pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
             <ul>
                 <li><code>-i, --input</code>：要分块的文件路径（必填）</li>
                 <li><code>-o, --output</code>：输出目录（必填）</li>
+                <li><code>-n, --output-name</code>：输出文件名（可选，不指定则使用源文件名）</li>
                 <li><code>-c, --chunk-size</code>：分片大小（MB），范围 1-1024，默认 10</li>
             </ul>
 
             <h4>本地合并</h4>
             <div class="code-block">
-<pre><span class="comment"># 安装后使用 fkxz 命令</span>
-<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
-<span class="cmd">fkxz</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
-
-<span class="comment"># 或直接运行源码</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<pre><span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span></pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
@@ -138,14 +130,7 @@
 
             <h4>远程下载</h4>
             <div class="code-block">
-<pre><span class="comment"># 安装后使用 fkxz 命令</span>
-<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
-<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
-<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300
-<span class="cmd">fkxz</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span>
-
-<span class="comment"># 或直接运行源码</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
+<pre><span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300
 <span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span></pre>
@@ -154,10 +139,20 @@
             <ul>
                 <li><code>-u, --url</code>：<code>.fkx</code> 信息文件的 URL（必填）</li>
                 <li><code>-o, --output</code>：输出目录（必填）</li>
-                <li><code>-e, --enhanced</code>：启用增强模式（可选，需安装 curl_cffi）</li>
+                <li><code>-e, --enhanced</code>：启用增强模式（可选）</li>
                 <li><code>-t, --timeout</code>：请求超时时间（秒），默认 120（可选）</li>
                 <li><code>-s, --skip-sha256</code>：跳过SHA-256校验（可选）</li>
             </ul>
+        </div>
+
+        <div class="usage-detail">
+            <h3>聚合 GUI 工具</h3>
+
+            <h4>聚合程序（分块 + 下载）</h4>
+            <div class="code-block">
+<pre><span class="cmd">python</span> <span class="path">main.py</span></pre>
+            </div>
+            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">启动后左侧边栏显示"文件分块"和"文件下载"两个功能入口，点击侧边栏按钮即可切换。无需开启多个窗口。</p>
         </div>
 
         <div class="usage-detail">
@@ -175,12 +170,6 @@
 <pre><span class="cmd">python</span> <span class="path">wjxz.py</span></pre>
             </div>
             <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">在输入框中填入 <code>.fkx</code> 文件的本地路径或完整 URL，选择输出目录。界面默认勾选<strong>增强模式</strong>（使用 curl_cffi 浏览器模拟以绕过反爬虫），和<strong>启用SHA-256检验</strong>。可根据需要取消勾选切换为标准模式/跳过SHA-256检验。点击"开始合并"（本地）或"开始下载"（远程）。</p>
-
-            <h4>聚合程序（分块 + 下载）</h4>
-            <div class="code-block">
-<pre><span class="cmd">python</span> <span class="path">main.py</span></pre>
-            </div>
-            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">启动后左侧边栏显示"文件分块"和"文件下载"两个功能入口，点击侧边栏按钮即可切换。无需开启多个窗口。</p>
         </div>
 
         <div class="usage-detail">
@@ -208,27 +197,27 @@
 <pre><span class="comment">fkxz/</span>
 ├── <span class="cmd">cli/</span>                           <span class="comment"># 命令行工具 (CLI)</span>
 │   ├── __init__.py
-│   ├── main.py                    <span class="comment"># CLI 入口，argparse 参数解析</span>
-│   ├── utils.py                   <span class="comment"># 公共工具函数（格式化、校验、解析）</span>
+│   ├── main.py                    <span class="comment"># CLI 入口</span>
+│   ├── utils.py                   <span class="comment"># 公共工具函数</span>
 │   ├── splitter.py                <span class="comment"># split 命令实现</span>
 │   ├── merger.py                  <span class="comment"># merge 命令实现</span>
 │   └── downloader.py              <span class="comment"># download 命令实现</span>
 │
 ├── <span class="cmd">icon/</span>                          <span class="comment"># 图标资源</span>
-│   ├── wjfk.ico                   <span class="comment"># 文件分块图标（.ico 用于打包程序图标）</span>
-│   ├── wjfk.png                   <span class="comment"># 文件分块图标（.png 用于窗口、任务栏图标）</span>
-│   ├── wjfkxz.ico                 <span class="comment"># 应用主图标（.ico 用于打包程序图标）</span>
-│   ├── wjfkxz.png                 <span class="comment"># 应用主图标（.png 用于窗口、任务栏图标）</span>
-│   ├── wjfkxz-cli.ico             <span class="comment"># CLI 命令行工具图标（.ico 用于打包程序图标）</span>
-│   ├── wjxz.ico                   <span class="comment"># 文件下载图标（.ico 用于打包程序图标）</span>
-│   └── wjxz.png                   <span class="comment"># 文件下载图标（.png 用于窗口、任务栏图标）</span>
+│   ├── wjfk.ico                   <span class="comment"># 文件分块图标（打包图标）</span>
+│   ├── wjfk.png                   <span class="comment"># 文件分块图标（窗口、任务栏图标）</span>
+│   ├── wjfkxz.ico                 <span class="comment"># 应用主图标（打包图标）</span>
+│   ├── wjfkxz.png                 <span class="comment"># 应用主图标（窗口、任务栏图标）</span>
+│   ├── wjfkxz-cli.ico             <span class="comment"># CLI 命令行工具图标（打包图标）</span>
+│   ├── wjxz.ico                   <span class="comment"># 文件下载图标（打包图标）</span>
+│   └── wjxz.png                   <span class="comment"># 文件下载图标（窗口、任务栏图标）</span>
 │
-├── <span class="cmd">web/</span>                           <span class="comment"># 网页端工具</span>
+├── <span class="cmd">web/</span>                           <span class="comment"># 网页端下载页面</span>
 │   ├── favicon.png                <span class="comment"># 网站图标</span>
-│   ├── index.html                 <span class="comment"># Service Worker 下载器页面</span>
+│   ├── index.html                 <span class="comment"># 文件下载页面</span>
 │   └── sw.js                      <span class="comment"># Service Worker 脚本</span>
 │
-├── <span class="cmd">docs/</span>                          <span class="comment"># 项目官网 (GitHub Pages)</span>
+├── <span class="cmd">docs/</span>                          <span class="comment"># 项目官网</span>
 │   ├── index.html                 <span class="comment"># 官网主页</span>
 │   ├── download.html              <span class="comment"># 下载页面</span>
 │   ├── favicon.png                <span class="comment"># 官网图标</span>
@@ -241,18 +230,17 @@
 │   │   ├── wjfkxz.ico
 │   │   ├── wjfkxz-cli.ico
 │   │   └── wjxz.ico
-│   └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线体验工具</span>
+│   └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线下载体验页面</span>
 │       ├── index.html
 │       ├── sw.js
+│       ├── experience.html
 │       └── favicon.png
 │
 ├── wjfk.py                        <span class="comment"># 独立文件分块程序 (GUI)</span>
-├── wjxz.py                        <span class="comment"># 独立文件下载程序 (GUI, 支持增强模式)</span>
+├── wjxz.py                        <span class="comment"># 独立文件合并/下载程序 (GUI, 支持增强模式)</span>
 ├── main.py                        <span class="comment"># 聚合程序，集成文件分块与文件下载 (GUI)</span>
-├── pyproject.toml                 <span class="comment"># 项目元数据与构建配置</span>
-├── requirements.txt               <span class="comment"># Python 依赖（兼容传统 pip install -r）</span>
-├── LICENSE                        <span class="comment"># MPL 2.0 许可证</span>
-└── .gitignore</pre>
+├── requirements.txt               <span class="comment"># Python 依赖</span>
+└── LICENSE                        <span class="comment"># MPL 2.0 许可证</span></pre>
         </div>
     </div>
 </section>
@@ -287,7 +275,7 @@
         </div>
 
         <div class="usage-detail">
-            <h3>独立 GUI 工具</h3>
+            <h3>聚合 GUI 工具</h3>
             <div style="margin-bottom:16px;">
                 <h4>main.py — 聚合程序</h4>
                 <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，集成文件分块与文件下载两大功能，通过侧边栏实现功能切换。</p>
@@ -296,6 +284,10 @@
                     <li>点击侧边栏按钮即可在两项功能之间切换，无需开启多个窗口</li>
                 </ul>
             </div>
+        </div>
+
+        <div class="usage-detail">
+            <h3>独立 GUI 工具</h3>
             <div style="margin-bottom:16px;">
                 <h4>wjfk.py — 文件分块</h4>
                 <p style="font-size:14px;color:var(--text-secondary);">Tkinter 图形界面，将大文件分块为多个 <code>.fk</code> 分片，并生成 <code>.fkx</code> 信息文件。</p>
@@ -405,6 +397,7 @@
             <div class="tabs">
                 <button class="tab-btn active" data-tab="pkg-cli">cli.exe</button>
                 <button class="tab-btn" data-tab="pkg-splitter">wjfk.exe</button>
+                <button class="tab-btn" data-tab="pkg-aggregator">wjfkxz.exe</button>
                 <button class="tab-btn" data-tab="pkg-downloader">wjxz.exe</button>
             </div>
 
@@ -432,6 +425,17 @@
                 </ul>
             </div>
 
+            <div class="tab-panel" data-tab="pkg-aggregator">
+                <h4>打包 wjfkxz.exe（聚合程序）</h4>
+                <div class="code-block">
+<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">wjfkxz</span> <span class="arg">--icon</span> <span class="path">icon/wjfkxz.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="path">main.py</span></pre>
+                </div>
+                <ul>
+                    <li><code>--icon icon/wjfkxz.ico</code>：设置 exe 程序图标</li>
+                    <li><code>--add-data "icon;icon"</code>：打包图标资源（窗口/任务栏图标 <code>icon/wjfkxz.png</code>）</li>
+                </ul>
+            </div>
+
             <div class="tab-panel" data-tab="pkg-downloader">
                 <h4>打包 wjxz.exe（文件下载）</h4>
                 <div class="code-block">
@@ -448,8 +452,7 @@
         <h4 style="margin-top:24px;">打包说明</h4>
         <ul>
             <li>打包后的 exe 文件位于 <code>dist/</code> 目录下</li>
-            <li>如果增强模式打包失败或运行时不可用，程序会自动回退到标准 <code>requests</code> 模式</li>
-            <li>建议在打包前先执行 <code>pip install -r requirements.txt</code> 和 <code>pip install ".[enhanced]"</code> 确保所有依赖已安装</li>
+            <li>建议在打包前先执行 <code>pip install -r requirements.txt</code> 确保所有依赖已安装</li>
         </ul>
     </div>
 </section>

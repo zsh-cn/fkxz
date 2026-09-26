@@ -57,6 +57,7 @@
                     下载
                 </a>
                 <a class="backup-link" href="https://y.zhshh.cn/fkxz/wjfkxz.exe" target="_blank" rel="noopener">备用源下载</a>
+                <a class="backup-link" href="https://zhshh.lanzouc.com/b00ybfauna" target="_blank" rel="noopener">蓝奏下载（密码fkxz）</a>
             </div>
 
             <div class="download-card">
@@ -69,6 +70,7 @@
                     下载
                 </a>
                 <a class="backup-link" href="https://y.zhshh.cn/fkxz/cli.exe" target="_blank" rel="noopener">备用源下载</a>
+                <a class="backup-link" href="https://zhshh.lanzouc.com/b00ybfauna" target="_blank" rel="noopener">蓝奏下载（密码fkxz）</a>
             </div>
 
             <div class="download-card">
@@ -81,6 +83,7 @@
                     下载
                 </a>
                 <a class="backup-link" href="https://y.zhshh.cn/fkxz/wjfk.exe" target="_blank" rel="noopener">备用源下载</a>
+                <a class="backup-link" href="https://zhshh.lanzouc.com/b00ybfauna" target="_blank" rel="noopener">蓝奏下载（密码fkxz）</a>
             </div>
 
             <div class="download-card">
@@ -93,6 +96,7 @@
                     下载
                 </a>
                 <a class="backup-link" href="https://y.zhshh.cn/fkxz/wjxz.exe" target="_blank" rel="noopener">备用源下载</a>
+                <a class="backup-link" href="https://zhshh.lanzouc.com/b00ybfauna" target="_blank" rel="noopener">蓝奏下载（密码fkxz）</a>
             </div>
         </div>
 
@@ -120,6 +124,7 @@
                     下载
                 </a>
                 <a class="backup-link" href="https://y.zhshh.cn/ym/fkxz.zip" target="_blank" rel="noopener">备用源下载</a>
+                <a class="backup-link" href="https://zhshh.lanzouc.com/b00ybfauna" target="_blank" rel="noopener">蓝奏下载（密码fkxz）</a>
             </div>
         </div>
     </div>
@@ -149,6 +154,7 @@
                     <tbody>
                         <tr><td><code>-i, --input</code></td><td>要分块的文件路径</td><td>是</td></tr>
                         <tr><td><code>-o, --output</code></td><td>输出目录</td><td>是</td></tr>
+                        <tr><td><code>-n, --output-name</code></td><td>输出文件名（不指定则使用源文件名）</td><td>否</td></tr>
                         <tr><td><code>-c, --chunk-size</code></td><td>分片大小（MB），范围 1-1024，默认 10</td><td>否</td></tr>
                     </tbody>
                 </table>
@@ -214,6 +220,8 @@
             <p>全部下载完成后才合并文件并自动清理分片目录，实现断点续传。</p>
         </div>
 
+        <h3>聚合 GUI 程序</h3>
+
         <div class="usage-detail">
             <h3>wjfkxz.exe — 文件分块下载</h3>
             <p class="detail-subtitle">聚合程序，集成文件分块与文件下载两大功能，侧边栏一键切换</p>
@@ -231,9 +239,11 @@
             <p>各功能的具体操作请参考下方 <code>wjfk.exe</code> 和 <code>wjxz.exe</code> 的使用说明。</p>
         </div>
 
+        <h3>独立 GUI 程序</h3>
+
         <div class="usage-detail">
             <h3>wjfk.exe — 文件分块</h3>
-            <p class="detail-subtitle">独立的文件分块 GUI 工具，专注于将大文件分块为多个小分片</p>
+            <p class="detail-subtitle">独立的文件分块 GUI 工具，将大文件分块为多个小分片</p>
 
             <h4>启动</h4>
             <p>双击 <code>wjfk.exe</code> 即可启动。</p>
@@ -242,8 +252,8 @@
             <ol style="padding-left:20px;font-size:14px;color:var(--text-secondary);line-height:2;">
                 <li>点击"浏览"选择要分块的文件</li>
                 <li>点击"浏览"选择输出目录</li>
+                <li>设置输出文件名</li>
                 <li>设置每个分片的大小（1-1024 MB，默认 10 MB）</li>
-                <li>界面会自动显示文件大小和分片数</li>
                 <li>点击"开始分块"</li>
             </ol>
 
