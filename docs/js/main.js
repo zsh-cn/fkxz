@@ -67,14 +67,12 @@
         },
 
         updateDownloadLinks: function(assets) {
-            var btns = document.querySelectorAll('.download-btn[data-asset]');
-            btns.forEach(function(btn) {
-                var name = btn.getAttribute('data-asset');
+            var links = document.querySelectorAll('[data-asset]');
+            links.forEach(function(link) {
+                var name = link.getAttribute('data-asset');
                 var url = Fkxz.getAssetUrl(assets, name);
                 if (url) {
-                    btn.href = url;
-                } else {
-                    btn.href = 'https://github.com/' + REPO + '/releases/latest';
+                    link.href = url;
                 }
             });
         },
