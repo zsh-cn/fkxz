@@ -1,19 +1,9 @@
 import os
-import sys
-import ctypes
 
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
-except Exception:
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-    except Exception:
-        pass
+import utils
 
-try:
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('fkxz.main')
-except Exception:
-    pass
+utils.setup_dpi_awareness()
+utils.set_app_user_model_id('fkxz.main')
 
 import tkinter as tk
 from tkinter import ttk
@@ -71,27 +61,11 @@ class MainApp:
         self.show_splitter()
 
     def _set_icon(self):
-        if getattr(sys, 'frozen', False):
-            icon_path = os.path.join(getattr(sys, '_MEIPASS', ''), 'icon', 'wjfkxz.png')
-        else:
-            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon', 'wjfkxz.png')
-        if os.path.exists(icon_path):
-            self._icon = tk.PhotoImage(file=icon_path)
-            self.root.iconphoto(True, self._icon)
+        self._icon = utils.apply_window_icon(self.root, 'wjfkxz.png')
 
     def _load_nav_icon(self, filename, size=22):
-        if getattr(sys, 'frozen', False):
-            icon_path = os.path.join(getattr(sys, '_MEIPASS', ''), 'icon', filename)
-        else:
-            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon', filename)
-        if os.path.exists(icon_path):
-            img = tk.PhotoImage(file=icon_path)
-            w, h = img.width(), img.height()
-            if w > size or h > size:
-                factor = max(1, max(w, h) // size)
-                img = img.subsample(factor, factor)
-            return img
-        return None
+        img = utils.load_icon(filename, size=size)
+        return img
 
     def _create_sidebar(self):
         self.sidebar_bg = "#f4f5f7"

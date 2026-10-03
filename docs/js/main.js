@@ -2,13 +2,11 @@
     'use strict';
 
     var REPO = 'zsh-cn/fkxz';
-    var ASSETS = ['cli.exe', 'wjfk.exe', 'wjxz.exe', 'wjfkxz.exe'];
     var CACHE_KEY = 'fkxz_release_cache';
     var CACHE_TTL = 3600000;
 
     window.Fkxz = {
         REPO: REPO,
-        ASSETS: ASSETS,
 
         getRelease: function(callback) {
             var cached = sessionStorage.getItem(CACHE_KEY);
@@ -29,24 +27,14 @@
                 })
                 .then(function(data) {
                     var version = data.tag_name || data.name || 'Unknown';
-                    var assets = (data.assets || []).map(function(a) {
-                        return { name: a.name, browser_download_url: a.browser_download_url };
-                    });
 
-                    var cacheData = { ts: Date.now(), version: version, assets: assets };
+                    var cacheData = { ts: Date.now(), version: version };
                     sessionStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
                     callback(null, cacheData);
                 })
                 .catch(function(err) {
                     callback(err);
                 });
-        },
-
-        getAssetUrl: function(assets, name) {
-            for (var i = 0; i < assets.length; i++) {
-                if (assets[i].name === name) return assets[i].browser_download_url;
-            }
-            return null;
         },
 
         updateVersionBadge: function(el, version) {
@@ -64,17 +52,6 @@
             el.classList.remove('loading');
             el.classList.add('error');
             if (textEl) textEl.textContent = '无法获取版本信息';
-        },
-
-        updateDownloadLinks: function(assets) {
-            var links = document.querySelectorAll('[data-asset]');
-            links.forEach(function(link) {
-                var name = link.getAttribute('data-asset');
-                var url = Fkxz.getAssetUrl(assets, name);
-                if (url) {
-                    link.href = url;
-                }
-            });
         },
 
         initTabs: function() {
