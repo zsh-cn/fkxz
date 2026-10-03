@@ -8,7 +8,7 @@
 - **文件下载**：支持本地 `.fkx` 合并还原与远程 URL 下载分片合并，支持 SHA-256 完整性校验
 - **断点续传**：远程下载中断后已下载的分片自动保留，重新下载时自动跳过已完整下载的分片，仅下载缺失分片，无需从头开始
 - **增强模式**：集成 `curl_cffi` 浏览器模拟，可模拟 Chrome 浏览器请求头，绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护
-- **多端支持**：提供命令行工具（CLI）、聚合 GUI 程序、独立 GUI 程序、网页端工具等多种使用方式
+- **多端支持**：提供聚合 GUI 程序、独立 GUI 程序、网页端工具等多种使用方式
 - **跨平台**：Python 工具支持 Windows / Linux / macOS；网页端下载页面支持所有现代浏览器
 
 ## 项目官网
@@ -22,20 +22,11 @@
 
 ```
 fkxz/
-├── cli/                           # 命令行工具 (CLI)
-│   ├── __init__.py
-│   ├── main.py                    # CLI 入口
-│   ├── utils.py                   # 公共工具函数
-│   ├── splitter.py                # split 命令实现
-│   ├── merger.py                  # merge 命令实现
-│   └── downloader.py              # download 命令实现
-│
 ├── icon/                          # 图标资源
 │   ├── wjfk.ico                   # 文件分块图标（打包图标）
 │   ├── wjfk.png                   # 文件分块图标（窗口、任务栏图标）
 │   ├── wjfkxz.ico                 # 应用主图标（打包图标）
 │   ├── wjfkxz.png                 # 应用主图标（窗口、任务栏图标）
-│   ├── wjfkxz-cli.ico             # CLI 命令行工具图标（打包图标）
 │   ├── wjxz.ico                   # 文件下载图标（打包图标）
 │   └── wjxz.png                   # 文件下载图标（窗口、任务栏图标）
 │
@@ -55,7 +46,6 @@ fkxz/
 │   ├── icons/                     # 程序图标
 │   │   ├── wjfk.ico
 │   │   ├── wjfkxz.ico
-│   │   ├── wjfkxz-cli.ico
 │   │   └── wjxz.ico
 │   └── wjxz/                      # Web 在线下载体验页面
 │       ├── index.html
@@ -78,19 +68,12 @@ fkxz/
 
 | 类型 | 文件名 | 说明 |
 |------|--------|------|
-| CLI（命令行） | `cli.exe` | 命令行版，支持 split / merge / download 命令 |
 | GUI（聚合） | `wjfkxz.exe` | 聚合程序，集成文件分块与文件下载，侧边栏一键切换 |
 | GUI（独立） | `wjfk.exe` | 独立程序，功能为文件分块 |
 | GUI（独立） | `wjxz.exe` | 独立程序，支持本地合并与远程下载 |
 
 
 ## Releases 程序说明
-
-### cli.exe — 命令行工具
-
-`cli.exe` 是命令行版本，提供 `split`、`merge`、`download` 三个子命令，适合批处理和脚本自动化场景。详细参数请参见下方 [使用方式 — 命令行工具](#命令行工具-cli)。
-
----
 
 ### 聚合 GUI 程序
 
@@ -193,24 +176,6 @@ python main.py                 # 启动聚合 GUI
 
 ## 组件说明
 
-### 命令行工具 — `cli/main.py`
-
-基于 `argparse` 的统一命令行入口，提供三大命令：
-
-| 命令 | 说明 |
-|------|------|
-| `split` | 将大文件分块为 `.fk` 分片和 `.fkx` 信息文件 |
-| `merge` | 读取本地 `.fkx` 和 `.fk` 文件合并还原 |
-| `download` | 从远程 URL 下载 `.fkx` 和 `.fk` 分片后合并 |
-
-- 支持 SHA-256 完整性校验
-- 支持 `-s, --skip-sha256` 跳过SHA-256校验
-- 支持 `--enhanced` 增强模式（curl_cffi 浏览器模拟）
-- 支持 `--timeout` 自定义请求超时时间（默认 120 秒）
-- 终端实时进度条显示
-- 下载完成后自动清理临时文件
-- 支持断点续传：分片保存在本地分片目录，中断后重新下载自动跳过已下载分片
-
 ### 聚合 GUI 工具
 
 #### main.py — 聚合程序
@@ -259,68 +224,6 @@ Service Worker 方案的优势在于：
 
 ## 使用方式
 
-### 命令行工具 (CLI)
-
-直接运行源码 `python cli/main.py <command>`，或运行 `cli.exe --help` 可查看以下完整的命令与参数说明：
-
-```
-文件分块下载工具 — 大文件分片传输
-
-============================ 命令与参数说明 ============================
-
-  split   将本地大文件拆分为多个固定大小的分片(.fk)，
-          并生成一个 .fkx 信息文件记录所有分片的元数据
-
-    参数:
-      -i, --input        要拆分的大文件路径，支持绝对路径和相对路径（必填）
-      -o, --output       分片文件和 .fkx 信息文件的输出目录，
-                         目录不存在时会自动创建（必填）
-      -n, --output-name  输出文件名（可选，不指定则使用源文件名）
-      -c, --chunk-size   每个分片的大小（单位：MB），
-                         取值范围 1-1024，默认 10MB
-
-    输出文件:
-      <文件名>.fkx      信息文件，记录文件名、大小、分片数和分片元数据
-      <文件名>-1.fk     第 1 个分片
-      <文件名>-2.fk     第 2 个分片
-      ...               ...
-
------------------------------------------------------------------------
-
-  merge   根据 .fkx 信息文件将本地的所有分片(.fk)合并还原为原始文件，
-          并可选进行 SHA-256 校验
-
-    参数:
-      -i, --input        .fkx 信息文件的路径，
-                         合并时会自动在同目录下查找对应的 .fk 分片（必填）
-      -o, --output       合并后原始文件的输出目录（必填）
-      -s, --skip-sha256  跳过 SHA-256 校验（可选标志）
-
------------------------------------------------------------------------
-
-  download  从远程服务器下载 .fkx 信息文件及其所有分片(.fk)，
-            下载完成后自动合并为原始文件并校验完整性
-
-    参数:
-      -u, --url          远程 .fkx 信息文件的完整 URL（必填）
-                         程序会自动解析 URL 的路径前缀，
-                         从同目录下载对应的 .fk 分片
-      -o, --output       下载和合并后文件的输出目录（必填）
-      -e, --enhanced     启用增强下载模式（可选标志）
-                         使用浏览器指纹伪装和 curl_cffi 库模拟 Chrome 131，
-                         适用于绕过反爬虫检测的服务器
-      -t, --timeout      每个分片下载的 HTTP 请求超时时间（秒），
-                         默认 120，网络不稳定时可适当增大（可选）
-      -s, --skip-sha256  跳过下载完成后的 SHA-256 校验（可选标志）
-
-    断点续传:
-      下载过程中如果中断，已下载的分片会保留在
-      <文件名>-fkxz 目录中。再次执行相同的 download 命令
-      即可从断点处继续下载，已完成的不会重复下载
-
-=======================================================================
-```
-
 ### 聚合 GUI 工具
 
 #### 聚合程序（分块 + 下载）
@@ -366,7 +269,6 @@ python wjxz.py
 
 | 组件 | 最低版本 | 依赖 |
 |------|---------|------|
-| CLI 工具 (`cli/`) | Python 3.8+ | `requests` |
 | 聚合 GUI | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
 | 独立 GUI | Python 3.8+ | `requests`、`tkinter`（Linux 需 `apt install python3-tk`） |
 | 增强模式 | Python 3.8+ | `requests` + `curl_cffi` |
@@ -420,17 +322,6 @@ pip install pyinstaller
 
 在项目根目录下执行以下命令：
 
-#### 打包 cli.exe（命令行工具）
-
-```bash
-pyinstaller --onefile --console --name cli --icon icon/wjfkxz-cli.ico cli/main.py
-```
-
-- `--onefile`：打包为单个 exe 文件
-- `--console`：控制台程序（显示命令行窗口）
-- `--name cli`：输出文件名为 `cli.exe`
-- `--icon icon/wjfkxz-cli.ico`：设置 exe 程序图标
-
 #### 打包 wjfk.exe（文件分块）
 
 ```bash
@@ -470,7 +361,7 @@ pyinstaller --onefile --windowed --name wjxz --icon icon/wjxz.ico --add-data "ic
 
 - **GitHub Issues**：[提交 Issue](https://github.com/zsh-cn/fkxz/issues)
 - 提交时请尽量提供以下信息：
-  - 使用的程序版本（`cli.exe` / `wjfkxz.exe` / `wjfk.exe` / `wjxz.exe` /源码运行或网页端下载页面）
+  - 使用的程序版本（`wjfkxz.exe` / `wjfk.exe` / `wjxz.exe` /源码运行或网页端下载页面）
   - 操作系统/浏览器版本
   - 问题的详细描述和复现步骤
   - 相关的错误信息或截图

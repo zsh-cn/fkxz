@@ -317,7 +317,7 @@ header .container {
 
 .platform-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
 }
 
@@ -445,8 +445,8 @@ header .container {
 
 .download-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
 }
 
 .download-card {
@@ -811,6 +811,11 @@ footer .copyright {
     .usage-detail { padding: 20px; }
 
     header .container { height: auto; padding: 10px 24px; flex-wrap: wrap; justify-content: center; gap: 8px; }
+}
+
+@media (max-width: 600px) {
+    .download-grid { grid-template-columns: 1fr; }
+    .platform-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {

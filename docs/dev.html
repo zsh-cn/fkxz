@@ -55,11 +55,6 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>CLI 工具 (<code>cli/</code>)</td>
-                        <td>Python 3.8+</td>
-                        <td><code>requests</code></td>
-                    </tr>
-                    <tr>
                         <td>聚合 GUI</td>
                         <td>Python 3.8+</td>
                         <td><code>requests</code>、<code>tkinter</code>（Linux 需 <code>apt install python3-tk</code>）</td>
@@ -99,51 +94,6 @@
     <div class="container">
         <h2 class="section-title">使用方式</h2>
         <p class="section-subtitle">多种使用方式，满足不同场景需求</p>
-
-        <div class="usage-detail">
-            <h3>命令行工具 (CLI)</h3>
-            <p class="detail-subtitle">直接运行源码 <code>python cli/main.py &lt;command&gt;</code>，或运行 <code>cli.exe --help</code> 可查看完整的命令与参数说明</p>
-
-            <h4>分块文件</h4>
-            <div class="code-block">
-<pre><span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">split</span> <span class="arg">-i</span> <span class="path">./video.mp4</span> <span class="arg">-o</span> <span class="path">./chunks</span> <span class="arg">-c</span> 10</pre>
-            </div>
-            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
-            <ul>
-                <li><code>-i, --input</code>：要分块的文件路径（必填）</li>
-                <li><code>-o, --output</code>：输出目录（必填）</li>
-                <li><code>-n, --output-name</code>：输出文件名（可选，不指定则使用源文件名）</li>
-                <li><code>-c, --chunk-size</code>：分片大小（MB），范围 1-1024，默认 10</li>
-            </ul>
-
-            <h4>本地合并</h4>
-            <div class="code-block">
-<pre><span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">merge</span> <span class="arg">-i</span> <span class="path">./chunks/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span></pre>
-            </div>
-            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
-            <ul>
-                <li><code>-i, --input</code>：<code>.fkx</code> 信息文件路径（必填）</li>
-                <li><code>-o, --output</code>：输出目录（必填）</li>
-                <li><code>-s, --skip-sha256</code>：跳过SHA-256校验（可选）</li>
-            </ul>
-
-            <h4>远程下载</h4>
-            <div class="code-block">
-<pre><span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">--enhanced</span>
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-t</span> 300
-<span class="cmd">python</span> <span class="path">cli/main.py</span> <span class="arg">download</span> <span class="arg">-u</span> <span class="path">https://example.com/files/video.mp4.fkx</span> <span class="arg">-o</span> <span class="path">./output</span> <span class="arg">-s</span></pre>
-            </div>
-            <p style="font-size:14px;color:var(--text-secondary);margin-top:8px;">参数说明：</p>
-            <ul>
-                <li><code>-u, --url</code>：<code>.fkx</code> 信息文件的 URL（必填）</li>
-                <li><code>-o, --output</code>：输出目录（必填）</li>
-                <li><code>-e, --enhanced</code>：启用增强模式（可选）</li>
-                <li><code>-t, --timeout</code>：请求超时时间（秒），默认 120（可选）</li>
-                <li><code>-s, --skip-sha256</code>：跳过SHA-256校验（可选）</li>
-            </ul>
-        </div>
 
         <div class="usage-detail">
             <h3>聚合 GUI 工具</h3>
@@ -195,20 +145,11 @@
         <p class="section-subtitle">清晰的项目目录组织</p>
         <div class="code-block">
 <pre><span class="comment">fkxz/</span>
-├── <span class="cmd">cli/</span>                           <span class="comment"># 命令行工具 (CLI)</span>
-│   ├── __init__.py
-│   ├── main.py                    <span class="comment"># CLI 入口</span>
-│   ├── utils.py                   <span class="comment"># 公共工具函数</span>
-│   ├── splitter.py                <span class="comment"># split 命令实现</span>
-│   ├── merger.py                  <span class="comment"># merge 命令实现</span>
-│   └── downloader.py              <span class="comment"># download 命令实现</span>
-│
 ├── <span class="cmd">icon/</span>                          <span class="comment"># 图标资源</span>
 │   ├── wjfk.ico                   <span class="comment"># 文件分块图标（打包图标）</span>
 │   ├── wjfk.png                   <span class="comment"># 文件分块图标（窗口、任务栏图标）</span>
 │   ├── wjfkxz.ico                 <span class="comment"># 应用主图标（打包图标）</span>
 │   ├── wjfkxz.png                 <span class="comment"># 应用主图标（窗口、任务栏图标）</span>
-│   ├── wjfkxz-cli.ico             <span class="comment"># CLI 命令行工具图标（打包图标）</span>
 │   ├── wjxz.ico                   <span class="comment"># 文件下载图标（打包图标）</span>
 │   └── wjxz.png                   <span class="comment"># 文件下载图标（窗口、任务栏图标）</span>
 │
@@ -228,7 +169,6 @@
 │   ├── <span class="cmd">icons/</span>                     <span class="comment"># 程序图标</span>
 │   │   ├── wjfk.ico
 │   │   ├── wjfkxz.ico
-│   │   ├── wjfkxz-cli.ico
 │   │   └── wjxz.ico
 │   └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线下载体验页面</span>
 │       ├── index.html
@@ -249,30 +189,6 @@
     <div class="container">
         <h2 class="section-title">组件说明</h2>
         <p class="section-subtitle">各核心组件的功能与特性</p>
-
-        <div class="usage-detail">
-            <h3>命令行工具 — cli/main.py</h3>
-            <p class="detail-subtitle">基于 argparse 的统一命令行入口，提供三大命令</p>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr><th>命令</th><th>说明</th></tr></thead>
-                    <tbody>
-                        <tr><td><code>split</code></td><td>将大文件分块为 <code>.fk</code> 分片和 <code>.fkx</code> 信息文件</td></tr>
-                        <tr><td><code>merge</code></td><td>读取本地 <code>.fkx</code> 和 <code>.fk</code> 文件合并还原</td></tr>
-                        <tr><td><code>download</code></td><td>从远程 URL 下载 <code>.fkx</code> 和 <code>.fk</code> 分片后合并</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <ul>
-                <li>支持 SHA-256 完整性校验</li>
-                <li>支持 <code>-s, --skip-sha256</code> 跳过SHA-256校验</li>
-                <li>支持 <code>--enhanced</code> 增强模式（curl_cffi 浏览器模拟）</li>
-                <li>支持 <code>--timeout</code> 自定义请求超时时间（默认 120 秒）</li>
-                <li>终端实时进度条显示</li>
-                <li>下载完成后自动清理临时文件</li>
-                <li>支持断点续传：分片保存在本地分片目录，中断后重新下载自动跳过已下载分片</li>
-            </ul>
-        </div>
 
         <div class="usage-detail">
             <h3>聚合 GUI 工具</h3>
@@ -361,22 +277,20 @@
         <h2 class="section-title">网页端工具</h2>
         <p class="section-subtitle">无需安装，浏览器直接使用</p>
 
-        <div class="platform-grid platform-grid-3">
-            <div class="platform-card">
-                <h3>Service Worker 下载器</h3>
-                <p style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">基于 Service Worker 的浏览器端下载器，SW 拦截请求并流式合并分片。</p>
-                <ul>
-                    <li>无需 File System Access API，兼容性更好</li>
-                    <li>合并过程不阻塞主线程</li>
-                    <li>直接触发浏览器原生下载</li>
-                    <li>通过 SW 代理绕过 CORS 限制</li>
-                </ul>
-                <div class="code-block" style="margin-top:12px;overflow-x:auto;">
+        <div class="usage-detail">
+            <h3>Service Worker 下载器</h3>
+            <p style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">基于 Service Worker 的浏览器端下载器，SW 拦截请求并流式合并分片。</p>
+            <ul>
+                <li>无需 File System Access API，兼容性更好</li>
+                <li>合并过程不阻塞主线程</li>
+                <li>直接触发浏览器原生下载</li>
+                <li>通过 SW 代理绕过 CORS 限制</li>
+            </ul>
+            <div class="code-block" style="margin-top:12px;overflow-x:auto;">
 <pre style="white-space:pre-wrap;word-break:break-all;margin:0;"><span class="comment"># 访问格式</span>
 <span class="path">https://your-domain.com/index.html?fkx=https://example.com/file.fkx</span></pre>
-                </div>
-                <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）。sw.js 必须与 index.html 同源部署。</p>
             </div>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">要求站点必须使用 HTTPS 或 localhost（Service Worker 安全策略要求）。sw.js 必须与 index.html 同源部署。</p>
         </div>
     </div>
 </section>
@@ -395,26 +309,12 @@
 
         <div class="tab-container">
             <div class="tabs">
-                <button class="tab-btn active" data-tab="pkg-cli">cli.exe</button>
-                <button class="tab-btn" data-tab="pkg-splitter">wjfk.exe</button>
+                <button class="tab-btn active" data-tab="pkg-splitter">wjfk.exe</button>
                 <button class="tab-btn" data-tab="pkg-aggregator">wjfkxz.exe</button>
                 <button class="tab-btn" data-tab="pkg-downloader">wjxz.exe</button>
             </div>
 
-            <div class="tab-panel active" data-tab="pkg-cli">
-                <h4>打包 cli.exe（命令行工具）</h4>
-                <div class="code-block">
-<pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--console</span> <span class="arg">--name</span> <span class="opt">cli</span> <span class="arg">--icon</span> <span class="path">icon/wjfkxz-cli.ico</span> <span class="path">cli/main.py</span></pre>
-                </div>
-                <ul>
-                    <li><code>--onefile</code>：打包为单个 exe 文件</li>
-                    <li><code>--console</code>：控制台程序（显示命令行窗口）</li>
-                    <li><code>--name cli</code>：输出文件名为 cli.exe</li>
-                    <li><code>--icon icon/wjfkxz-cli.ico</code>：设置 exe 程序图标</li>
-                </ul>
-            </div>
-
-            <div class="tab-panel" data-tab="pkg-splitter">
+            <div class="tab-panel active" data-tab="pkg-splitter">
                 <h4>打包 wjfk.exe（文件分块）</h4>
                 <div class="code-block">
 <pre><span class="cmd">pyinstaller</span> <span class="arg">--onefile</span> <span class="arg">--windowed</span> <span class="arg">--name</span> <span class="opt">wjfk</span> <span class="arg">--icon</span> <span class="path">icon/wjfk.ico</span> <span class="arg">--add-data</span> <span class="path">"icon;icon"</span> <span class="path">wjfk.py</span></pre>
