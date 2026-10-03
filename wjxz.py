@@ -90,6 +90,7 @@ class FileDownloaderApp:
         self._use_enhanced = True
         self._last_chunk_error = ""
         self._speed_samples = []
+        self._chunk_download_start = 0
         self._retry_needed = False
         self._failed = False
         
@@ -336,24 +337,35 @@ class FileDownloaderApp:
     def show_parse_error(self, title, message):
         self.update_status(f"状态: {title} - {message}", foreground="#cc0000")
     
+    def _download_in_progress(self):
+        return bool(self.download_thread and self.download_thread.is_alive())
+
     def _apply_parse_result(self, fkx_info, total_size, num_chunks):
+        in_progress = self._download_in_progress()
         self.filename_label.config(text=str(fkx_info.get('filename', '-')))
         self.filesize_label.config(text=self.format_size(total_size))
         self.chunks_label.config(text=str(num_chunks))
         self.is_local = not self._is_remote_url(self.fkx_path)
         self.file_info = fkx_info
         self.total_download_size = total_size
-        self._update_path_type_ui(self.fkx_path)
-        mode_text = "本地模式" if self.is_local else "远程模式"
-        self.update_status(f"状态: 就绪 ({mode_text})", foreground="#006600")
-        self.download_detail_label.config(text="")
+        if in_progress:
+            self.enhanced_checkbox.config(state=tk.DISABLED)
+        else:
+            self._update_path_type_ui(self.fkx_path)
+        if not in_progress:
+            mode_text = "本地模式" if self.is_local else "远程模式"
+            self.update_status(f"状态: 就绪 ({mode_text})", foreground="#006600")
+            self.download_detail_label.config(text="")
 
     def _apply_parse_error(self, error_msg):
-        self.status_label.config(text="状态: 就绪", foreground="#333333")
+        if not self._download_in_progress():
+            self.status_label.config(text="状态: 就绪", foreground="#333333")
 
     def parse_file(self):
         path = self.url_entry.get().strip()
         if not path:
+            return
+        if self._download_in_progress():
             return
         
         if not path.endswith('.fkx'):
@@ -697,7 +709,7 @@ class FileDownloaderApp:
         total_downloaded = self._downloaded_before_chunk + downloaded
         
         now = time.time()
-        self._speed_samples.append((now, total_downloaded))
+        self._speed_samples.append((now, downloaded))
         cutoff = now - 2.0
         self._speed_samples = [(t, b) for t, b in self._speed_samples if t >= cutoff]
         if len(self._speed_samples) >= 2:
@@ -705,8 +717,8 @@ class FileDownloaderApp:
             window_bytes = self._speed_samples[-1][1] - self._speed_samples[0][1]
             speed = window_bytes / window_time if window_time > 0 else 0
         else:
-            elapsed = now - self.download_start_time
-            speed = total_downloaded / elapsed if elapsed > 0 else 0
+            elapsed = now - self._chunk_download_start
+            speed = downloaded / elapsed if elapsed > 0 else 0
         
         self.update_chunk_progress(downloaded, chunk_size)
         self.update_download_status(total_downloaded, self.total_download_size, speed)
@@ -891,6 +903,8 @@ class FileDownloaderApp:
                 chunk_info = fkx_info['chunks'][i]
                 self.update_status(f"状态: 正在下载分片 {i+1}/{num_chunks}: {chunk_info['filename']}")
                 self._downloaded_before_chunk = self.downloaded_size
+                self._chunk_download_start = time.time()
+                self._speed_samples = []
                 self.progress_chunk['value'] = 0
                 result = self.download_chunk(base_path, chunk_info, i, self.chunk_dir,
                                             self.chunk_progress_callback)
