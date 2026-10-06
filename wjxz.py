@@ -83,6 +83,7 @@ class FileDownloaderApp:
         self._chunk_download_start = 0
         self._retry_needed = False
         self._failed = False
+        self._verified_chunks = set()
         
         self.create_widgets()
     
@@ -521,6 +522,9 @@ class FileDownloaderApp:
         if os.path.getsize(chunk_path) != chunk_info['size']:
             return None
         if 'sha256' in chunk_info:
+            verify_key = (chunk_info['filename'], chunk_info['size'], chunk_info['sha256'])
+            if verify_key in self._verified_chunks:
+                return chunk_path
             self.update_status(f"状态: 正在校验分片 {chunk_info['filename']}")
             actual_sha256 = utils.calculate_sha256(
                 chunk_path,
@@ -530,6 +534,7 @@ class FileDownloaderApp:
             if self.is_cancelled:
                 return None
             if actual_sha256 == chunk_info['sha256']:
+                self._verified_chunks.add(verify_key)
                 return chunk_path
             return None
         return chunk_path
@@ -1079,6 +1084,8 @@ class FileDownloaderApp:
         return None
     
     def start_download(self):
+        if self.download_thread and self.download_thread.is_alive():
+            return
         self._retry_needed = False
         self._failed = False
         verify_sha256 = self.verify_sha256_var.get()
