@@ -46,6 +46,46 @@ h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
 <script>
 let fkxInfo = null, baseUrl = '', resumeOffset = 0;
 let _fkxParam = null;
+let currentFkxUrl = '';
+
+function absoluteFkxHref() {
+    if (!_fkxParam) return '';
+    try {
+        const url = /^https?:\/\//i.test(_fkxParam) ? _fkxParam : new URL(_fkxParam, window.location.href).href;
+        return new URL(url, window.location.origin + window.location.pathname).href;
+    } catch (e) {
+        return '';
+    }
+}
+
+// 断点写入 sessionStorage：SW 每推进一段就回报一次，页面据此更新
+function saveResumeState(offset) {
+    if (!fkxInfo?.chunks?.length || !currentFkxUrl || !(offset > 0)) return;
+    try {
+        sessionStorage.setItem('fkx_resume', JSON.stringify({
+            fkx: currentFkxUrl,
+            offset: offset,
+            filename: fkxInfo.filename,
+            chunks: fkxInfo.chunks.map(c => c.filename + ',' + c.size).join('\n')
+        }));
+    } catch (e) { /* 隐私模式等场景写不进去，忽略 */ }
+}
+
+function clearResumeState() {
+    try { sessionStorage.removeItem('fkx_resume'); } catch (e) { /* ignore */ }
+}
+
+function updateResumeProgress(offset) {
+    resumeOffset = offset;
+    document.getElementById('resumeRow').style.display = 'flex';
+    document.getElementById('resumeProgress').textContent = formatSize(offset);
+}
+
+function showResumeButton() {
+    const resumeBtn = document.getElementById('resumeBtn');
+    resumeBtn.classList.add('show');
+    resumeBtn.disabled = false;
+}
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -119,6 +159,7 @@ function startDownload(offset) {
 
     const fkxUrl = /^https?:\/\//i.test(_fkxParam) ? _fkxParam : new URL(_fkxParam, window.location.href).href;
     const absoluteFkxUrl = new URL(fkxUrl, window.location.origin + window.location.pathname).href;
+    currentFkxUrl = absoluteFkxUrl;
     const downloadUrl = new URL('./fkxz', window.location.href);
     downloadUrl.searchParams.set('fkx', absoluteFkxUrl);
     if (offset > 0) downloadUrl.searchParams.set('resume', String(offset));
@@ -148,13 +189,51 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // SW 回报下载进度/结果，用来维护断点与"继续下载"按钮
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || typeof data.type !== 'string' || data.type.indexOf('fkx-') !== 0) return;
+        if (!currentFkxUrl || !data.fkx) return;
+        let from = '';
+        try { from = new URL(data.fkx).href; } catch (e) { return; }
+        if (from !== currentFkxUrl) return;
+
+        if (data.type === 'fkx-progress') {
+            if (data.sent > 0) {
+                saveResumeState(data.sent);
+                updateResumeProgress(data.sent);
+                if (data.total > 0) {
+                    showMessage(`下载中… ${formatSize(data.sent)} / ${formatSize(data.total)}`);
+                }
+            }
+        } else if (data.type === 'fkx-done') {
+            clearResumeState();
+            resumeOffset = 0;
+            document.getElementById('resumeRow').style.display = 'none';
+            document.getElementById('resumeBtn').classList.remove('show');
+            showMessage('下载完成');
+        } else if (data.type === 'fkx-failed') {
+            const offset = data.sent || resumeOffset;
+            saveResumeState(offset);
+            if (offset > 0) {
+                updateResumeProgress(offset);
+                showResumeButton();
+                showMessage('下载中断: ' + (data.error || '未知错误') + '，可点击"继续下载"从断点继续');
+            } else {
+                showMessage('下载失败: ' + (data.error || '未知错误'));
+            }
+        }
+    });
+
     const fkxParam = new URLSearchParams(window.location.search).get('fkx');
     const saved = sessionStorage.getItem('fkx_resume');
     if (fkxParam) {
         _fkxParam = fkxParam;
+        currentFkxUrl = absoluteFkxHref();
         if (saved) {
             try {
                 const state = JSON.parse(saved);
+                if (!state.fkx || state.fkx !== currentFkxUrl) throw new Error('断点不属于当前文件');
                 resumeOffset = state.offset || 0;
                 fkxInfo = {
                     chunks: state.chunks.split('\n').map(l => {

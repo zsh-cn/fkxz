@@ -1,43 +1,128 @@
-import os
-import requests
 import hashlib
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-import threading
-from urllib.parse import urlparse, urljoin
-import time
+import os
+import queue
+import re
 import shutil
-import utils
+import threading
+import time
+import tkinter as tk
+from tkinter import messagebox, ttk
+from urllib.parse import quote, unquote, urljoin, urlparse
 
-utils.set_app_user_model_id('fkxz.downloader')
+import requests
+
+import config
+import core
+import utils
 
 try:
     from curl_cffi import requests as curl_requests
     HAS_CURL_CFFI = True
 except ImportError:
+    curl_requests = None
     HAS_CURL_CFFI = False
 
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1",
-    "Priority": "u=0, i",
-}
+_DRIVE_PATH_RE = re.compile(r'^/[A-Za-z]:')
+
+
+def _new_pooled_session():
+    session = requests.Session()
+    size = config.HTTP_POOL_SIZE
+    adapter = requests.adapters.HTTPAdapter(pool_connections=size, pool_maxsize=size)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+
+def _new_enhanced_session():
+    """返回 (session, 是否为 curl_cffi 会话)。
+
+    curl_cffi 的 impersonate 目标是按版本演进的，不能盲目写死 chrome131，
+    否则低版本在构造 Session 时就抛 ValueError，窗口都起不来。
+    """
+    if HAS_CURL_CFFI:
+        for target in config.IMPERSONATE_TARGETS:
+            try:
+                return curl_requests.Session(impersonate=target), True
+            except Exception:
+                continue
+        try:
+            return curl_requests.Session(), True
+        except Exception:
+            pass
+    return _new_pooled_session(), False
+
+
+
+VERIFY_STATUS_THRESHOLD = 8 * 1024 * 1024
+
+
+def _validate_chunk_name(filename):
+    """分片名只允许是纯文件名，任何路径成分都拒绝。"""
+    if not filename or '..' in filename or '/' in filename or '\\' in filename:
+        raise ValueError(f"非法的分片文件名: {filename}")
+    return os.path.basename(filename)
+
+
+def chunk_path_in(directory, filename):
+    """把清单里的分片名落成目录内的绝对路径（越界即报错）。"""
+    return utils.ensure_within_dir(directory, _validate_chunk_name(filename))
+
+
+def same_chunk_layout(left_info, right_info):
+    """两份清单是否描述同一批分片（复用本地缓存清单时忽略哈希字段差异）。"""
+    left = left_info.get('chunks') or []
+    right = right_info.get('chunks') or []
+    if not left or len(left) != len(right):
+        return False
+    return all(lc['filename'] == rc['filename'] and lc['size'] == rc['size']
+               for lc, rc in zip(left, right))
+
+
+def find_existing_chunk(chunk_dir, chunk_info, verified_cache=None,
+                        should_stop=None, on_verify_start=None):
+    """检查分片是否已存在且可用（断点续传的关键一步）。
+
+    大小不符直接当不存在；清单里带 SHA-256 时逐字节复核，不符就删掉重下。
+    verified_cache 记录本轮已校验过的 (文件名, 大小, 哈希)，避免重复读盘。
+    命中返回分片路径，否则返回 None。
+    """
+    try:
+        chunk_path = chunk_path_in(chunk_dir, chunk_info['filename'])
+    except ValueError:
+        return None
+    if not os.path.exists(chunk_path):
+        return None
+    if os.path.getsize(chunk_path) != chunk_info['size']:
+        return None
+
+    expected_sha256 = chunk_info.get('sha256')
+    if not expected_sha256:
+        return chunk_path
+
+    verify_key = (chunk_info['filename'], chunk_info['size'], expected_sha256)
+    if verified_cache is not None and verify_key in verified_cache:
+        return chunk_path
+
+    if on_verify_start and chunk_info['size'] > VERIFY_STATUS_THRESHOLD:
+        on_verify_start(chunk_info['filename'])
+    actual_sha256 = utils.sha256_file(chunk_path, should_stop=should_stop)
+    if actual_sha256 is None:
+        return None
+    if actual_sha256 == expected_sha256:
+        if verified_cache is not None:
+            verified_cache.add(verify_key)
+        return chunk_path
+
+    utils.safe_remove(chunk_path)
+    return None
+
 
 class FileDownloaderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("文件下载")
-        self.root.geometry("650x650")
-        self.root.minsize(650, 650)
+        utils.scaled_geometry(self.root, *config.DOWNLOADER_WINDOW_SIZE)
         self.root.resizable(True, True)
 
         self._icon = utils.apply_window_icon(self.root, 'wjxz.png')
@@ -50,24 +135,19 @@ class FileDownloaderApp:
             self.style.theme_use('xpnative')
         elif 'clam' in available_themes:
             self.style.theme_use('clam')
-        
+
         self.fkx_path = ""
         self.output_dir = ""
         self.download_thread = None
         self.is_cancelled = False
         self.is_local = False
-        self.session = requests.Session()
-        if HAS_CURL_CFFI:
-            self.session_enhanced = curl_requests.Session(impersonate="chrome131")
-        else:
-            self.session_enhanced = requests.Session()
-            self.session_enhanced.mount('http://', requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=32))
-            self.session_enhanced.mount('https://', requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=32))
-        self.session_enhanced.headers.update(BROWSER_HEADERS)
-        self.session.mount('http://', requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=32))
-        self.session.mount('https://', requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=32))
+        self._closed = False
+
+        self.session = _new_pooled_session()
+        self.session_enhanced, self._curl_session = _new_enhanced_session()
+        self.session_enhanced.headers.update(config.BROWSER_HEADERS)
+
         self.downloaded_chunks = {}
-        self.chunk_errors = []
         self.file_info = {}
         self.total_download_size = 0
         self.downloaded_size = 0
@@ -75,28 +155,34 @@ class FileDownloaderApp:
         self.chunk_dir = ""
         self.safe_filename = ""
         self.base_referer = ""
-        self.enhanced_mode = tk.BooleanVar(value=True)
+        self.enhanced_mode = tk.BooleanVar(value=self._curl_session)
         self.verify_sha256_var = tk.BooleanVar(value=True)
-        self._use_enhanced = True
+        self.workers_var = tk.IntVar(value=config.DEFAULT_WORKERS)
+        self._use_enhanced = self._curl_session
         self._last_chunk_error = ""
-        self._speed_samples = []
-        self._chunk_download_start = 0
-        self._retry_needed = False
-        self._failed = False
         self._verified_chunks = set()
-        
+
+        self._progress_lock = threading.Lock()
+        self._chunk_bytes = {}
+        self._abort_download = False
+        self._file_info_source = None
+
         self.create_widgets()
-    
+        utils.install_about_menu(self.root, "文件下载")
+
+        self.ui = utils.UiDispatcher(self.root)
+
+
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         url_frame = ttk.LabelFrame(main_frame, text="文件信息来源", padding="10")
         url_frame.pack(fill=tk.X, pady=5)
         url_frame.columnconfigure(0, weight=1)
         url_frame.columnconfigure(1, weight=1)
         url_frame.columnconfigure(2, minsize=130)
-        
+
         ttk.Label(url_frame, text="文件信息URL或本地路径 (.fkx):").grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
         self.url_entry = ttk.Entry(url_frame)
         self.url_entry.grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 5), sticky=tk.EW, ipady=2)
@@ -104,115 +190,164 @@ class FileDownloaderApp:
         utils.setup_context_menu(self.url_entry, on_change=self.validate_input)
         self.browse_fkx_btn = ttk.Button(url_frame, text="浏览", command=self.browse_fkx_file)
         self.browse_fkx_btn.grid(row=1, column=2, pady=(0, 5))
-        
+
         ttk.Label(url_frame, text="输出目录:").grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
         self.output_entry = ttk.Entry(url_frame)
         self.output_entry.grid(row=3, column=0, columnspan=2, padx=10, pady=(0, 5), sticky=tk.EW, ipady=2)
         self.browse_output_btn = ttk.Button(url_frame, text="浏览", command=self.browse_output_dir)
         self.browse_output_btn.grid(row=3, column=2, pady=(0, 5))
         utils.setup_context_menu(self.output_entry)
-        
+
         self.enhanced_checkbox = ttk.Checkbutton(url_frame, text="启用增强模式 (curl_cffi浏览器模拟)", variable=self.enhanced_mode)
         self.enhanced_checkbox.grid(row=4, column=0, sticky=tk.W, pady=5)
 
         self.verify_sha256_checkbox = ttk.Checkbutton(url_frame, text="启用SHA-256检验", variable=self.verify_sha256_var)
         self.verify_sha256_checkbox.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
 
-        if not HAS_CURL_CFFI:
+        if not self._curl_session:
             self.enhanced_mode.set(False)
             self.enhanced_checkbox.config(state=tk.DISABLED, text="增强模式不可用 (未安装 curl_cffi)")
-        
+
+        ttk.Label(url_frame, text="并发分片数:").grid(row=5, column=0, sticky=tk.W, pady=5)
+        self.workers_spinbox = ttk.Spinbox(url_frame, from_=config.MIN_WORKERS,
+                                           to=config.MAX_WORKERS, width=6,
+                                           textvariable=self.workers_var)
+        self.workers_spinbox.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        ttk.Label(url_frame, text=f"({config.MIN_WORKERS}-{config.MAX_WORKERS}，仅远程下载生效)").grid(
+            row=5, column=2, sticky=tk.W, pady=5)
+
         control_frame = ttk.LabelFrame(main_frame, text="文件信息", padding="10")
         control_frame.pack(fill=tk.X, pady=5)
         control_frame.columnconfigure(1, weight=1)
-        
+
         ttk.Label(control_frame, text="文件名:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.filename_label = ttk.Label(control_frame, text="-", foreground="#666666")
+        self.filename_label = ttk.Label(control_frame, text="-", foreground=config.TEXT_SECONDARY)
         self.filename_label.grid(row=0, column=1, sticky=tk.W, padx=10, pady=5)
-        
+
         ttk.Label(control_frame, text="文件大小:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.filesize_label = ttk.Label(control_frame, text="-", foreground="#666666")
+        self.filesize_label = ttk.Label(control_frame, text="-", foreground=config.TEXT_SECONDARY)
         self.filesize_label.grid(row=1, column=1, sticky=tk.W, padx=10, pady=5)
-        
+
         ttk.Label(control_frame, text="分片数:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.chunks_label = ttk.Label(control_frame, text="-", foreground="#666666")
+        self.chunks_label = ttk.Label(control_frame, text="-", foreground=config.TEXT_SECONDARY)
         self.chunks_label.grid(row=2, column=1, sticky=tk.W, padx=10, pady=5)
-        
+
         control_frame2 = ttk.LabelFrame(main_frame, text="处理状态", padding="10")
         control_frame2.pack(fill=tk.X, pady=5)
         control_frame2.columnconfigure(0, weight=1)
-        
-        self.progress_chunk = ttk.Progressbar(control_frame2, orient=tk.HORIZONTAL, mode='determinate')
-        self.progress_chunk.grid(row=0, column=0, pady=5, sticky=tk.EW)
-        
-        self.progress_total = ttk.Progressbar(control_frame2, orient=tk.HORIZONTAL, mode='determinate')
-        self.progress_total.grid(row=1, column=0, pady=5, sticky=tk.EW)
-        
-        self.status_label = ttk.Label(control_frame2, text="状态: 就绪", foreground="#333333")
-        self.status_label.grid(row=2, column=0, sticky=tk.W, pady=5)
-        
-        self.download_detail_label = ttk.Label(control_frame2, text="", foreground="#666666")
-        self.download_detail_label.grid(row=3, column=0, sticky=tk.W, pady=5)
-        
+
+        self.progress_bar = ttk.Progressbar(control_frame2, orient=tk.HORIZONTAL,
+                                            mode='determinate', maximum=100)
+        self.progress_bar.grid(row=0, column=0, pady=5, sticky=tk.EW)
+
+        self.status_label = ttk.Label(control_frame2, text="状态: 就绪", foreground=config.TEXT_NORMAL)
+        self.status_label.grid(row=1, column=0, sticky=tk.W, pady=5)
+
+        self.download_detail_label = ttk.Label(control_frame2, text="", foreground=config.TEXT_SECONDARY)
+        self.download_detail_label.grid(row=2, column=0, sticky=tk.W, pady=5)
+
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=10)
-        
+
         self.start_button = ttk.Button(button_frame, text="开始合并", command=self.start_download, width=20, state=tk.NORMAL)
         self.start_button.pack(side=tk.LEFT, padx=5)
-        
+
         self.cancel_button = ttk.Button(button_frame, text="取消", command=self.cancel_download, width=15, state=tk.DISABLED)
         self.cancel_button.pack(side=tk.LEFT, padx=5)
-    
+
+
+    def _run_on_ui(self, func, *args, **kwargs):
+        if threading.current_thread() is threading.main_thread():
+            func(*args, **kwargs)
+        else:
+            self.ui.call(func, *args, **kwargs)
+
+    def _run_on_ui_latest(self, key, func, *args, **kwargs):
+        self.ui.call_latest(key, func, *args, **kwargs)
+
+
     @staticmethod
     def _is_remote_url(path):
-        return path.startswith('http://') or path.startswith('https://')
+        lowered = (path or '').lower()
+        return lowered.startswith('http://') or lowered.startswith('https://')
 
     @staticmethod
     def _has_drive_letter(path):
         return len(path) >= 2 and path[1] == ':'
 
     @staticmethod
-    def _is_domain_like(path):
+    def _strip_query(path):
+        return path.split('?', 1)[0].split('#', 1)[0]
+
+    @classmethod
+    def _url_path_of(cls, path):
+        """取 URL 的 path 部分（去掉 query/fragment），本地路径原样返回。"""
+        if not path:
+            return ''
+        if cls._is_remote_url(path):
+            try:
+                return urlparse(path).path or ''
+            except ValueError:
+                return cls._strip_query(path)
+        return path
+
+    @classmethod
+    def _looks_like_fkx(cls, path):
+        """用 path 判断后缀，兼容带签名的 CDN 链接（xxx.fkx?sign=...）。"""
+        return cls._url_path_of(path).lower().endswith('.fkx')
+
+    @classmethod
+    def _is_domain_like(cls, path):
         if not path:
             return False
-        if path.startswith('http://') or path.startswith('https://'):
+        if cls._is_remote_url(path):
             return False
         if len(path) >= 2 and path[1] == ':':
             return False
         if path.startswith('.') or path.startswith('/') or path.startswith('\\'):
             return False
-        slash_pos = path.find('/')
+        bare = cls._strip_query(path)
+        slash_pos = bare.find('/')
         if slash_pos == -1:
-            slash_pos = len(path)
-        dot_pos = path.find('.')
+            slash_pos = len(bare)
+        dot_pos = bare.find('.')
         return dot_pos != -1 and dot_pos < slash_pos
 
     def _resolve_local_path(self, path):
-        if path.startswith('file://'):
-            path = path[7:]
+        """file:// URL → 本地路径（正确处理 /C:/ 与 UNC 与 %20 解码）。"""
+        if path.lower().startswith('file://'):
+            parsed = urlparse(path)
+            local = unquote(parsed.path or '')
+            netloc = parsed.netloc
+            if netloc and netloc.lower() != 'localhost':
+                local = f"//{netloc}{local}"
+            elif _DRIVE_PATH_RE.match(local):
+                local = local[1:]
+            path = local.replace('/', os.sep) if os.sep != '/' else local
         if not self._is_remote_url(path) and not self._has_drive_letter(path):
             return os.path.abspath(path)
         return path
 
     def _update_path_type_ui(self, path, is_local=False):
         if not path:
-            if HAS_CURL_CFFI:
+            if self._curl_session:
                 self.enhanced_checkbox.config(state=tk.NORMAL)
             return
         if not is_local and (self._is_remote_url(path) or self._is_domain_like(path)):
-            if HAS_CURL_CFFI:
+            if self._curl_session:
                 self.enhanced_checkbox.config(state=tk.NORMAL)
             self.start_button.config(text="开始下载")
         else:
             self.enhanced_checkbox.config(state=tk.DISABLED)
             self.start_button.config(text="开始合并")
 
+
     def validate_input(self, event=None):
         path = self.url_entry.get().strip()
         if path:
-            if path.endswith('.fkx') and self._is_domain_like(path):
+            if self._looks_like_fkx(path) and self._is_domain_like(path):
                 if not getattr(self, '_auto_prepending', False):
-                    local_path = os.path.join(os.getcwd(), path)
+                    local_path = os.path.join(os.getcwd(), self._url_path_of(path))
                     if os.path.exists(local_path):
                         self._update_path_type_ui(path, is_local=True)
                     else:
@@ -225,20 +360,20 @@ class FileDownloaderApp:
             else:
                 self._update_path_type_ui(path)
 
-            if path.endswith('.fkx'):
+            if self._looks_like_fkx(path):
                 self.schedule_parse()
             else:
-                self.status_label.config(text="状态: 就绪", foreground="#333333")
+                self.status_label.config(text="状态: 就绪", foreground=config.TEXT_NORMAL)
         else:
             self._update_path_type_ui("")
-            self.status_label.config(text="状态: 就绪", foreground="#333333")
+            self.status_label.config(text="状态: 就绪", foreground=config.TEXT_NORMAL)
             self.clear_file_info()
-    
+
     def schedule_parse(self):
-        if hasattr(self, '_parse_after_id'):
+        if getattr(self, '_parse_after_id', None):
             self.root.after_cancel(self._parse_after_id)
         self._parse_after_id = self.root.after(500, self.parse_file)
-    
+
     def clear_file_info(self):
         self.file_info = None
         self.total_download_size = 0
@@ -246,12 +381,8 @@ class FileDownloaderApp:
         self.filesize_label.config(text="-")
         self.chunks_label.config(text="-")
         self.download_detail_label.config(text="")
-        self.progress_chunk['value'] = 0
-        self.progress_total['value'] = 0
-    
-    def show_parse_error(self, title, message):
-        self.update_status(f"状态: {title} - {message}", foreground="#cc0000")
-    
+        self.progress_bar['value'] = 0
+
     def _download_in_progress(self):
         return bool(self.download_thread and self.download_thread.is_alive())
 
@@ -262,6 +393,7 @@ class FileDownloaderApp:
         self.chunks_label.config(text=str(num_chunks))
         self.is_local = not self._is_remote_url(self.fkx_path)
         self.file_info = fkx_info
+        self._file_info_source = self.fkx_path
         self.total_download_size = total_size
         if in_progress:
             self.enhanced_checkbox.config(state=tk.DISABLED)
@@ -269,12 +401,12 @@ class FileDownloaderApp:
             self._update_path_type_ui(self.fkx_path)
         if not in_progress:
             mode_text = "本地模式" if self.is_local else "远程模式"
-            self.update_status(f"状态: 就绪 ({mode_text})", foreground="#006600")
+            self.update_status(f"状态: 就绪 ({mode_text})", foreground=config.TEXT_SUCCESS)
             self.download_detail_label.config(text="")
 
     def _apply_parse_error(self, error_msg):
         if not self._download_in_progress():
-            self.status_label.config(text="状态: 就绪", foreground="#333333")
+            self.status_label.config(text="状态: 就绪", foreground=config.TEXT_NORMAL)
 
     def parse_file(self):
         path = self.url_entry.get().strip()
@@ -282,84 +414,79 @@ class FileDownloaderApp:
             return
         if self._download_in_progress():
             return
-        
-        if not path.endswith('.fkx'):
+        if not self._looks_like_fkx(path):
             return
-        
+
         path = self._resolve_local_path(path)
         self.fkx_path = path
-        self._use_enhanced = self.enhanced_mode.get()
-        self.progress_chunk['value'] = 0
-        self.progress_total['value'] = 0
-        
+        self._use_enhanced = bool(self.enhanced_mode.get() and self._curl_session)
+        self.progress_bar['value'] = 0
+
+        is_remote = self._is_remote_url(path)
+        use_enhanced = self._use_enhanced
+
         def parse_thread():
             try:
-                fkx_content = None
-                if self._is_remote_url(path):
-                    fkx_content = self.download_fkx(path)
-                    if not fkx_content:
-                        self.root.after(0, lambda: self._apply_parse_error("无法下载文件信息"))
+                if is_remote:
+                    content = self.download_fkx(path)
+                    if not content:
+                        self._run_on_ui(self._apply_parse_error, "无法下载文件信息")
                         return
                 else:
                     if not os.path.exists(path) or not os.path.isfile(path):
-                        self.root.after(0, lambda: self._apply_parse_error(f"本地文件不存在: {path}"))
+                        self._run_on_ui(self._apply_parse_error, f"本地文件不存在: {path}")
                         return
-                    fkx_content = self.read_local_fkx(path)
-                
-                if not fkx_content:
-                    self.root.after(0, lambda: self._apply_parse_error("无法获取文件信息"))
-                    return
-                
-                fkx_info = self.parse_fkx(fkx_content)
-                
+                    content = self.read_local_fkx(path)
+                    if not content:
+                        self._run_on_ui(self._apply_parse_error, "无法获取文件信息")
+                        return
+
+                fkx_info = self.parse_fkx(content)
                 if 'filename' not in fkx_info or 'chunks' not in fkx_info:
-                    self.root.after(0, lambda: self._apply_parse_error("文件信息格式不正确"))
+                    self._run_on_ui(self._apply_parse_error, "文件信息格式不正确")
                     return
-                
+
                 total_size = sum(chunk['size'] for chunk in fkx_info['chunks'])
                 num_chunks = len(fkx_info['chunks'])
+                self._run_on_ui(self._apply_parse_result, fkx_info, total_size, num_chunks)
+            except Exception as exc:
+                message = f"解析失败: {exc}"
+                self._run_on_ui(self._apply_parse_error, message)
 
-                self.root.after(0, lambda: self._apply_parse_result(fkx_info, total_size, num_chunks))
-                
-            except Exception as e:
-                self.root.after(0, lambda: self._apply_parse_error(f"解析失败: {str(e)}"))
-        
-        threading.Thread(target=parse_thread, daemon=True).start()
-    
-    def disable_all_widgets(self):
-        def _disable():
-            self.url_entry.config(state=tk.DISABLED)
-            self.output_entry.config(state=tk.DISABLED)
-            self.browse_fkx_btn.config(state=tk.DISABLED)
-            self.browse_output_btn.config(state=tk.DISABLED)
-            self.enhanced_checkbox.config(state=tk.DISABLED)
-            self.verify_sha256_checkbox.config(state=tk.DISABLED)
-            self.start_button.config(state=tk.DISABLED)
-        self.root.after(0, _disable)
-    
-    def enable_all_widgets(self):
-        def _enable():
-            self.url_entry.config(state=tk.NORMAL)
-            self.output_entry.config(state=tk.NORMAL)
-            self.browse_fkx_btn.config(state=tk.NORMAL)
-            self.browse_output_btn.config(state=tk.NORMAL)
-            if self.is_local:
-                self.enhanced_checkbox.config(state=tk.DISABLED)
-            elif HAS_CURL_CFFI:
-                self.enhanced_checkbox.config(state=tk.NORMAL)
-            else:
-                self.enhanced_checkbox.config(state=tk.DISABLED)
-            self.verify_sha256_checkbox.config(state=tk.NORMAL)
-            if self._retry_needed:
-                self.start_button.config(state=tk.NORMAL, text="重试")
-            elif self.file_info and 'chunks' in self.file_info:
-                button_text = "开始合并" if self.is_local else "开始下载"
-                self.start_button.config(state=tk.NORMAL, text=button_text)
-            else:
-                self.start_button.config(state=tk.NORMAL, text="开始下载")
-            self.cancel_button.config(state=tk.DISABLED, text="取消")
-        self.root.after(0, _enable)
-    
+        self._use_enhanced = use_enhanced
+        threading.Thread(target=parse_thread, daemon=True, name="parse-worker").start()
+
+
+    def _idle_button_text(self):
+        return "开始合并" if self.is_local else "开始下载"
+
+    def _apply_ui_state(self, state, button_text=None):
+        """统一管理控件可用性与按钮文案。
+
+        state: "running" 运行中（全部只读、显示取消）
+               "idle"    空闲（文案按本地/远程自动给）
+               "retry"   失败后可重试（文案"重试"，可传入 button_text 覆盖）
+        """
+        running = state == "running"
+        editing = tk.DISABLED if running else tk.NORMAL
+        for widget in (self.url_entry, self.output_entry, self.browse_fkx_btn,
+                       self.browse_output_btn, self.verify_sha256_checkbox,
+                       self.workers_spinbox):
+            widget.config(state=editing)
+
+        enhanced_enabled = (not running) and (not self.is_local) and self._curl_session
+        self.enhanced_checkbox.config(state=tk.NORMAL if enhanced_enabled else tk.DISABLED)
+
+        if running:
+            self.start_button.config(state=tk.DISABLED, text=self._idle_button_text())
+            self.cancel_button.config(state=tk.NORMAL, text="取消")
+            return
+
+        if button_text is None:
+            button_text = "重试" if state == "retry" else self._idle_button_text()
+        self.start_button.config(state=tk.NORMAL, text=button_text)
+        self.cancel_button.config(state=tk.DISABLED, text="取消")
+
     def browse_fkx_file(self):
         file_path = utils.browse_file_dialog(self.url_entry, filetypes=[("文件信息文件", "*.fkx")])
         if file_path:
@@ -370,9 +497,10 @@ class FileDownloaderApp:
         dir_path = utils.browse_directory(self.output_entry)
         if dir_path:
             self.output_dir = dir_path
-    
+
+
     def _get_request_headers(self, referer=None, is_chunk=False):
-        headers = dict(BROWSER_HEADERS)
+        headers = dict(config.BROWSER_HEADERS)
         if is_chunk:
             headers["Sec-Fetch-Dest"] = "empty"
             headers["Sec-Fetch-Mode"] = "cors"
@@ -384,304 +512,339 @@ class FileDownloaderApp:
             headers["Referer"] = referer
         return headers
 
-    def download_single(self, url, timeout=120):
+    def download_single(self, url, timeout=config.CONNECT_TIMEOUT):
         try:
-            if self._use_enhanced:
-                session = self.session_enhanced
-                headers = self._get_request_headers()
-                if HAS_CURL_CFFI:
-                    response = session.get(url, timeout=timeout, headers=headers)
-                else:
-                    response = session.get(url, timeout=timeout, stream=True, headers=headers)
+            if self._use_enhanced and self._curl_session:
+                response = self.session_enhanced.get(
+                    url, timeout=timeout, headers=self._get_request_headers()
+                )
+            elif self._use_enhanced:
+                response = self.session_enhanced.get(
+                    url, timeout=timeout, stream=True, headers=self._get_request_headers()
+                )
             else:
                 response = self.session.get(url, timeout=timeout, stream=True)
             response.raise_for_status()
             return response
-        except Exception as e:
-            self.update_status(f"状态: 网络错误 - {str(e)[:50]}", foreground="#cc0000")
+        except Exception as exc:
+            self.update_status(f"状态: 网络错误 - {str(exc)[:50]}", foreground=config.TEXT_ERROR)
             return None
 
     def read_local_fkx(self, file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            self.show_error(f"无法读取文件信息: {str(e)}")
+            return core.read_fkx_text(file_path)
+        except OSError as exc:
+            self.show_error(f"无法读取文件信息: {exc}")
             return None
-    
+
     def parse_fkx(self, content):
-        info = {'chunks': []}
-        raw_chunks = {}
+        """清单解析：格式定义在 core.py，这里只做转发。"""
+        return core.parse_fkx(content)
 
-        lines = content.strip().split('\n')
-        for line in lines:
-            if '=' not in line:
-                continue
-            key, value = line.split('=', 1)
-            if key.startswith('chunk_'):
+
+    def _should_stop(self):
+        return self.is_cancelled or self._abort_download
+
+    def _set_chunk_bytes(self, index, written):
+        with self._progress_lock:
+            self._chunk_bytes[index] = written
+
+    def _record_chunk_error(self, message):
+        with self._progress_lock:
+            self._last_chunk_error = message
+
+    def _transfer_to_part(self, url, part_path, chunk_size, expected_sha256, index):
+        """单次传输尝试：支持 Range 续传，边收边算分片 SHA-256。
+
+        返回 (ok, error)；取消时抛 _ChunkCancelled，网络异常交给调用方重试。
+        失败时会保留 part 文件，下次尝试从断点继续。
+        """
+        offset = 0
+        hasher = hashlib.sha256()
+
+        if os.path.exists(part_path):
+            existing = os.path.getsize(part_path)
+            if existing >= chunk_size:
+                utils.safe_remove(part_path)
+            elif existing > 0:
+                offset = existing
+                with open(part_path, 'rb') as handle:
+                    while True:
+                        block = handle.read(config.IO_BLOCK_SIZE)
+                        if not block:
+                            break
+                        hasher.update(block)
+                        if self._should_stop():
+                            raise _ChunkCancelled()
+
+        headers = self._get_request_headers(referer=self.base_referer, is_chunk=True)
+        if offset:
+            headers['Range'] = f'bytes={offset}-'
+
+        if offset == 0 and self._use_enhanced and self._curl_session:
+            written = 0
+            with open(part_path, 'wb') as handle:
+                def content_callback(data):
+                    nonlocal written
+                    if self._should_stop():
+                        return -1
+                    handle.write(data)
+                    hasher.update(data)
+                    written += len(data)
+                    self._set_chunk_bytes(index, written)
+                    return None
+
                 try:
-                    index = int(key.split('_', 1)[1])
-                except ValueError:
-                    continue
-                parts = value.split(',')
-                if len(parts) >= 2:
-                    chunk_filename = os.path.basename(parts[0].strip())
-                    if index in raw_chunks:
-                        raise ValueError(f"chunk 索引重复: chunk_{index}")
-                    chunk_info = {
-                        'filename': chunk_filename,
-                        'size': int(parts[1])
-                    }
-                    if len(parts) >= 3:
-                        chunk_info['sha256'] = parts[2].strip()
-                    raw_chunks[index] = chunk_info
-            else:
-                info[key] = value.strip()
-
-        if not raw_chunks:
-            raise ValueError("未找到任何 chunk 条目")
-
-        sorted_indices = sorted(raw_chunks.keys())
-        expected_start = 1
-        for i, idx in enumerate(sorted_indices):
-            if idx != expected_start + i:
-                raise ValueError(
-                    f"chunk 索引不连续: 期望 chunk_{expected_start + i}, 实际 chunk_{idx}"
-                )
-
-        info['chunks'] = [raw_chunks[idx] for idx in sorted_indices]
-        return info
-    
-    def _download_stream_to_file(self, response, chunk_path, chunk_size, progress_callback):
-        downloaded = 0
-        with open(chunk_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=65536):
-                if self.is_cancelled:
-                    return False
-                f.write(chunk)
-                downloaded += len(chunk)
-                if progress_callback:
-                    progress_callback(downloaded, chunk_size, len(chunk))
-        return True
-
-    def download_chunk_stream(self, url, chunk_path, chunk_size, progress_callback=None):
-        try:
+                    response = self.session_enhanced.get(
+                        url, timeout=config.CHUNK_TIMEOUT, headers=headers,
+                        content_callback=content_callback,
+                    )
+                except Exception:
+                    if self._should_stop():
+                        raise _ChunkCancelled()
+                    raise
+            response.raise_for_status()
+        else:
             if self._use_enhanced:
-                session = self.session_enhanced
-                headers = self._get_request_headers(referer=self.base_referer, is_chunk=True)
-                if HAS_CURL_CFFI:
-                    fh_ref: list = [None]
-                    downloaded_bytes = [0]
-                    last_reported = [0]
-
-                    def content_callback(data):
-                        if self.is_cancelled:
-                            return -1
-                        fh_ref[0].write(data)
-                        downloaded_bytes[0] += len(data)
-                        d = downloaded_bytes[0]
-                        if d - last_reported[0] >= 16384 or d >= chunk_size:
-                            last_reported[0] = d
-                            if progress_callback:
-                                progress_callback(d, chunk_size, len(data))
-
-                    with open(chunk_path, 'wb') as f:
-                        fh_ref[0] = f
-                        response = session.get(url, timeout=120, headers=headers, content_callback=content_callback)
-                    response.raise_for_status()
-                else:
-                    response = session.get(url, stream=True, timeout=120, headers=headers)
-                    response.raise_for_status()
-                    if not self._download_stream_to_file(response, chunk_path, chunk_size, progress_callback):
-                        return False
+                response = self.session_enhanced.get(
+                    url, stream=True, timeout=config.CHUNK_TIMEOUT, headers=headers)
+            elif offset:
+                response = self.session.get(
+                    url, stream=True, timeout=config.CHUNK_TIMEOUT,
+                    headers={'Range': headers['Range']})
             else:
-                response = self.session.get(url, stream=True, timeout=120)
-                response.raise_for_status()
-                if not self._download_stream_to_file(response, chunk_path, chunk_size, progress_callback):
-                    return False
+                response = self.session.get(url, stream=True, timeout=config.CHUNK_TIMEOUT)
+            response.raise_for_status()
 
-            if self.is_cancelled:
-                return False
+            if offset and getattr(response, 'status_code', 0) != 206:
+                offset = 0
+                hasher = hashlib.sha256()
 
-            return True
-        except Exception as e:
-            self._last_chunk_error = str(e)[:100]
-            return False
+            written = offset
+            with open(part_path, 'ab' if offset else 'wb') as handle:
+                for block in response.iter_content(chunk_size=config.CHUNK_BUFFER):
+                    if self._should_stop():
+                        raise _ChunkCancelled()
+                    if not block:
+                        continue
+                    handle.write(block)
+                    hasher.update(block)
+                    written += len(block)
+                    self._set_chunk_bytes(index, written)
+                handle.flush()
 
-    @staticmethod
-    def _validate_chunk_filename(filename):
-        if '..' in filename or '/' in filename or '\\' in filename:
-            raise ValueError(f"非法的分片文件名: {filename}")
-        return os.path.basename(filename)
+        if written != chunk_size:
+            return False, f"大小不匹配 (期望 {chunk_size}, 实际 {written})"
+        if expected_sha256 and hasher.hexdigest() != expected_sha256:
+            return False, "sha-mismatch"
+        return True, ""
 
     def _check_existing_chunk(self, chunk_dir, chunk_info):
-        chunk_path = os.path.join(chunk_dir, chunk_info['filename'])
-        chunk_path = os.path.normpath(chunk_path)
-        if not os.path.exists(chunk_path):
-            return None
-        if os.path.getsize(chunk_path) != chunk_info['size']:
-            return None
-        if 'sha256' in chunk_info:
-            verify_key = (chunk_info['filename'], chunk_info['size'], chunk_info['sha256'])
-            if verify_key in self._verified_chunks:
-                return chunk_path
-            self.update_status(f"状态: 正在校验分片 {chunk_info['filename']}")
-            actual_sha256 = utils.calculate_sha256(
-                chunk_path,
-                cancel_check=lambda: self.is_cancelled,
-                progress_callback=lambda p, t: self._on_sha256_progress(p, t)
-            )
-            if self.is_cancelled:
-                return None
-            if actual_sha256 == chunk_info['sha256']:
-                self._verified_chunks.add(verify_key)
-                return chunk_path
-            return None
-        return chunk_path
+        """已有分片是否可复用（大小 + SHA-256），判定逻辑在本模块。"""
+        return find_existing_chunk(
+            chunk_dir, chunk_info,
+            verified_cache=self._verified_chunks,
+            should_stop=self._should_stop,
+            on_verify_start=lambda name: self.update_status(f"状态: 正在校验已有分片 {name}"),
+        )
 
-    def download_chunk(self, base_url, chunk_info, chunk_index, output_dir, progress_callback=None):
-        existing = self._check_existing_chunk(output_dir, chunk_info)
-        if existing:
-            self.update_status(f"状态: 分片 {chunk_index+1}/{len(self.file_info['chunks'])} 已存在，跳过")
-            self.downloaded_chunks[chunk_index] = existing
-            self.downloaded_size += chunk_info['size']
-            return chunk_index
+    def _mark_chunk_done(self, index, size, path):
+        with self._progress_lock:
+            self.downloaded_chunks[index] = path
+            self._chunk_bytes[index] = size
 
-        chunk_filename = self._validate_chunk_filename(chunk_info['filename'])
-        chunk_url = urljoin(base_url, chunk_filename)
+    def _sleep_backoff(self, attempt):
+        deadline = time.monotonic() + config.RETRY_BASE_DELAY * (2 ** (attempt - 1))
+        while time.monotonic() < deadline:
+            if self._should_stop():
+                return
+            time.sleep(0.05)
+
+    def _fetch_chunk(self, base_url, index, chunk_info, chunk_dir):
+        """工作线程：下载单个分片（跳过已完成 / 断点续传 / 指数退避重试 / SHA 校验）。"""
+        if self._should_stop():
+            return False
+
+        filename = chunk_info['filename']
         chunk_size = chunk_info['size']
-        chunk_path = os.path.join(output_dir, chunk_filename)
-        chunk_path = os.path.normpath(chunk_path)
+        expected_sha256 = chunk_info.get('sha256')
+
+        existing = self._check_existing_chunk(chunk_dir, chunk_info)
+        if existing:
+            self._mark_chunk_done(index, chunk_size, existing)
+            return True
+
+        try:
+            chunk_path = chunk_path_in(chunk_dir, filename)
+        except ValueError as exc:
+            self._record_chunk_error(f"{filename}: {exc}")
+            return False
 
         if chunk_size == 0:
-            with open(chunk_path, 'wb') as f:
-                pass
-            self.downloaded_chunks[chunk_index] = chunk_path
-            return chunk_index
+            try:
+                with open(chunk_path, 'wb'):
+                    pass
+            except OSError as exc:
+                self._record_chunk_error(f"{filename}: {exc}")
+                return False
+            self._mark_chunk_done(index, 0, chunk_path)
+            return True
 
-        self.update_status(f"状态: 正在下载 {chunk_info['filename']}")
-        success = self.download_chunk_stream(chunk_url, chunk_path, chunk_size, progress_callback)
+        url = urljoin(base_url, self._quote_segment(filename))
+        part_path = utils.part_path_for(chunk_path)
+        last_error = "未知错误"
 
-        if success and os.path.exists(chunk_path) and os.path.getsize(chunk_path) == chunk_size:
-            self.downloaded_chunks[chunk_index] = chunk_path
-            self.downloaded_size += chunk_size
-            return chunk_index
+        for attempt in range(1, config.RETRY_ATTEMPTS + 1):
+            if self._should_stop():
+                return False
+            try:
+                ok, err = self._transfer_to_part(url, part_path, chunk_size, expected_sha256, index)
+            except _ChunkCancelled:
+                return False
+            except Exception as exc:
+                ok, err = False, (str(exc)[:120] or exc.__class__.__name__)
 
-        if success:
-            self._last_chunk_error = (
-                f"下载大小不匹配 (期望 {chunk_size}, 实际 {os.path.getsize(chunk_path)})"
-            )
+            if ok:
+                try:
+                    os.replace(part_path, chunk_path)
+                except OSError as exc:
+                    self._record_chunk_error(f"{filename}: {exc}")
+                    return False
+                self._mark_chunk_done(index, chunk_size, chunk_path)
+                return True
 
-        return None
-    
-    def read_local_chunk(self, base_path, chunk_info):
-        chunk_path = os.path.join(base_path, chunk_info['filename'])
-        chunk_path = os.path.normpath(chunk_path)
-        try:
-            with open(chunk_path, 'rb') as f:
-                return f.read()
-        except Exception as e:
-            self.show_error(f"无法读取分片文件 {chunk_info['filename']}: {str(e)}")
-            return None
-    
+            last_error = err
+            if err == "sha-mismatch":
+                utils.safe_remove(part_path)
+            if attempt < config.RETRY_ATTEMPTS:
+                self._sleep_backoff(attempt)
+
+        self._record_chunk_error(f"{filename}: {last_error}")
+        return False
+
+    @staticmethod
+    def _quote_segment(name):
+        """把分片名编码进 URL；已含 % 转义的保持原样。"""
+        if '%' in name:
+            return name
+        return quote(name)
+
+
     def sanitize_filename(self, filename):
-        invalid_chars = '<>:"/\\|?*'
-        for char in invalid_chars:
-            filename = filename.replace(char, '_')
-        return filename
-    
+        return utils.safe_filename(filename, default="未命名")
+
     def _get_chunk_dir_name(self):
         return f"{self.safe_filename}-fkxz" if self.safe_filename else "fkwj"
 
     def get_chunk_dir(self, output_dir):
-        chunk_dir = os.path.join(output_dir, self._get_chunk_dir_name())
+        chunk_dir = utils.ensure_within_dir(output_dir, self._get_chunk_dir_name())
         os.makedirs(chunk_dir, exist_ok=True)
         return chunk_dir
-    
+
     def cleanup_chunk_dir(self, output_dir):
-        chunk_dir = os.path.join(output_dir, self._get_chunk_dir_name())
-        if os.path.exists(chunk_dir):
-            shutil.rmtree(chunk_dir)
-    
-    def update_status(self, text, foreground="#333333"):
-        def update():
-            self.status_label.config(text=text, foreground=foreground)
-            self.root.update_idletasks()
-        self.root.after(0, update)
-    
+        try:
+            chunk_dir = utils.ensure_within_dir(output_dir, self._get_chunk_dir_name())
+        except ValueError:
+            return
+        if os.path.isdir(chunk_dir):
+            shutil.rmtree(chunk_dir, ignore_errors=True)
+
+
+    def update_status(self, text, foreground=config.TEXT_NORMAL):
+        self._run_on_ui(self._set_status, text, foreground)
+
+    def _set_status(self, text, foreground=config.TEXT_NORMAL):
+        self.status_label.config(text=text, foreground=foreground)
+
     def show_error(self, message):
-        self.update_status(f"状态: {message}", foreground="#cc0000")
-    
-    def update_chunk_progress(self, downloaded, chunk_size):
-        def update():
-            if chunk_size > 0:
-                percentage = downloaded / chunk_size
-                self.progress_chunk['value'] = percentage * 100
-            self.root.update_idletasks()
-        self.root.after(0, update)
-    
-    def chunk_progress_callback(self, downloaded, chunk_size, chunk_len=0):
-        total_downloaded = self._downloaded_before_chunk + downloaded
-        
-        now = time.time()
-        self._speed_samples.append((now, downloaded))
-        cutoff = now - 2.0
-        self._speed_samples = [(t, b) for t, b in self._speed_samples if t >= cutoff]
-        if len(self._speed_samples) >= 2:
-            window_time = self._speed_samples[-1][0] - self._speed_samples[0][0]
-            window_bytes = self._speed_samples[-1][1] - self._speed_samples[0][1]
-            speed = window_bytes / window_time if window_time > 0 else 0
-        else:
-            elapsed = now - self._chunk_download_start
-            speed = downloaded / elapsed if elapsed > 0 else 0
-        
-        self.update_chunk_progress(downloaded, chunk_size)
-        self.update_download_status(total_downloaded, self.total_download_size, speed)
-    
-    def update_download_status(self, downloaded, total, speed):
-        def update():
-            if total > 0 and downloaded > 0:
-                text = f"已下载: {utils.format_size(downloaded)} / {utils.format_size(total)} | 速度: {utils.format_size(int(speed))}/s"
-                self.download_detail_label.config(text=text)
-            self.root.update_idletasks()
-        self.root.after(0, update)
-    
+        self.update_status(f"状态: {message}", foreground=config.TEXT_ERROR)
+
+    def _set_progress_value(self, value):
+        self.progress_bar['value'] = max(0.0, min(100.0, value))
+
+    def _set_detail(self, text):
+        self.download_detail_label.config(text=text)
+
+    def _push_overall(self, completed, count, bytes_done, total_bytes, speed):
+        """主线程：一次调用同时刷新进度条与明细文字。"""
+        percent = 0.0
+        if total_bytes > 0:
+            percent = min(100.0, bytes_done / total_bytes * 100)
+            self.progress_bar['value'] = percent
+        text = (f"已下载: {utils.format_size(bytes_done)} / {utils.format_size(total_bytes)}"
+                f" ({percent:.0f}%)"
+                f" | 速度: {utils.format_size(int(speed))}/s"
+                f" | 分片: {completed}/{count}")
+        self.download_detail_label.config(text=text)
+
+    def _report_download_progress(self, num_chunks, started, throttle, force=False):
+        if not throttle.ready(force=force):
+            return
+        with self._progress_lock:
+            bytes_done = sum(self._chunk_bytes.values())
+            completed = len(self.downloaded_chunks)
+        elapsed = time.monotonic() - started
+        speed = bytes_done / elapsed if elapsed > 0 else 0
+        self._run_on_ui_latest('overall', self._push_overall,
+                               completed, num_chunks, bytes_done,
+                               self.total_download_size, speed)
+
+
+    def _action_name(self):
+        return "合并" if self.is_local else "下载"
+
+    def _interrupted_prefix(self):
+        return "合并失败" if self.is_local else "下载已中断"
+
+    def _fail(self, prefix, detail=""):
+        """统一失败收尾：拼状态文字并复位 UI 到可重试。"""
+        text = f"状态: {prefix}"
+        if detail:
+            text += f" - {detail}"
+        self._set_retry_ui(text)
+
+    def _cancel(self):
+        self._set_retry_ui(f"状态: 已取消{self._action_name()}", is_cancel=True)
+
+    def _fail_input(self, message):
+        self._last_chunk_error = message
+        self.show_error(message)
+        return False
+
     def _validate_download_inputs(self):
-        self.fkx_path = self.url_entry.get().strip()
-        self.output_dir = self.output_entry.get().strip()
-        
-        if not self.fkx_path:
-            self.show_error("请输入文件信息URL或本地路径")
-            self._last_chunk_error = "请输入文件信息URL或本地路径"
-            self.clear_file_info()
-            return None
-        if not self.fkx_path.endswith('.fkx'):
-            self.show_error("输入必须是.fkx文件")
-            self._last_chunk_error = "输入必须是.fkx文件"
-            self.clear_file_info()
-            return None
+        """只能在主线程调用（会读取输入框内容）。"""
+        raw_path = self.url_entry.get().strip()
+        raw_output = self.output_entry.get().strip()
+
+        self.fkx_path = self._resolve_local_path(raw_path) if raw_path else ""
+        self.output_dir = os.path.abspath(raw_output) if raw_output else ""
+
+        if not raw_path:
+            return self._fail_input("请输入文件信息URL或本地路径")
+        if not self._looks_like_fkx(raw_path):
+            return self._fail_input("输入必须是.fkx文件")
         if not self.output_dir:
-            self.show_error("请选择输出目录")
-            self._last_chunk_error = "请选择输出目录"
-            return None
-        
-        self.fkx_path = self._resolve_local_path(self.fkx_path)
-        self.output_dir = os.path.abspath(self.output_dir)
+            return self._fail_input("请选择输出目录")
+
         self.is_local = not self._is_remote_url(self.fkx_path)
-        return (self.fkx_path, self.output_dir)
+        if self.fkx_path != self._file_info_source:
+            self.file_info = None
+        return True
+
+    def _set_busy_ui(self):
+        self._apply_ui_state("running")
+
 
     def _get_or_fetch_fkx_info(self):
         fkx_local_path = self.fkx_path
+
+        if self.file_info and 'chunks' in self.file_info and self._file_info_source == self.fkx_path:
+            self.total_download_size = sum(chunk['size'] for chunk in self.file_info['chunks'])
+            return self.file_info, fkx_local_path, None
+
         fkx_content = None
-        
-        if self.file_info and 'chunks' in self.file_info:
-            if self.is_local:
-                fkx_content = self.read_local_fkx(fkx_local_path)
-            else:
-                fkx_content = self.download_fkx(self.fkx_path)
-        elif self.is_local:
-            if self.fkx_path.startswith('file://'):
-                fkx_local_path = self.fkx_path[7:]
+
+        if self.is_local:
             if not os.path.exists(fkx_local_path):
                 self.show_error(f"本地文件不存在: {fkx_local_path}")
                 self._last_chunk_error = f"本地文件不存在: {fkx_local_path}"
@@ -693,9 +856,9 @@ class FileDownloaderApp:
             fkx_content = self.read_local_fkx(fkx_local_path)
         else:
             fkx_content = self.download_fkx(self.fkx_path)
-        
+
         if self.is_cancelled or not fkx_content:
-            if not fkx_content:
+            if not fkx_content and not self.is_cancelled:
                 self.show_error("无法获取文件信息")
                 self._last_chunk_error = "无法获取文件信息"
             return None, None, None
@@ -707,39 +870,38 @@ class FileDownloaderApp:
             self.show_error("文件信息格式不正确")
             self._last_chunk_error = "文件信息格式不正确"
             return None, None, None
-        
+
+        self.file_info = fkx_info
+        self._file_info_source = self.fkx_path
         return fkx_info, fkx_local_path, fkx_content
 
-    def _setup_download_state(self, fkx_info, fkx_content, fkx_local_path):
-        num_chunks = len(fkx_info['chunks'])
-        total_size = sum(chunk['size'] for chunk in fkx_info['chunks'])
-        
+    def _apply_download_state_ui(self, fkx_info, total_size, num_chunks):
         self.filename_label.config(text=str(fkx_info.get('filename', '-')))
         self.filesize_label.config(text=utils.format_size(total_size))
         self.chunks_label.config(text=str(num_chunks))
+        self.progress_bar['maximum'] = 100
+        self.progress_bar['value'] = 0
+
+    def _setup_download_state(self, fkx_info, fkx_content, fkx_local_path):
+        total_size = sum(chunk['size'] for chunk in fkx_info['chunks'])
+        num_chunks = len(fkx_info['chunks'])
+
         self.file_info = fkx_info
-        self.safe_filename = self.sanitize_filename(os.path.basename(fkx_info['filename']))
+        self.safe_filename = self.sanitize_filename(os.path.basename(str(fkx_info.get('filename', ''))))
         self.total_download_size = total_size
-        
-        self.progress_total['maximum'] = num_chunks
-        self.progress_total['value'] = 0
-        self.progress_chunk['maximum'] = 100
-        self.progress_chunk['value'] = 0
-        
-        if not os.path.exists(self.output_dir):
-            try:
-                os.makedirs(self.output_dir)
-            except Exception as e:
-                self.show_error(f"无法创建输出目录: {str(e)}")
-                self._last_chunk_error = f"无法创建输出目录: {str(e)}"
-                return None, None
-        
         self.downloaded_chunks = {}
-        self.chunk_errors = []
         self.downloaded_size = 0
         self.download_start_time = time.time()
         self.chunk_dir = ""
-        
+
+        if not os.path.exists(self.output_dir):
+            try:
+                os.makedirs(self.output_dir, exist_ok=True)
+            except OSError as exc:
+                self.show_error(f"无法创建输出目录: {exc}")
+                self._last_chunk_error = f"无法创建输出目录: {exc}"
+                return None, None
+
         if self.is_local:
             base_path = os.path.dirname(fkx_local_path)
             self.base_referer = ""
@@ -748,29 +910,30 @@ class FileDownloaderApp:
             dir_path = parsed.path.rsplit('/', 1)[0] if '/' in parsed.path else ''
             base_path = f"{parsed.scheme}://{parsed.netloc}{dir_path}/"
             self.base_referer = base_path
-            self.chunk_dir = self.get_chunk_dir(self.output_dir)
+            try:
+                self.chunk_dir = self.get_chunk_dir(self.output_dir)
+            except (ValueError, OSError) as exc:
+                self.show_error(f"无法创建临时目录: {exc}")
+                self._last_chunk_error = f"无法创建临时目录: {exc}"
+                return None, None
 
-            fkx_filename = os.path.basename(self.fkx_path)
-            local_fkx_path = os.path.join(self.chunk_dir, fkx_filename)
-            if os.path.exists(local_fkx_path):
-                try:
-                    with open(local_fkx_path, 'r', encoding='utf-8') as f:
-                        local_fkx_content = f.read()
-                    local_info = self.parse_fkx(local_fkx_content)
-                    remote_info = self.parse_fkx(fkx_content)
-                    local_num = len(local_info.get('chunks', []))
-                    remote_num = len(remote_info.get('chunks', []))
-                    if local_num == remote_num:
-                        match = True
-                        for i in range(local_num):
-                            lc = local_info['chunks'][i]
-                            rc = remote_info['chunks'][i]
-                            if lc['filename'] != rc['filename'] or lc['size'] != rc['size']:
-                                match = False
-                                break
-                        if match:
-                            if any('sha256' not in lc for lc in local_info['chunks']) and \
-                               any('sha256' in rc for rc in remote_info['chunks']):
+            remote_name = unquote(parsed.path.rsplit('/', 1)[-1]) if parsed.path else ""
+            cache_name = utils.safe_filename(remote_name, default="remote.fkx")
+            try:
+                local_fkx_path = utils.ensure_within_dir(self.chunk_dir, cache_name)
+            except ValueError:
+                local_fkx_path = os.path.join(self.chunk_dir, "remote.fkx")
+
+            if fkx_content is not None:
+                if os.path.exists(local_fkx_path):
+                    try:
+                        local_info = self.parse_fkx(core.read_fkx_text(local_fkx_path))
+                        remote_info = self.parse_fkx(fkx_content)
+                        local_chunks = local_info.get('chunks', [])
+                        remote_chunks = remote_info.get('chunks', [])
+                        if same_chunk_layout(local_info, remote_info):
+                            if any('sha256' not in lc for lc in local_chunks) and \
+                                    any('sha256' in rc for rc in remote_chunks):
                                 fkx_info = remote_info
                             else:
                                 fkx_info = local_info
@@ -778,334 +941,308 @@ class FileDownloaderApp:
                             total_size = sum(chunk['size'] for chunk in fkx_info['chunks'])
                             self.file_info = fkx_info
                             self.total_download_size = total_size
-                            self.filename_label.config(text=str(fkx_info.get('filename', '-')))
-                            self.filesize_label.config(text=utils.format_size(total_size))
-                            self.chunks_label.config(text=str(num_chunks))
-                            self.progress_total['maximum'] = num_chunks
-                except Exception:
-                    pass
-            else:
-                with open(local_fkx_path, 'w', encoding='utf-8') as f:
-                    f.write(fkx_content)
-        
+                    except Exception:
+                        pass
+                else:
+                    core.write_fkx_text(local_fkx_path, fkx_content)
+
+        self._run_on_ui(self._apply_download_state_ui, fkx_info, total_size, num_chunks)
         return base_path, num_chunks
 
-    def _collect_chunks(self, fkx_info, base_path, num_chunks):
+    def _collect_chunks(self, fkx_info, base_path, num_chunks, workers=1):
         if self.is_local:
+            throttle = utils.Throttle(config.PROGRESS_INTERVAL)
+            started = time.monotonic()
             for i, chunk_info in enumerate(fkx_info['chunks']):
                 if self.is_cancelled:
                     return False
-                self.update_status(f"状态: 正在读取分片 {i+1}/{num_chunks}")
-                chunk_path = os.path.join(base_path, chunk_info['filename'])
-                chunk_path = os.path.normpath(chunk_path)
+                try:
+                    chunk_path = chunk_path_in(base_path, chunk_info['filename'])
+                except ValueError as exc:
+                    self._last_chunk_error = str(exc)
+                    return False
                 if not os.path.exists(chunk_path):
                     self._last_chunk_error = f"分片文件不存在: {chunk_info['filename']}"
                     return False
                 self.downloaded_chunks[i] = chunk_path
                 self.downloaded_size += chunk_info['size']
-                self.progress_total['value'] = i + 1
-                self.progress_chunk['value'] = 100
-                self.update_download_status(self.downloaded_size, self.total_download_size, 0)
-        else:
-            self.update_status(f"状态: 正在下载分片 (共{num_chunks}个)")
-            self.download_detail_label.config(text="")
-            self._speed_samples = []
-            self.download_start_time = time.time()
-            i = 0
-            while i < num_chunks:
-                if self.is_cancelled:
-                    return False
-                chunk_info = fkx_info['chunks'][i]
-                self.update_status(f"状态: 正在下载分片 {i+1}/{num_chunks}: {chunk_info['filename']}")
-                self._downloaded_before_chunk = self.downloaded_size
-                self._chunk_download_start = time.time()
-                self._speed_samples = []
-                self.progress_chunk['value'] = 0
-                result = self.download_chunk(base_path, chunk_info, i, self.chunk_dir,
-                                            self.chunk_progress_callback)
-                if result is None:
-                    if self.is_cancelled:
-                        return False
-                    self._last_chunk_error = f"分片 {i+1}/{num_chunks} 下载失败: {self._last_chunk_error}"
-                    return False
-                self.progress_total['value'] = i + 1
-                self.progress_chunk['value'] = 100
-                self.root.update_idletasks()
-                i += 1
-        return True
+                with self._progress_lock:
+                    self._chunk_bytes[i] = chunk_info['size']
+                if throttle.ready() or i == num_chunks - 1:
+                    elapsed = time.monotonic() - started
+                    speed = self.downloaded_size / elapsed if elapsed > 0 else 0
+                    self._run_on_ui_latest('overall', self._push_overall,
+                                           i + 1, num_chunks, self.downloaded_size,
+                                           self.total_download_size, speed)
+            self.update_status(f"状态: 分片就绪，准备合并 (共{num_chunks}个)", foreground=config.TEXT_NORMAL)
+            return True
 
-    def _merge_chunks(self, fkx_info, num_chunks):
-        safe_filename = self.sanitize_filename(os.path.basename(fkx_info['filename']))
-        output_path = os.path.join(self.output_dir, safe_filename)
-        output_path = os.path.normpath(output_path)
-        
-        self.update_status("状态: 正在合并文件...")
-        merged_bytes = [0]
-        cancelled = False
-        merge_start = time.time()
-        last_report_time = [merge_start]
-        last_report_bytes = [0]
-        with open(output_path, 'wb') as f:
-            for i in range(num_chunks):
-                if self.is_cancelled:
-                    cancelled = True
+        workers = max(1, min(config.MAX_WORKERS, workers, num_chunks))
+        self.update_status(f"状态: 正在下载分片 (共{num_chunks}个, {workers} 线程)", foreground=config.TEXT_NORMAL)
+        self._run_on_ui(self._set_detail, "")
+        with self._progress_lock:
+            self.downloaded_chunks = {}
+            self._chunk_bytes = {i: 0 for i in range(num_chunks)}
+        self._abort_download = False
+        self.download_start_time = time.time()
+
+        started = time.monotonic()
+        throttle = utils.Throttle(config.PROGRESS_INTERVAL)
+
+        index_queue = queue.Queue()
+        for i in range(num_chunks):
+            index_queue.put(i)
+        stop_event = threading.Event()
+
+        def chunk_worker():
+            try:
+                while not stop_event.is_set() and not self._should_stop():
+                    try:
+                        index = index_queue.get_nowait()
+                    except queue.Empty:
+                        return
+                    if not self._fetch_chunk(base_path, index,
+                                             fkx_info['chunks'][index], self.chunk_dir):
+                        self._abort_download = True
+                        stop_event.set()
+                        return
+            except Exception as exc:
+                self._record_chunk_error(str(exc)[:120] or exc.__class__.__name__)
+                self._abort_download = True
+                stop_event.set()
+
+        threads = [threading.Thread(target=chunk_worker, name=f"fkxz-chunk-{n}", daemon=True)
+                   for n in range(workers)]
+        for thread in threads:
+            thread.start()
+
+        try:
+            while any(thread.is_alive() for thread in threads):
+                if self._should_stop():
                     break
-                chunk_path = self.downloaded_chunks[i]
-                chunk_path = os.path.normpath(chunk_path)
-                with open(chunk_path, 'rb') as chunk_file:
-                    for chunk in iter(lambda: chunk_file.read(65536), b""):
-                        f.write(chunk)
-                        merged_bytes[0] += len(chunk)
-                        now = time.time()
-                        if now - last_report_time[0] >= 0.3 or merged_bytes[0] >= self.total_download_size:
-                            elapsed = now - merge_start
-                            speed = merged_bytes[0] / elapsed if elapsed > 0 else 0
-                            last_report_time[0] = now
-                            last_report_bytes[0] = merged_bytes[0]
-                            def update_progress():
-                                percentage = merged_bytes[0] / self.total_download_size if self.total_download_size > 0 else 0
-                                self.progress_chunk['value'] = percentage * 100
-                                self.download_detail_label.config(
-                                    text=f"合并: {utils.format_size(merged_bytes[0])} / {utils.format_size(self.total_download_size)} | {utils.format_size(int(speed))}/s"
-                                )
-                                self.root.update_idletasks()
-                            self.root.after(0, update_progress)
-        if cancelled:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-            return None
-        return output_path
+                self._report_download_progress(num_chunks, started, throttle)
+                time.sleep(0.05)
+        finally:
+            stop_event.set()
+            for thread in threads:
+                thread.join(timeout=0.2)
 
-    def _on_sha256_progress(self, processed, total, start_time=None):
-        def update():
-            if total > 0:
-                self.progress_chunk['value'] = processed / total * 100
-            text = f"校验: {utils.format_size(processed)} / {utils.format_size(total)}"
-            if start_time is not None:
-                elapsed = time.time() - start_time
-                speed = processed / elapsed if elapsed > 0 else 0
-                text += f" | {utils.format_size(int(speed))}/s"
-            self.download_detail_label.config(text=text)
-            self.root.update_idletasks()
-        self.root.after(0, update)
+        self._report_download_progress(num_chunks, started, throttle, force=True)
 
-    def _verify_sha256(self, output_path, expected_sha256):
-        self.update_status("状态: 正在校验SHA-256...")
-        file_size = os.path.getsize(output_path)
-        actual_sha256 = hashlib.sha256()
-        processed = 0
-        verify_start = time.time()
-        last_report = [0.0]
-        with open(output_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                if self.is_cancelled:
-                    return "cancelled"
-                actual_sha256.update(chunk)
-                processed += len(chunk)
-                now = time.time()
-                if now - last_report[0] >= 0.3 or processed >= file_size:
-                    last_report[0] = now
-                    self._on_sha256_progress(processed, file_size, verify_start)
-        if actual_sha256.hexdigest() != expected_sha256:
-            self.show_error("文件SHA-256校验失败")
-            return "failed"
-        return "ok"
+        if self._should_stop():
+            return False
 
-    def download_and_merge(self, verify_sha256=True):
+        with self._progress_lock:
+            completed = len(self.downloaded_chunks)
+        self.downloaded_size = sum(fkx_info['chunks'][i]['size'] for i in self.downloaded_chunks)
+        return completed == num_chunks
+
+    def _merge_chunks(self, fkx_info, num_chunks, compute_sha256=True):
+        """合并分片：字节级合并交给 core.merge_chunks，命名/进度/字节核对留在这里。"""
+        safe_name = self.sanitize_filename(os.path.basename(str(fkx_info.get('filename', ''))))
+        try:
+            target_path = utils.unique_path(utils.ensure_within_dir(self.output_dir, safe_name))
+        except ValueError as exc:
+            self._last_chunk_error = str(exc)
+            return None, None
+
+        self.update_status("状态: 正在合并文件...")
+        merge_start = time.monotonic()
+        throttle = utils.Throttle(config.PROGRESS_INTERVAL)
+
+        def on_progress(merged_bytes):
+            if throttle.ready():
+                elapsed = time.monotonic() - merge_start
+                speed = merged_bytes / elapsed if elapsed > 0 else 0
+                self._report_merge_progress(merged_bytes, speed)
+
+        try:
+            result = core.merge_chunks(
+                [self.downloaded_chunks.get(i) for i in range(num_chunks)],
+                target_path,
+                compute_sha256=compute_sha256,
+                on_progress=on_progress,
+                should_stop=self._should_stop,
+            )
+        except core.Cancelled:
+            return None, None
+
+        expected_total = int(fkx_info.get('total_size') or 0)
+        if expected_total and result.size != expected_total:
+            utils.safe_remove(result.path)
+            self._last_chunk_error = (
+                f"合并字节数与文件信息不一致 (期望 {expected_total}, 实际 {result.size})")
+            return None, None
+        return result.path, result.sha256
+
+    def _report_merge_progress(self, merged_bytes, speed):
+        percentage = merged_bytes / self.total_download_size * 100 if self.total_download_size else 0
+        text = (f"合并: {utils.format_size(merged_bytes)} / {utils.format_size(self.total_download_size)}"
+                f" ({percentage:.0f}%)"
+                f" | {utils.format_size(int(speed))}/s")
+        self._run_on_ui_latest('merge-progress', self._set_progress_value, percentage)
+        self._run_on_ui_latest('detail', self._set_detail, text)
+
+    def download_and_merge(self, verify_sha256=True, use_enhanced=True, workers=1):
         output_path = None
         try:
-            self._use_enhanced = self.enhanced_mode.get()
+            self._use_enhanced = bool(use_enhanced and self._curl_session)
             self._last_chunk_error = ""
-            
-            inputs = self._validate_download_inputs()
-            if inputs is None:
-                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                self._set_retry_ui(f"状态: 下载失败{error_detail}")
-                return
-            fkx_path, output_dir = inputs
-            
-            self.is_cancelled = False
-            def _disable_widgets():
-                self.disable_all_widgets()
-                self.cancel_button.config(state=tk.NORMAL, text="取消")
-            self.root.after(0, _disable_widgets)
-            
+            self._abort_download = False
+            self._run_on_ui(self._set_busy_ui)
+
             fkx_info, fkx_local_path, fkx_content = self._get_or_fetch_fkx_info()
             if fkx_info is None:
                 if self.is_cancelled:
-                    if self.is_local:
-                        self._set_retry_ui("状态: 已取消合并", is_cancel=True)
-                    else:
-                        self._set_retry_ui("状态: 已取消下载", is_cancel=True)
-                    return
-                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                if self.is_local:
-                    self._set_retry_ui(f"状态: 合并失败{error_detail}")
+                    self._cancel()
                 else:
-                    self._set_retry_ui(f"状态: 下载失败{error_detail}")
+                    self._fail(f"{self._action_name()}失败", self._last_chunk_error)
                 return
-            
+
             base_path, num_chunks = self._setup_download_state(fkx_info, fkx_content, fkx_local_path)
-            
             if base_path is None:
-                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                if self.is_local:
-                    self._set_retry_ui(f"状态: 合并失败{error_detail}")
-                else:
-                    self._set_retry_ui(f"状态: 下载失败{error_detail}")
+                self._fail(f"{self._action_name()}失败", self._last_chunk_error)
                 return
-            
-            def _set_buttons():
-                self.start_button.config(state=tk.DISABLED)
-                self.cancel_button.config(state=tk.NORMAL, text="取消")
-            self.root.after(0, _set_buttons)
-            
-            if not self._collect_chunks(fkx_info, base_path, num_chunks):
+
+            if not self._collect_chunks(fkx_info, base_path, num_chunks, workers):
                 if self.is_cancelled:
-                    if self.is_local:
-                        self._set_retry_ui("状态: 已取消合并", is_cancel=True)
-                    else:
-                        self._set_retry_ui("状态: 已取消下载", is_cancel=True)
-                    return
-                error_detail = f" - {self._last_chunk_error}" if self._last_chunk_error else ""
-                if self.is_local:
-                    self._set_retry_ui(f"状态: 合并失败{error_detail}")
+                    self._cancel()
                 else:
-                    self._set_retry_ui(f"状态: 下载已中断{error_detail}")
+                    self._fail(self._interrupted_prefix(), self._last_chunk_error)
                 return
-            
+
             if len(self.downloaded_chunks) != num_chunks:
                 error_msg = f"下载不完整: 期望{num_chunks}个分片，实际下载{len(self.downloaded_chunks)}个"
                 self.show_error(error_msg)
                 self._last_chunk_error = error_msg
-                if self.is_local:
-                    self._set_retry_ui(f"状态: 合并失败 - {error_msg}")
-                else:
-                    self._set_retry_ui(f"状态: 下载已中断 - {error_msg}")
+                self._fail(self._interrupted_prefix(), error_msg)
                 return
-            
-            output_path = self._merge_chunks(fkx_info, num_chunks)
+
+            need_sha = bool(verify_sha256 and fkx_info.get('sha256'))
+            output_path, digest = self._merge_chunks(fkx_info, num_chunks, compute_sha256=need_sha)
             if output_path is None:
-                if self.is_local:
-                    self._set_retry_ui("状态: 已取消合并", is_cancel=True)
+                if self.is_cancelled:
+                    self._cancel()
                 else:
-                    self._set_retry_ui("状态: 已取消下载", is_cancel=True)
+                    self._fail(f"{self._action_name()}失败", self._last_chunk_error)
                 return
-            
-            sha_skipped = False
-            if 'sha256' in fkx_info and verify_sha256:
-                self.root.after(0, lambda: self.cancel_button.config(text="跳过"))
-                verify_result = self._verify_sha256(output_path, fkx_info['sha256'])
-                if verify_result == "cancelled":
-                    sha_skipped = True
-                elif verify_result != "ok":
-                    if os.path.exists(output_path):
-                        os.remove(output_path)
-                    if not self.is_local:
-                        self._set_retry_ui("状态: SHA-256校验失败")
-                    else:
-                        self._set_retry_ui("状态: 合并失败 - SHA-256校验失败")
+
+            if need_sha:
+                self.update_status("状态: 正在比对SHA-256...")
+                if digest != fkx_info['sha256']:
+                    utils.safe_remove(output_path)
+                    self._fail(f"{self._action_name()}失败", "SHA-256校验失败")
                     return
-                self.root.after(0, lambda: self.cancel_button.config(text="取消"))
-            
+
             if not self.is_local:
                 self.cleanup_chunk_dir(self.output_dir)
-            self._retry_needed = False
-            self._failed = False
-            
-            def _on_success():
-                self.progress_total['value'] = num_chunks
-                self.progress_chunk['value'] = 100
-                if sha_skipped:
-                    if self.is_local:
-                        self.update_status("状态: 合并成功（已跳过SHA-256检验）", foreground="#006600")
-                    else:
-                        self.update_status("状态: 下载成功（已跳过SHA-256检验）", foreground="#006600")
-                else:
-                    if self.is_local:
-                        self.update_status("状态: 合并成功", foreground="#006600")
-                    else:
-                        self.update_status("状态: 下载成功", foreground="#006600")
-                self.download_detail_label.config(text="")
-                self.enable_all_widgets()
-            self.root.after(0, _on_success)
-            
-            safe_filename = self.sanitize_filename(os.path.basename(fkx_info['filename']))
-            mode_text = "本地" if self.is_local else "远程"
-            enhanced_text = " (增强模式)" if self._use_enhanced and not self.is_local else ""
-            def show_completion():
-                messagebox.showinfo("完成", f"文件合并完成！\n模式: {mode_text}{enhanced_text}\n文件名: {safe_filename}\n保存位置: {output_path}")
-            self.root.after(0, show_completion)
-        except Exception as e:
-            error_msg = f"下载线程异常: {str(e)}"
-            self.show_error(error_msg)
+
+            verified = "sha" if need_sha else ("size" if fkx_info.get('total_size') else "none")
+            self._run_on_ui(self._on_success, num_chunks, verified, output_path)
+        except Exception as exc:
+            error_msg = str(exc) or exc.__class__.__name__
+            self.show_error(f"{self._action_name()}失败 - {error_msg}")
             self._last_chunk_error = error_msg
-            if output_path is not None and os.path.exists(output_path):
-                os.remove(output_path)
-            if self.is_local:
-                self._set_retry_ui(f"状态: 合并失败 - {error_msg}")
-            else:
-                self._set_retry_ui(f"状态: 下载失败 - {error_msg}")
+            utils.safe_remove(output_path)
+            self._fail(f"{self._action_name()}失败", error_msg)
+
+
+    def _on_success(self, num_chunks, verified, output_path):
+        self.progress_bar['value'] = 100
+        action = "合并" if self.is_local else "下载"
+        suffix = {"sha": "（SHA-256 已校验）", "size": "（已校验字节数）", "none": ""}.get(verified, "")
+        self.update_status(f"状态: {action}成功{suffix}", foreground=config.TEXT_SUCCESS)
+        self.download_detail_label.config(text="")
+        self._apply_ui_state("idle")
+
+        mode_text = "本地" if self.is_local else "远程"
+        enhanced_text = " (增强模式)" if self._use_enhanced and not self.is_local else ""
+        safe_filename = utils.safe_filename(
+            os.path.basename(str((self.file_info or {}).get('filename', ''))), default="文件")
+        messagebox.showinfo(
+            "完成",
+            f"文件{action}完成！\n模式: {mode_text}{enhanced_text}\n"
+            f"文件名: {safe_filename}\n保存位置: {output_path}",
+            parent=self.root,
+        )
 
     def _set_retry_ui(self, status_text, is_cancel=False):
-        self._retry_needed = True
-        self._failed = True
-        button_text = "开始合并" if self.is_local else "开始下载" if is_cancel else "重试"
-        def _retry():
-            self.progress_chunk['value'] = 0
-            self.progress_total['value'] = 0
+        def _apply():
+            self.progress_bar['value'] = 0
             self.download_detail_label.config(text="")
-            self.cancel_button.config(state=tk.DISABLED, text="取消")
-            self.start_button.config(state=tk.NORMAL, text=button_text)
-            self.url_entry.config(state=tk.NORMAL)
-            self.output_entry.config(state=tk.NORMAL)
-            self.browse_fkx_btn.config(state=tk.NORMAL)
-            self.browse_output_btn.config(state=tk.NORMAL)
-            if self.is_local:
-                self.enhanced_checkbox.config(state=tk.DISABLED)
-            elif HAS_CURL_CFFI:
-                self.enhanced_checkbox.config(state=tk.NORMAL)
-            else:
-                self.enhanced_checkbox.config(state=tk.DISABLED)
-            self.verify_sha256_checkbox.config(state=tk.NORMAL)
-            self.update_status(status_text, foreground="#cc0000")
-        self.root.after(0, _retry)
-    
+            self._apply_ui_state("idle" if is_cancel else "retry")
+            self.update_status(status_text,
+                               foreground=config.TEXT_NORMAL if is_cancel else config.TEXT_ERROR)
+        self._run_on_ui(_apply)
+
     def download_fkx(self, url):
         response = self.download_single(url)
-        if response:
-            try:
-                return response.text
-            except Exception as e:
-                self.show_error(f"无法解析文件信息: {str(e)}")
-                return None
-        if self.is_cancelled:
+        if response is None:
             return None
-        return None
-    
+        try:
+            return core.decode_fkx(response.content)
+        except Exception as exc:
+            self.show_error(f"无法解析文件信息: {exc}")
+            return None
+
     def start_download(self):
         if self.download_thread and self.download_thread.is_alive():
             return
-        self._retry_needed = False
-        self._failed = False
-        verify_sha256 = self.verify_sha256_var.get()
-        self.download_thread = threading.Thread(target=self.download_and_merge, args=(verify_sha256,))
+
+        if not self._validate_download_inputs():
+            self.clear_file_info()
+            self._apply_ui_state("idle")
+            return
+
+        verify_sha256 = bool(self.verify_sha256_var.get())
+        use_enhanced = bool(self.enhanced_mode.get() and self._curl_session)
+        try:
+            workers = int(self.workers_var.get())
+        except (ValueError, tk.TclError):
+            workers = 1
+        workers = max(1, min(config.MAX_WORKERS, workers))
+
+        self.is_cancelled = False
+
+        self.download_thread = threading.Thread(
+            target=self.download_and_merge,
+            args=(verify_sha256, use_enhanced, workers),
+            name="download-worker",
+            daemon=True,
+        )
         self.download_thread.start()
-    
+
     def cancel_download(self):
         self.is_cancelled = True
-    
-    def reset_ui(self, status_text=None):
-        def _reset():
-            self.progress_chunk['value'] = 0
-            self.progress_total['value'] = 0
-            self.download_detail_label.config(text="")
-            if status_text is not None:
-                self.update_status(status_text)
-            else:
-                self.update_status("状态: 就绪")
-            self.enable_all_widgets()
-        self.root.after(0, _reset)
+        self.cancel_button.config(state=tk.DISABLED)
+        self.update_status("状态: 正在取消...")
+
+
+    def close(self, timeout=2.0):
+        """窗口关闭时调用：中止传输、等待线程退出、释放会话。"""
+        if self._closed:
+            return
+        self._closed = True
+        self.is_cancelled = True
+        thread = self.download_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=timeout)
+        self.ui.stop()
+        try:
+            self.session.close()
+        except Exception:
+            pass
+        if self.session_enhanced is not self.session:
+            try:
+                self.session_enhanced.close()
+            except Exception:
+                pass
+
+
+class _ChunkCancelled(Exception):
+    """单个分片传输被取消（合并阶段的取消请用 core.Cancelled）。"""
+
 
 if __name__ == "__main__":
-    utils.run_gui_app(FileDownloaderApp, 650, 650)
+    utils.set_app_user_model_id(config.APP_ID_DOWNLOADER)
+    utils.run_gui_app(FileDownloaderApp)

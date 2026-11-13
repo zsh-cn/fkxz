@@ -1,55 +1,64 @@
-import os
-
-import utils
-
-utils.setup_dpi_awareness()
-utils.set_app_user_model_id('fkxz.main')
-
 import tkinter as tk
-from tkinter import ttk
 
+import config
+import utils
 import wjfk
 import wjxz
 
 
+def _make_window_noop(name):
+    """生成一个吸收窗口级调用的空方法。"""
+
+    def _noop(self, *args, **kwargs):
+        self.swallowed_calls.append(name)
+        return None
+
+    _noop.__name__ = name
+    return _noop
+
+
 class ModuleHost(tk.Frame):
+    """把子模块当顶层窗口使用时的宿主。
 
-    def title(self, *args, **kwargs):
-        pass
+    子模块（wjfk / wjxz）本身是独立程序，内部会调用窗口级方法（title / geometry /
+    iconphoto …）。嵌进聚合窗口后这些调用必须被吸收，否则会去改真正的主窗口。
 
-    def geometry(self, *args, **kwargs):
-        pass
+    这里显式列出会用到的窗口方法；未列出的方法由 __getattr__ 兜底成空操作，
+    以后子模块多调一个 window API 也不会直接 AttributeError。
+    """
 
-    def minsize(self, *args, **kwargs):
-        pass
+    _WINDOW_METHODS = (
+        'title', 'geometry', 'minsize', 'maxsize', 'resizable',
+        'iconphoto', 'iconbitmap', 'protocol', 'mainloop', 'quit',
+    )
 
-    def resizable(self, *args, **kwargs):
-        pass
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self.swallowed_calls = []
 
-    def iconphoto(self, *args, **kwargs):
-        pass
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
 
-    def iconbitmap(self, *args, **kwargs):
-        pass
+        def _noop(*args, **kwargs):
+            self.swallowed_calls.append(name)
+            return None
 
-    def protocol(self, *args, **kwargs):
-        pass
+        return _noop
 
-    def mainloop(self, *args, **kwargs):
-        pass
 
-    def quit(self, *args, **kwargs):
-        pass
+for _method_name in ModuleHost._WINDOW_METHODS:
+    setattr(ModuleHost, _method_name, _make_window_noop(_method_name))
 
 
 class MainApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("文件分块下载")
-        self.root.geometry("950x700")
-        self.root.minsize(950, 650)
+        self.root.title(config.APP_NAME)
+        utils.scaled_geometry(self.root, *config.MAIN_WINDOW_SIZE)
 
         self._set_icon()
+        utils.install_about_menu(self.root, config.APP_NAME)
 
         self.current_host = None
         self.current_app = None
@@ -64,28 +73,27 @@ class MainApp:
         self._icon = utils.apply_window_icon(self.root, 'wjfkxz.png')
 
     def _load_nav_icon(self, filename, size=22):
-        img = utils.load_icon(filename, size=size)
-        return img
+        return utils.load_icon(filename, size=size, master=self.root)
 
     def _create_sidebar(self):
-        self.sidebar_bg = "#f4f5f7"
-        self.sidebar_width = 200
-        self.nav_active_bg = "#e0e4eb"
-        self.nav_hover_bg = "#eaecf0"
-        self.nav_fg = "#333333"
-        self.nav_font = ('Microsoft YaHei UI', 10)
+        self.sidebar_bg = config.SIDEBAR_BG
+        self.sidebar_width = config.SIDEBAR_WIDTH
+        self.nav_active_bg = config.NAV_ACTIVE_BG
+        self.nav_hover_bg = config.NAV_HOVER_BG
+        self.nav_fg = config.NAV_FG
+        self.nav_font = (config.FONT_FAMILY, config.FONT_SIZE)
 
         sidebar = tk.Frame(self.root, width=self.sidebar_width, bg=self.sidebar_bg,
-                           highlightbackground="#d5d8dc", highlightthickness=1)
+                           highlightbackground=config.BORDER_COLOR, highlightthickness=1)
         sidebar.pack(side=tk.LEFT, fill=tk.Y)
         sidebar.pack_propagate(False)
 
         title_frame = tk.Frame(sidebar, bg=self.sidebar_bg)
         title_frame.pack(fill=tk.X, pady=(20, 10), padx=16)
-        tk.Label(title_frame, text="文件分块下载", font=('Microsoft YaHei UI', 13, 'bold'),
-                 fg="#1a1a1a", bg=self.sidebar_bg).pack(anchor=tk.W)
+        tk.Label(title_frame, text=config.APP_NAME, font=(config.FONT_FAMILY, 13, 'bold'),
+                 fg=config.TEXT_PRIMARY, bg=self.sidebar_bg).pack(anchor=tk.W)
 
-        tk.Frame(sidebar, bg="#d5d8dc", height=1).pack(fill=tk.X, padx=12, pady=(0, 12))
+        tk.Frame(sidebar, bg=config.BORDER_COLOR, height=1).pack(fill=tk.X, padx=12, pady=(0, 12))
 
         self.nav_items = {}
         self._nav_icon_refs = []
@@ -153,8 +161,8 @@ class MainApp:
             if k == key:
                 frame.configure(bg=self.nav_active_bg)
                 icon_label.configure(bg=self.nav_active_bg)
-                label.configure(bg=self.nav_active_bg, fg="#1a1a1a")
-                indicator.configure(bg="#3b71fe")
+                label.configure(bg=self.nav_active_bg, fg=config.TEXT_PRIMARY)
+                indicator.configure(bg=config.NAV_ACCENT)
             else:
                 frame.configure(bg=self.sidebar_bg)
                 icon_label.configure(bg=self.sidebar_bg)
@@ -163,8 +171,25 @@ class MainApp:
         self._active_nav = key
 
     def _create_content(self):
-        self.content_frame = tk.Frame(self.root, bg="#ffffff")
+        self.content_frame = tk.Frame(self.root, bg=config.CONTENT_BG)
         self.content_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    def on_close(self):
+        """关闭窗口：先让各模块中止后台传输并等待线程退出，再销毁窗口。"""
+        if getattr(self, "_closing", False):
+            return
+        self._closing = True
+        for _host, app in self.module_cache.values():
+            closer = getattr(app, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
 
     def _hide_current_module(self):
         if self.current_host is not None:
@@ -185,51 +210,33 @@ class MainApp:
         self.module_cache[key] = (host, app)
         return host, app
 
-    def show_splitter(self):
+    def _switch_to(self, key):
         self._hide_current_module()
-
-        host, app = self._get_or_create_module("split")
+        host, app = self._get_or_create_module(key)
         host.pack(fill=tk.BOTH, expand=True)
         self.current_host = host
         self.current_app = app
+        self._set_active_nav(key)
 
-        self._set_active_nav("split")
+    def show_splitter(self):
+        self._switch_to("split")
 
     def show_downloader(self):
-        self._hide_current_module()
-
-        host, app = self._get_or_create_module("download")
-        host.pack(fill=tk.BOTH, expand=True)
-        self.current_host = host
-        self.current_app = app
-
-        self._set_active_nav("download")
+        self._switch_to("download")
 
 
 if __name__ == "__main__":
+    utils.setup_dpi_awareness()
+    utils.set_app_user_model_id(config.APP_ID_MAIN)
+
     root = tk.Tk()
 
     try:
         from tkinter import font
-        default_font = font.nametofont("TkDefaultFont")
-        default_font.configure(size=10)
+        font.nametofont("TkDefaultFont").configure(size=config.FONT_SIZE)
     except Exception:
         pass
 
-    try:
-        scale_factor = root.tk.call('tk', 'scaling')
-    except Exception:
-        scale_factor = 1.0
-
-    if scale_factor > 1.5:
-        root.update_idletasks()
-        req_width = max(950, int(950 * scale_factor / 1.25))
-        req_height = max(700, int(700 * scale_factor / 1.25))
-    else:
-        req_width, req_height = 950, 700
-
-    root.geometry(f"{req_width}x{req_height}")
-    root.minsize(req_width, req_height - 50)
-
     app = MainApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()

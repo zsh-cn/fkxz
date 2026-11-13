@@ -1,5 +1,41 @@
+self.addEventListener('install', () => {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(self.clients.claim());
+});
+
+const PROGRESS_NOTIFY_MS = 800;
+
+async function broadcast(message) {
+    try {
+        const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+        for (const client of clients) {
+            try {
+                client.postMessage(message);
+            } catch (e) {
+            }
+        }
+    } catch (e) {
+    }
+}
+
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
+
+    if (event.request.method === 'OPTIONS') {
+        event.respondWith(new Response('', {
+            status: 204,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Range'
+            }
+        }));
+        return;
+    }
+
     if (url.pathname.endsWith('/fkxz')) {
         const fkxUrl = url.searchParams.get('fkx');
         const resumeParam = url.searchParams.get('resume');
@@ -22,19 +58,14 @@ self.addEventListener('fetch', (event) => {
                 })
             );
         }
-    } else if (url.pathname.endsWith('/fkxz') && event.request.method === 'OPTIONS') {
-        event.respondWith(new Response('', {
-            status: 204,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Range'
-            }
-        }));
     }
 });
 
 async function streamDownload(fkxUrl, request, resumeOffset) {
+    let sentSoFar = 0;
+    let totalBytes = 0;
+    let notify = (type, extra) => broadcast(Object.assign(
+        { type, fkx: fkxUrl, sent: 0, total: 0 }, extra || {}));
     try {
         const fkxRes = await fetch(fkxUrl);
         if (!fkxRes.ok) throw new Error('无法获取文件信息: HTTP ' + fkxRes.status);
@@ -44,7 +75,16 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
 
         const baseUrl = getBaseUrl(fkxUrl);
         const totalSize = info.chunks.reduce((s, c) => s + c.size, 0);
-        const sanitizedName = info.filename.replace(/[<>:"/\\|?*]/g, '_');
+        totalBytes = totalSize;
+        notify = (type, extra) => broadcast(Object.assign(
+            { type, fkx: fkxUrl, sent: sentSoFar, total: totalBytes }, extra || {}));
+
+        const sanitizedName = String(info.filename)
+            .replace(/[\r\n\t]/g, '')
+            .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_')
+            .replace(/^\.+/, '')
+            .trim() || 'download';
+        const asciiName = sanitizedName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\;]/g, '_');
 
         let rangeStart = resumeOffset || 0;
         let rangeEnd = totalSize - 1;
@@ -73,34 +113,62 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
             cumulativeSize += info.chunks[i].size;
         }
 
+        const PREFETCH_AHEAD = 1;
+        const prefetched = new Map();
+        const prefetchController = new AbortController();
+        const chunkUrl = (idx) => baseUrl + info.chunks[idx].filename;
+
+        const prefetch = (idx) => {
+            if (idx >= info.chunks.length || prefetched.has(idx)) return;
+            prefetched.set(idx, fetch(chunkUrl(idx), { signal: prefetchController.signal })
+                .catch(() => null));
+        };
+
+        const takeChunk = async (idx, headers) => {
+            const pending = prefetched.get(idx);
+            if (pending) {
+                prefetched.delete(idx);
+                const buffered = await pending;
+                if (buffered && buffered.ok) return buffered;
+            }
+            return fetch(chunkUrl(idx), { headers });
+        };
+
         const stream = new ReadableStream({
             async start(controller) {
                 let rangeSent = 0;
+                let lastNotify = 0;
                 for (let i = startChunkIdx; i < info.chunks.length && rangeSent < rangeLength; i++) {
                     try {
                         const chunkHeaders = {};
                         if (i === startChunkIdx && startOffset > 0) {
                             chunkHeaders['Range'] = 'bytes=' + startOffset + '-';
                         }
-                        const chunkRes = await fetch(baseUrl + info.chunks[i].filename, { headers: chunkHeaders });
+                        if (rangeSent + info.chunks[i].size < rangeLength) {
+                            for (let k = 1; k <= PREFETCH_AHEAD; k++) prefetch(i + k);
+                        }
+                        const chunkRes = await takeChunk(i, chunkHeaders);
                         if (!chunkRes.ok) {
-                            controller.error(new Error('无法下载分片: ' + info.chunks[i].filename));
-                            return;
+                            throw new Error('无法下载分片: ' + info.chunks[i].filename);
                         }
                         const reader = chunkRes.body.getReader();
+                        let skipBytes = 0;
+                        if (i === startChunkIdx && startOffset > 0 && chunkRes.status !== 206) {
+                            skipBytes = startOffset;
+                        }
                         let chunkOffset = 0;
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) break;
 
-                            if (i === startChunkIdx && chunkOffset + value.length <= startOffset) {
+                            if (skipBytes && chunkOffset + value.length <= skipBytes) {
                                 chunkOffset += value.length;
                                 continue;
                             }
 
                             let data = value;
-                            if (i === startChunkIdx && chunkOffset < startOffset) {
-                                data = value.subarray(startOffset - chunkOffset);
+                            if (skipBytes && chunkOffset < skipBytes) {
+                                data = value.subarray(skipBytes - chunkOffset);
                             }
                             chunkOffset += value.length;
 
@@ -111,23 +179,35 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
                             if (data.length > 0) {
                                 controller.enqueue(data);
                                 rangeSent += data.length;
+                                sentSoFar = rangeStart + rangeSent;
+                                const now = Date.now();
+                                if (now - lastNotify >= PROGRESS_NOTIFY_MS) {
+                                    lastNotify = now;
+                                    notify('fkx-progress');
+                                }
                             }
 
                             if (rangeSent >= rangeLength) break;
                         }
                     } catch (e) {
+                        notify('fkx-failed', { error: (e && e.message) || String(e) });
                         controller.error(e);
                         return;
                     }
                 }
+                sentSoFar = rangeStart + rangeSent;
                 controller.close();
+                notify('fkx-done');
             },
-            cancel() {}
+            cancel() {
+                prefetchController.abort();
+                prefetched.clear();
+            }
         });
 
         const headers = {
             'Content-Type': 'application/octet-stream',
-            'Content-Disposition': `attachment; filename="${sanitizedName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`,
+            'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`,
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges',
             'Accept-Ranges': 'bytes'
@@ -143,6 +223,7 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
         return new Response(stream, { headers });
     } catch (e) {
         console.error('下载失败:', e);
+        notify('fkx-failed', { error: (e && e.message) || String(e) });
         return new Response('下载失败: ' + e.message, {
             status: 500,
             headers: { 'Access-Control-Allow-Origin': '*' }
