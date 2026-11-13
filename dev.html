@@ -145,50 +145,51 @@
         <p class="section-subtitle">清晰的项目目录组织</p>
         <div class="code-block">
 <pre><span class="comment">fkxz/</span>
-├── <span class="cmd">icon/</span>                          <span class="comment"># 图标资源</span>
-│   ├── wjfk.ico                   <span class="comment"># 文件分块图标（打包图标）</span>
-│   ├── wjfk.png                   <span class="comment"># 文件分块图标（窗口、任务栏图标）</span>
-│   ├── wjfkxz.ico                 <span class="comment"># 应用主图标（打包图标）</span>
-│   ├── wjfkxz.png                 <span class="comment"># 应用主图标（窗口、任务栏图标）</span>
-│   ├── wjxz.ico                   <span class="comment"># 文件下载图标（打包图标）</span>
-│   └── wjxz.png                   <span class="comment"># 文件下载图标（窗口、任务栏图标）</span>
+├── <span class="cmd">fkxz-main/</span>                    <span class="comment"># 主程序源码</span>
+│   ├── <span class="cmd">icon/</span>                      <span class="comment"># 图标资源</span>
+│   │   ├── wjfk.ico               <span class="comment"># 文件分块图标（打包图标）</span>
+│   │   ├── wjfk.png               <span class="comment"># 文件分块图标（窗口、任务栏图标）</span>
+│   │   ├── wjfkxz.ico             <span class="comment"># 应用主图标（打包图标）</span>
+│   │   ├── wjfkxz.png             <span class="comment"># 应用主图标（窗口、任务栏图标）</span>
+│   │   ├── wjxz.ico               <span class="comment"># 文件下载图标（打包图标）</span>
+│   │   └── wjxz.png               <span class="comment"># 文件下载图标（窗口、任务栏图标）</span>
+│   │
+│   ├── <span class="cmd">web/</span>                       <span class="comment"># 网页端下载页面</span>
+│   │   ├── favicon.png            <span class="comment"># 网站图标</span>
+│   │   ├── index.html             <span class="comment"># 文件下载页面</span>
+│   │   └── sw.js                  <span class="comment"># Service Worker 脚本</span>
+│   │
+│   ├── main.py                    <span class="comment"># 聚合程序，集成文件分块与文件下载 (GUI)</span>
+│   ├── wjfk.py                    <span class="comment"># 独立文件分块程序 (GUI)</span>
+│   ├── wjxz.py                    <span class="comment"># 独立文件合并/下载程序 (GUI, 支持增强模式)</span>
+│   ├── utils.py                   <span class="comment"># 公共工具（DPI 适配、SHA-256、文件名净化、UI 线程桥、图标/对话框/右键菜单）</span>
+│   ├── config.py                  <span class="comment"># 全局常量与版本号（网络/IO/并发/配色/窗口尺寸）</span>
+│   ├── requirements.txt           <span class="comment"># Python 依赖</span>
+│   └── LICENSE                    <span class="comment"># MPL 2.0 许可证</span>
 │
-├── <span class="cmd">web/</span>                           <span class="comment"># 网页端下载页面</span>
-│   ├── favicon.png                <span class="comment"># 网站图标</span>
-│   ├── index.html                 <span class="comment"># 文件下载页面</span>
-│   └── sw.js                      <span class="comment"># Service Worker 脚本</span>
-│
-├── <span class="cmd">docs/</span>                          <span class="comment"># 项目官网</span>
-│   ├── index.html                 <span class="comment"># 官网主页</span>
-│   ├── download.html              <span class="comment"># 下载页面</span>
-│   ├── dev.html                   <span class="comment"># 文档页面</span>
-│   ├── favicon.png                <span class="comment"># 官网图标</span>
-│   ├── logo.png                   <span class="comment"># 官网大图（导航与首屏）</span>
-│   ├── <span class="cmd">dist/</span>                      <span class="comment"># 打包产物（每个 zip 内是单个 exe）</span>
-│   │   ├── wjfk.zip
-│   │   ├── wjfkxz.zip
-│   │   └── wjxz.zip
-│   ├── <span class="cmd">css/</span>                       <span class="comment"># 样式文件</span>
-│   │   └── style.css
-│   ├── <span class="cmd">js/</span>                        <span class="comment"># 公共脚本</span>
-│   │   └── main.js
-│   ├── <span class="cmd">icons/</span>                     <span class="comment"># 程序图标</span>
-│   │   ├── wjfk.ico
-│   │   ├── wjfkxz.ico
-│   │   └── wjxz.ico
-│   └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线下载体验页面</span>
-│       ├── index.html
-│       ├── sw.js
-│       ├── experience.html
-│       └── favicon.png
-│
-├── main.py                        <span class="comment"># 聚合程序，集成文件分块与文件下载 (GUI)</span>
-├── wjfk.py                        <span class="comment"># 独立文件分块程序 (GUI)</span>
-├── wjxz.py                        <span class="comment"># 独立文件合并/下载程序 (GUI, 支持增强模式)</span>
-├── utils.py                       <span class="comment"># 公共工具（DPI 适配、SHA-256、文件名净化、UI 线程桥、图标/对话框/右键菜单）</span>
-├── config.py                      <span class="comment"># 全局常量与版本号（网络/IO/并发/配色/窗口尺寸）</span>
-├── requirements.txt               <span class="comment"># Python 依赖</span>
-└── LICENSE                        <span class="comment"># MPL 2.0 许可证</span></pre>
+└── <span class="cmd">fkxz-docs/</span>                    <span class="comment"># 项目官网</span>
+    ├── index.html                 <span class="comment"># 官网主页</span>
+    ├── download.html              <span class="comment"># 下载页面</span>
+    ├── dev.html                   <span class="comment"># 文档页面</span>
+    ├── favicon.png                <span class="comment"># 官网图标</span>
+    ├── logo.png                   <span class="comment"># 官网大图（导航与首屏）</span>
+    ├── <span class="cmd">dist/</span>                      <span class="comment"># 打包产物（每个 zip 内是单个 exe）</span>
+    │   ├── wjfk.zip
+    │   ├── wjfkxz.zip
+    │   └── wjxz.zip
+    ├── <span class="cmd">css/</span>                       <span class="comment"># 样式文件</span>
+    │   └── style.css
+    ├── <span class="cmd">js/</span>                        <span class="comment"># 公共脚本</span>
+    │   └── main.js
+    ├── <span class="cmd">icons/</span>                     <span class="comment"># 程序图标</span>
+    │   ├── wjfk.ico
+    │   ├── wjfkxz.ico
+    │   └── wjxz.ico
+    └── <span class="cmd">wjxz/</span>                      <span class="comment"># Web 在线下载体验页面</span>
+        ├── index.html
+        ├── sw.js
+        ├── experience.html
+        └── favicon.png</pre>
         </div>
     </div>
 </section>
