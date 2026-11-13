@@ -6,26 +6,11 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(self.clients.claim());
 });
 
-const PROGRESS_NOTIFY_MS = 800;
-
-async function broadcast(message) {
-    try {
-        const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-        for (const client of clients) {
-            try {
-                client.postMessage(message);
-            } catch (e) {
-            }
-        }
-    } catch (e) {
-    }
-}
-
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     if (event.request.method === 'OPTIONS') {
-        event.respondWith(new Response('', {
+        event.respondWith(new Response(null, {
             status: 204,
             headers: {
                 'Access-Control-Allow-Origin': '*',
@@ -62,10 +47,6 @@ self.addEventListener('fetch', (event) => {
 });
 
 async function streamDownload(fkxUrl, request, resumeOffset) {
-    let sentSoFar = 0;
-    let totalBytes = 0;
-    let notify = (type, extra) => broadcast(Object.assign(
-        { type, fkx: fkxUrl, sent: 0, total: 0 }, extra || {}));
     try {
         const fkxRes = await fetch(fkxUrl);
         if (!fkxRes.ok) throw new Error('无法获取文件信息: HTTP ' + fkxRes.status);
@@ -75,10 +56,6 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
 
         const baseUrl = getBaseUrl(fkxUrl);
         const totalSize = info.chunks.reduce((s, c) => s + c.size, 0);
-        totalBytes = totalSize;
-        notify = (type, extra) => broadcast(Object.assign(
-            { type, fkx: fkxUrl, sent: sentSoFar, total: totalBytes }, extra || {}));
-
         const sanitizedName = String(info.filename)
             .replace(/[\r\n\t]/g, '')
             .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_')
@@ -137,7 +114,6 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
         const stream = new ReadableStream({
             async start(controller) {
                 let rangeSent = 0;
-                let lastNotify = 0;
                 for (let i = startChunkIdx; i < info.chunks.length && rangeSent < rangeLength; i++) {
                     try {
                         const chunkHeaders = {};
@@ -179,25 +155,16 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
                             if (data.length > 0) {
                                 controller.enqueue(data);
                                 rangeSent += data.length;
-                                sentSoFar = rangeStart + rangeSent;
-                                const now = Date.now();
-                                if (now - lastNotify >= PROGRESS_NOTIFY_MS) {
-                                    lastNotify = now;
-                                    notify('fkx-progress');
-                                }
                             }
 
                             if (rangeSent >= rangeLength) break;
                         }
                     } catch (e) {
-                        notify('fkx-failed', { error: (e && e.message) || String(e) });
                         controller.error(e);
                         return;
                     }
                 }
-                sentSoFar = rangeStart + rangeSent;
                 controller.close();
-                notify('fkx-done');
             },
             cancel() {
                 prefetchController.abort();
@@ -223,7 +190,6 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
         return new Response(stream, { headers });
     } catch (e) {
         console.error('下载失败:', e);
-        notify('fkx-failed', { error: (e && e.message) || String(e) });
         return new Response('下载失败: ' + e.message, {
             status: 500,
             headers: { 'Access-Control-Allow-Origin': '*' }
