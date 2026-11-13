@@ -1,5 +1,5 @@
-self.addEventListener('install', () => {
-    self.skipWaiting();
+self.addEventListener('install', (event) => {
+    event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
@@ -9,18 +9,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    if (event.request.method === 'OPTIONS') {
-        event.respondWith(new Response(null, {
-            status: 204,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Range'
-            }
-        }));
-        return;
-    }
-
+    // /fkxz 是下载入口：任何方法（含 OPTIONS 探测）都必须生成带 Content-Disposition 的下载响应，
+    // 否则浏览器不会创建下载任务。此判断必须放在通用 OPTIONS 分支之前。
     if (url.pathname.endsWith('/fkxz')) {
         const fkxUrl = url.searchParams.get('fkx');
         const resumeParam = url.searchParams.get('resume');
@@ -43,6 +33,16 @@ self.addEventListener('fetch', (event) => {
                 })
             );
         }
+    } else if (event.request.method === 'OPTIONS') {
+        // 其他路径的 CORS 预检；204 属于 null body status，不能带 body
+        event.respondWith(new Response(null, {
+            status: 204,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Range'
+            }
+        }));
     }
 });
 
@@ -92,20 +92,22 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
 
         const PREFETCH_AHEAD = 1;
         const prefetched = new Map();
-        const prefetchController = new AbortController();
         const chunkUrl = (idx) => baseUrl + info.chunks[idx].filename;
 
+        // 每个预取请求独立的 controller：被取走并正在读取的分片不再被 abort，
+        // 只取消那些还没用上的预取，避免下载被取消时把正在传输的流一起打断。
         const prefetch = (idx) => {
             if (idx >= info.chunks.length || prefetched.has(idx)) return;
-            prefetched.set(idx, fetch(chunkUrl(idx), { signal: prefetchController.signal })
-                .catch(() => null));
+            const ctrl = new AbortController();
+            const pending = fetch(chunkUrl(idx), { signal: ctrl.signal }).catch(() => null);
+            prefetched.set(idx, { pending, ctrl });
         };
 
         const takeChunk = async (idx, headers) => {
-            const pending = prefetched.get(idx);
-            if (pending) {
+            const entry = prefetched.get(idx);
+            if (entry) {
                 prefetched.delete(idx);
-                const buffered = await pending;
+                const buffered = await entry.pending;
                 if (buffered && buffered.ok) return buffered;
             }
             return fetch(chunkUrl(idx), { headers });
@@ -164,10 +166,12 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
                         return;
                     }
                 }
+                for (const entry of prefetched.values()) entry.ctrl.abort();
+                prefetched.clear();
                 controller.close();
             },
             cancel() {
-                prefetchController.abort();
+                for (const entry of prefetched.values()) entry.ctrl.abort();
                 prefetched.clear();
             }
         });
