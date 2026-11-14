@@ -1,10 +1,5 @@
-"""集中存放的常量与元信息：改一处即可全局生效。
-
-本模块只依赖标准库，不导入 tkinter / utils，避免循环依赖。
-"""
-
 APP_NAME = "文件分块下载"
-APP_VERSION = "4.0.0-beta"
+APP_VERSION = "4.0.0"
 APP_LICENSE = "MPL-2.0"
 APP_HOMEPAGE = "https://fkxz.zhshh.cn"
 
@@ -36,13 +31,14 @@ CHUNK_TIMEOUT = 30
 CHUNK_BUFFER = 65536
 IO_BLOCK_SIZE = 1024 * 1024
 PROGRESS_INTERVAL = 0.15
+SPEED_MIN_INTERVAL = 0.5
 
 RETRY_ATTEMPTS = 3
 RETRY_BASE_DELAY = 0.5
 
 MIN_WORKERS = 1
 DEFAULT_WORKERS = 3
-MAX_WORKERS = 4
+MAX_WORKERS = 16
 
 DEFAULT_CHUNK_SIZE_MB = 10
 MIN_CHUNK_SIZE_MB = 1

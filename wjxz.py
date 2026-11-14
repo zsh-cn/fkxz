@@ -35,11 +35,6 @@ def _new_pooled_session():
 
 
 def _new_enhanced_session():
-    """返回 (session, 是否为 curl_cffi 会话)。
-
-    curl_cffi 的 impersonate 目标是按版本演进的，不能盲目写死 chrome131，
-    否则低版本在构造 Session 时就抛 ValueError，窗口都起不来。
-    """
     if HAS_CURL_CFFI:
         for target in config.IMPERSONATE_TARGETS:
             try:
@@ -53,24 +48,20 @@ def _new_enhanced_session():
     return _new_pooled_session(), False
 
 
-
 VERIFY_STATUS_THRESHOLD = 8 * 1024 * 1024
 
 
 def _validate_chunk_name(filename):
-    """分片名只允许是纯文件名，任何路径成分都拒绝。"""
     if not filename or '..' in filename or '/' in filename or '\\' in filename:
         raise ValueError(f"非法的分片文件名: {filename}")
     return os.path.basename(filename)
 
 
 def chunk_path_in(directory, filename):
-    """把清单里的分片名落成目录内的绝对路径（越界即报错）。"""
     return utils.ensure_within_dir(directory, _validate_chunk_name(filename))
 
 
 def same_chunk_layout(left_info, right_info):
-    """两份清单是否描述同一批分片（复用本地缓存清单时忽略哈希字段差异）。"""
     left = left_info.get('chunks') or []
     right = right_info.get('chunks') or []
     if not left or len(left) != len(right):
@@ -80,13 +71,7 @@ def same_chunk_layout(left_info, right_info):
 
 
 def find_existing_chunk(chunk_dir, chunk_info, verified_cache=None,
-                        should_stop=None, on_verify_start=None):
-    """检查分片是否已存在且可用（断点续传的关键一步）。
-
-    大小不符直接当不存在；清单里带 SHA-256 时逐字节复核，不符就删掉重下。
-    verified_cache 记录本轮已校验过的 (文件名, 大小, 哈希)，避免重复读盘。
-    命中返回分片路径，否则返回 None。
-    """
+                        should_stop=None, on_verify_start=None, on_verify_end=None):
     try:
         chunk_path = chunk_path_in(chunk_dir, chunk_info['filename'])
     except ValueError:
@@ -104,9 +89,14 @@ def find_existing_chunk(chunk_dir, chunk_info, verified_cache=None,
     if verified_cache is not None and verify_key in verified_cache:
         return chunk_path
 
-    if on_verify_start and chunk_info['size'] > VERIFY_STATUS_THRESHOLD:
+    notify_verify = chunk_info['size'] > VERIFY_STATUS_THRESHOLD
+    if notify_verify and on_verify_start:
         on_verify_start(chunk_info['filename'])
-    actual_sha256 = utils.sha256_file(chunk_path, should_stop=should_stop)
+    try:
+        actual_sha256 = utils.sha256_file(chunk_path, should_stop=should_stop)
+    finally:
+        if notify_verify and on_verify_end:
+            on_verify_end(chunk_info['filename'])
     if actual_sha256 is None:
         return None
     if actual_sha256 == expected_sha256:
@@ -164,8 +154,18 @@ class FileDownloaderApp:
 
         self._progress_lock = threading.Lock()
         self._chunk_bytes = {}
+        self._chunk_bytes_total = 0
+        self._speed_base_bytes = 0
+        self._speed_start_time = None
+        self._run_token = 0
+        self._run_part_token = None
+        self._run_part_names_cache = []
         self._abort_download = False
         self._file_info_source = None
+
+        self._status_lock = threading.Lock()
+        self._status_base = None
+        self._verifying_names = set()
 
         self.create_widgets()
         utils.install_about_menu(self.root, "文件下载")
@@ -213,7 +213,7 @@ class FileDownloaderApp:
                                            to=config.MAX_WORKERS, width=6,
                                            textvariable=self.workers_var)
         self.workers_spinbox.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
-        ttk.Label(url_frame, text=f"({config.MIN_WORKERS}-{config.MAX_WORKERS}，仅远程下载生效)").grid(
+        ttk.Label(url_frame, text=f"({config.MIN_WORKERS}-{config.MAX_WORKERS}，仅远程模式可调)").grid(
             row=5, column=2, sticky=tk.W, pady=5)
 
         control_frame = ttk.LabelFrame(main_frame, text="文件信息", padding="10")
@@ -281,7 +281,6 @@ class FileDownloaderApp:
 
     @classmethod
     def _url_path_of(cls, path):
-        """取 URL 的 path 部分（去掉 query/fragment），本地路径原样返回。"""
         if not path:
             return ''
         if cls._is_remote_url(path):
@@ -293,7 +292,6 @@ class FileDownloaderApp:
 
     @classmethod
     def _looks_like_fkx(cls, path):
-        """用 path 判断后缀，兼容带签名的 CDN 链接（xxx.fkx?sign=...）。"""
         return cls._url_path_of(path).lower().endswith('.fkx')
 
     @classmethod
@@ -314,7 +312,6 @@ class FileDownloaderApp:
         return dot_pos != -1 and dot_pos < slash_pos
 
     def _resolve_local_path(self, path):
-        """file:// URL → 本地路径（正确处理 /C:/ 与 UNC 与 %20 解码）。"""
         if path.lower().startswith('file://'):
             parsed = urlparse(path)
             local = unquote(parsed.path or '')
@@ -332,13 +329,16 @@ class FileDownloaderApp:
         if not path:
             if self._curl_session:
                 self.enhanced_checkbox.config(state=tk.NORMAL)
+            self.workers_spinbox.config(state=tk.NORMAL)
             return
         if not is_local and (self._is_remote_url(path) or self._is_domain_like(path)):
             if self._curl_session:
                 self.enhanced_checkbox.config(state=tk.NORMAL)
+            self.workers_spinbox.config(state=tk.NORMAL)
             self.start_button.config(text="开始下载")
         else:
             self.enhanced_checkbox.config(state=tk.DISABLED)
+            self.workers_spinbox.config(state=tk.DISABLED)
             self.start_button.config(text="开始合并")
 
 
@@ -397,6 +397,7 @@ class FileDownloaderApp:
         self.total_download_size = total_size
         if in_progress:
             self.enhanced_checkbox.config(state=tk.DISABLED)
+            self.workers_spinbox.config(state=tk.DISABLED)
         else:
             self._update_path_type_ui(self.fkx_path)
         if not in_progress:
@@ -461,21 +462,17 @@ class FileDownloaderApp:
         return "开始合并" if self.is_local else "开始下载"
 
     def _apply_ui_state(self, state, button_text=None):
-        """统一管理控件可用性与按钮文案。
-
-        state: "running" 运行中（全部只读、显示取消）
-               "idle"    空闲（文案按本地/远程自动给）
-               "retry"   失败后可重试（文案"重试"，可传入 button_text 覆盖）
-        """
         running = state == "running"
         editing = tk.DISABLED if running else tk.NORMAL
         for widget in (self.url_entry, self.output_entry, self.browse_fkx_btn,
-                       self.browse_output_btn, self.verify_sha256_checkbox,
-                       self.workers_spinbox):
+                       self.browse_output_btn, self.verify_sha256_checkbox):
             widget.config(state=editing)
 
         enhanced_enabled = (not running) and (not self.is_local) and self._curl_session
         self.enhanced_checkbox.config(state=tk.NORMAL if enhanced_enabled else tk.DISABLED)
+
+        workers_enabled = (not running) and (not self.is_local)
+        self.workers_spinbox.config(state=tk.NORMAL if workers_enabled else tk.DISABLED)
 
         if running:
             self.start_button.config(state=tk.DISABLED, text=self._idle_button_text())
@@ -538,34 +535,69 @@ class FileDownloaderApp:
             return None
 
     def parse_fkx(self, content):
-        """清单解析：格式定义在 core.py，这里只做转发。"""
         return core.parse_fkx(content)
 
 
-    def _should_stop(self):
-        return self.is_cancelled or self._abort_download
+    def _should_stop(self, stop_event=None):
+        if self.is_cancelled:
+            return True
+        if stop_event is not None:
+            return stop_event.is_set()
+        return self._abort_download
 
-    def _set_chunk_bytes(self, index, written):
+    def _set_chunk_bytes(self, index, written, token=None):
         with self._progress_lock:
+            if token is not None and token != self._run_token:
+                return
+            previous = self._chunk_bytes.get(index, 0)
+            delta = written - previous
             self._chunk_bytes[index] = written
+            if delta:
+                self._chunk_bytes_total += delta
+                if self._speed_start_time is None:
+                    self._speed_base_bytes = self._chunk_bytes_total - delta
+                    self._speed_start_time = time.monotonic()
+
+    def _reset_progress_counters(self, num_chunks=0):
+        with self._progress_lock:
+            self._run_token += 1
+            token = self._run_token
+            self._chunk_bytes = {i: 0 for i in range(num_chunks)}
+            self._chunk_bytes_total = 0
+            self._speed_base_bytes = 0
+            self._speed_start_time = None
+        return token
 
     def _record_chunk_error(self, message):
         with self._progress_lock:
             self._last_chunk_error = message
 
-    def _transfer_to_part(self, url, part_path, chunk_size, expected_sha256, index):
-        """单次传输尝试：支持 Range 续传，边收边算分片 SHA-256。
+    def _transfer_to_part(self, url, part_path, chunk_size, expected_sha256, index,
+                          token, stop_event):
+        def should_stop():
+            return self._should_stop(stop_event)
 
-        返回 (ok, error)；取消时抛 _ChunkCancelled，网络异常交给调用方重试。
-        失败时会保留 part 文件，下次尝试从断点继续。
-        """
         offset = 0
         hasher = hashlib.sha256()
 
         if os.path.exists(part_path):
             existing = os.path.getsize(part_path)
-            if existing >= chunk_size:
+            if existing > chunk_size:
                 utils.safe_remove(part_path)
+                self._set_chunk_bytes(index, 0, token)
+            elif existing == chunk_size:
+                with open(part_path, 'rb') as handle:
+                    while True:
+                        block = handle.read(config.IO_BLOCK_SIZE)
+                        if not block:
+                            break
+                        hasher.update(block)
+                        if should_stop():
+                            raise _ChunkCancelled()
+                self._set_chunk_bytes(index, chunk_size, token)
+                if expected_sha256 and hasher.hexdigest() != expected_sha256:
+                    return False, "sha-mismatch"
+                return True, ""
             elif existing > 0:
                 offset = existing
                 with open(part_path, 'rb') as handle:
@@ -574,7 +606,7 @@ class FileDownloaderApp:
                         if not block:
                             break
                         hasher.update(block)
-                        if self._should_stop():
+                        if should_stop():
                             raise _ChunkCancelled()
 
         headers = self._get_request_headers(referer=self.base_referer, is_chunk=True)
@@ -586,12 +618,12 @@ class FileDownloaderApp:
             with open(part_path, 'wb') as handle:
                 def content_callback(data):
                     nonlocal written
-                    if self._should_stop():
+                    if should_stop():
                         return -1
                     handle.write(data)
                     hasher.update(data)
                     written += len(data)
-                    self._set_chunk_bytes(index, written)
+                    self._set_chunk_bytes(index, written, token)
                     return None
 
                 try:
@@ -600,7 +632,7 @@ class FileDownloaderApp:
                         content_callback=content_callback,
                     )
                 except Exception:
-                    if self._should_stop():
+                    if should_stop():
                         raise _ChunkCancelled()
                     raise
             response.raise_for_status()
@@ -623,14 +655,14 @@ class FileDownloaderApp:
             written = offset
             with open(part_path, 'ab' if offset else 'wb') as handle:
                 for block in response.iter_content(chunk_size=config.CHUNK_BUFFER):
-                    if self._should_stop():
+                    if should_stop():
                         raise _ChunkCancelled()
                     if not block:
                         continue
                     handle.write(block)
                     hasher.update(block)
                     written += len(block)
-                    self._set_chunk_bytes(index, written)
+                    self._set_chunk_bytes(index, written, token)
                 handle.flush()
 
         if written != chunk_size:
@@ -639,39 +671,46 @@ class FileDownloaderApp:
             return False, "sha-mismatch"
         return True, ""
 
-    def _check_existing_chunk(self, chunk_dir, chunk_info):
-        """已有分片是否可复用（大小 + SHA-256），判定逻辑在本模块。"""
+    def _check_existing_chunk(self, chunk_dir, chunk_info, stop_event=None):
         return find_existing_chunk(
             chunk_dir, chunk_info,
             verified_cache=self._verified_chunks,
-            should_stop=self._should_stop,
-            on_verify_start=lambda name: self.update_status(f"状态: 正在校验已有分片 {name}"),
+            should_stop=lambda: self._should_stop(stop_event),
+            on_verify_start=self._begin_verify,
+            on_verify_end=self._end_verify,
         )
 
-    def _mark_chunk_done(self, index, size, path):
+    def _mark_chunk_done(self, index, size, path, reused=False, token=None):
         with self._progress_lock:
+            if token is not None and token != self._run_token:
+                return
+            previous = self._chunk_bytes.get(index, 0)
+            delta = size - previous
             self.downloaded_chunks[index] = path
             self._chunk_bytes[index] = size
+            if delta:
+                self._chunk_bytes_total += delta
+                if reused:
+                    self._speed_base_bytes += delta
 
-    def _sleep_backoff(self, attempt):
+    def _sleep_backoff(self, attempt, stop_event=None):
         deadline = time.monotonic() + config.RETRY_BASE_DELAY * (2 ** (attempt - 1))
         while time.monotonic() < deadline:
-            if self._should_stop():
+            if self._should_stop(stop_event):
                 return
             time.sleep(0.05)
 
-    def _fetch_chunk(self, base_url, index, chunk_info, chunk_dir):
-        """工作线程：下载单个分片（跳过已完成 / 断点续传 / 指数退避重试 / SHA 校验）。"""
-        if self._should_stop():
+    def _fetch_chunk(self, base_url, index, chunk_info, chunk_dir, token, stop_event):
+        if self._should_stop(stop_event):
             return False
 
         filename = chunk_info['filename']
         chunk_size = chunk_info['size']
         expected_sha256 = chunk_info.get('sha256')
 
-        existing = self._check_existing_chunk(chunk_dir, chunk_info)
+        existing = self._check_existing_chunk(chunk_dir, chunk_info, stop_event)
         if existing:
-            self._mark_chunk_done(index, chunk_size, existing)
+            self._mark_chunk_done(index, chunk_size, existing, reused=True, token=token)
             return True
 
         try:
@@ -687,18 +726,20 @@ class FileDownloaderApp:
             except OSError as exc:
                 self._record_chunk_error(f"{filename}: {exc}")
                 return False
-            self._mark_chunk_done(index, 0, chunk_path)
+            self._mark_chunk_done(index, 0, chunk_path, token=token)
             return True
 
         url = urljoin(base_url, self._quote_segment(filename))
-        part_path = utils.part_path_for(chunk_path)
+        part_path = self._part_path_for(chunk_path, token)
+        self._adopt_previous_part(chunk_path, part_path, token)
         last_error = "未知错误"
 
         for attempt in range(1, config.RETRY_ATTEMPTS + 1):
-            if self._should_stop():
+            if self._should_stop(stop_event):
                 return False
             try:
-                ok, err = self._transfer_to_part(url, part_path, chunk_size, expected_sha256, index)
+                ok, err = self._transfer_to_part(
+                    url, part_path, chunk_size, expected_sha256, index, token, stop_event)
             except _ChunkCancelled:
                 return False
             except Exception as exc:
@@ -706,25 +747,63 @@ class FileDownloaderApp:
 
             if ok:
                 try:
-                    os.replace(part_path, chunk_path)
+                    utils.replace_with_retry(part_path, chunk_path)
                 except OSError as exc:
                     self._record_chunk_error(f"{filename}: {exc}")
                     return False
-                self._mark_chunk_done(index, chunk_size, chunk_path)
+                self._mark_chunk_done(index, chunk_size, chunk_path, token=token)
                 return True
 
             last_error = err
             if err == "sha-mismatch":
                 utils.safe_remove(part_path)
+                self._set_chunk_bytes(index, 0, token)
             if attempt < config.RETRY_ATTEMPTS:
-                self._sleep_backoff(attempt)
+                self._sleep_backoff(attempt, stop_event)
 
         self._record_chunk_error(f"{filename}: {last_error}")
         return False
 
+    def _part_path_for(self, chunk_path, token):
+        return f"{chunk_path}.{os.getpid()}.r{token}.part"
+
+    def _adopt_previous_part(self, chunk_path, part_path, token):
+        if os.path.exists(part_path):
+            return
+        prefix = os.path.basename(chunk_path) + '.'
+        candidates = []
+        for name in self._run_part_names(token):
+            if not name.startswith(prefix):
+                continue
+            path = os.path.join(self.chunk_dir, name)
+            if path == part_path:
+                continue
+            try:
+                candidates.append((os.path.getsize(path), path))
+            except OSError:
+                continue
+        if not candidates:
+            return
+        candidates.sort(reverse=True)
+        try:
+            utils.replace_with_retry(candidates[0][1], part_path, attempts=2, delay=0.05)
+        except OSError:
+            pass
+
+    def _run_part_names(self, token):
+        with self._progress_lock:
+            if self._run_part_token == token:
+                return self._run_part_names_cache
+            try:
+                names = [n for n in os.listdir(self.chunk_dir) if n.endswith('.part')]
+            except OSError:
+                names = []
+            self._run_part_token = token
+            self._run_part_names_cache = names
+            return names
+
     @staticmethod
     def _quote_segment(name):
-        """把分片名编码进 URL；已含 % 转义的保持原样。"""
         if '%' in name:
             return name
         return quote(name)
@@ -751,7 +830,47 @@ class FileDownloaderApp:
 
 
     def update_status(self, text, foreground=config.TEXT_NORMAL):
-        self._run_on_ui(self._set_status, text, foreground)
+        with self._status_lock:
+            self._status_base = (text, foreground)
+        self._push_status()
+
+    def _status_payload_locked(self):
+        text, foreground = self._status_base or ("状态: 就绪", config.TEXT_NORMAL)
+        count = len(self._verifying_names)
+        if count == 1:
+            return f"状态: 正在校验已有分片 {next(iter(self._verifying_names))}", config.TEXT_NORMAL
+        if count > 1:
+            return f"状态: 正在校验已有分片 (并发 {count} 个)", config.TEXT_NORMAL
+        return text, foreground
+
+    def _refresh_status(self):
+        with self._status_lock:
+            text, foreground = self._status_payload_locked()
+        self._set_status(text, foreground)
+
+    def _push_status(self):
+        self._run_on_ui_latest('status', self._refresh_status)
+
+    def _enter_status_phase(self, text, foreground=config.TEXT_NORMAL):
+        with self._status_lock:
+            self._status_base = (text, foreground)
+            self._verifying_names.clear()
+        self._push_status()
+
+    def _leave_status_phase(self):
+        with self._status_lock:
+            self._verifying_names.clear()
+        self._push_status()
+
+    def _begin_verify(self, name):
+        with self._status_lock:
+            self._verifying_names.add(name)
+        self._push_status()
+
+    def _end_verify(self, name):
+        with self._status_lock:
+            self._verifying_names.discard(name)
+        self._push_status()
 
     def _set_status(self, text, foreground=config.TEXT_NORMAL):
         self.status_label.config(text=text, foreground=foreground)
@@ -765,26 +884,30 @@ class FileDownloaderApp:
     def _set_detail(self, text):
         self.download_detail_label.config(text=text)
 
-    def _push_overall(self, completed, count, bytes_done, total_bytes, speed):
-        """主线程：一次调用同时刷新进度条与明细文字。"""
+    def _push_overall(self, completed, count, bytes_done, total_bytes, speed,
+                      show_speed=True):
         percent = 0.0
         if total_bytes > 0:
             percent = min(100.0, bytes_done / total_bytes * 100)
             self.progress_bar['value'] = percent
         text = (f"已下载: {utils.format_size(bytes_done)} / {utils.format_size(total_bytes)}"
-                f" ({percent:.0f}%)"
-                f" | 速度: {utils.format_size(int(speed))}/s"
-                f" | 分片: {completed}/{count}")
+                f" ({percent:.0f}%)")
+        if show_speed:
+            text += f" | 速度: {utils.speed_text(speed)}"
+        text += f" | 分片: {completed}/{count}"
         self.download_detail_label.config(text=text)
 
-    def _report_download_progress(self, num_chunks, started, throttle, force=False):
+    def _report_download_progress(self, num_chunks, throttle, token=None, force=False):
         if not throttle.ready(force=force):
             return
         with self._progress_lock:
-            bytes_done = sum(self._chunk_bytes.values())
+            if token is not None and token != self._run_token:
+                return
+            bytes_done = self._chunk_bytes_total
             completed = len(self.downloaded_chunks)
-        elapsed = time.monotonic() - started
-        speed = bytes_done / elapsed if elapsed > 0 else 0
+            base_bytes = self._speed_base_bytes
+            started = self._speed_start_time
+        speed = utils.measured_speed(bytes_done - base_bytes, started)
         self._run_on_ui_latest('overall', self._push_overall,
                                completed, num_chunks, bytes_done,
                                self.total_download_size, speed)
@@ -797,7 +920,6 @@ class FileDownloaderApp:
         return "合并失败" if self.is_local else "下载已中断"
 
     def _fail(self, prefix, detail=""):
-        """统一失败收尾：拼状态文字并复位 UI 到可重试。"""
         text = f"状态: {prefix}"
         if detail:
             text += f" - {detail}"
@@ -812,7 +934,6 @@ class FileDownloaderApp:
         return False
 
     def _validate_download_inputs(self):
-        """只能在主线程调用（会读取输入框内容）。"""
         raw_path = self.url_entry.get().strip()
         raw_output = self.output_entry.get().strip()
 
@@ -893,6 +1014,7 @@ class FileDownloaderApp:
         self.downloaded_size = 0
         self.download_start_time = time.time()
         self.chunk_dir = ""
+        self._reset_progress_counters()
 
         if not os.path.exists(self.output_dir):
             try:
@@ -952,7 +1074,6 @@ class FileDownloaderApp:
     def _collect_chunks(self, fkx_info, base_path, num_chunks, workers=1):
         if self.is_local:
             throttle = utils.Throttle(config.PROGRESS_INTERVAL)
-            started = time.monotonic()
             for i, chunk_info in enumerate(fkx_info['chunks']):
                 if self.is_cancelled:
                     return False
@@ -966,27 +1087,23 @@ class FileDownloaderApp:
                     return False
                 self.downloaded_chunks[i] = chunk_path
                 self.downloaded_size += chunk_info['size']
-                with self._progress_lock:
-                    self._chunk_bytes[i] = chunk_info['size']
+                self._set_chunk_bytes(i, chunk_info['size'])
                 if throttle.ready() or i == num_chunks - 1:
-                    elapsed = time.monotonic() - started
-                    speed = self.downloaded_size / elapsed if elapsed > 0 else 0
                     self._run_on_ui_latest('overall', self._push_overall,
                                            i + 1, num_chunks, self.downloaded_size,
-                                           self.total_download_size, speed)
+                                           self.total_download_size, None, False)
             self.update_status(f"状态: 分片就绪，准备合并 (共{num_chunks}个)", foreground=config.TEXT_NORMAL)
             return True
 
         workers = max(1, min(config.MAX_WORKERS, workers, num_chunks))
-        self.update_status(f"状态: 正在下载分片 (共{num_chunks}个, {workers} 线程)", foreground=config.TEXT_NORMAL)
+        self._enter_status_phase(f"状态: 正在下载分片 (共{num_chunks}个, {workers} 线程)")
         self._run_on_ui(self._set_detail, "")
         with self._progress_lock:
             self.downloaded_chunks = {}
-            self._chunk_bytes = {i: 0 for i in range(num_chunks)}
+        token = self._reset_progress_counters(num_chunks)
         self._abort_download = False
         self.download_start_time = time.time()
 
-        started = time.monotonic()
         throttle = utils.Throttle(config.PROGRESS_INTERVAL)
 
         index_queue = queue.Queue()
@@ -996,19 +1113,18 @@ class FileDownloaderApp:
 
         def chunk_worker():
             try:
-                while not stop_event.is_set() and not self._should_stop():
+                while not stop_event.is_set() and not self._should_stop(stop_event):
                     try:
                         index = index_queue.get_nowait()
                     except queue.Empty:
                         return
                     if not self._fetch_chunk(base_path, index,
-                                             fkx_info['chunks'][index], self.chunk_dir):
-                        self._abort_download = True
+                                             fkx_info['chunks'][index], self.chunk_dir,
+                                             token, stop_event):
                         stop_event.set()
                         return
             except Exception as exc:
                 self._record_chunk_error(str(exc)[:120] or exc.__class__.__name__)
-                self._abort_download = True
                 stop_event.set()
 
         threads = [threading.Thread(target=chunk_worker, name=f"fkxz-chunk-{n}", daemon=True)
@@ -1016,29 +1132,33 @@ class FileDownloaderApp:
         for thread in threads:
             thread.start()
 
+        stopped_early = False
         try:
             while any(thread.is_alive() for thread in threads):
-                if self._should_stop():
+                if self._should_stop(stop_event):
+                    stopped_early = True
                     break
-                self._report_download_progress(num_chunks, started, throttle)
+                self._report_download_progress(num_chunks, throttle, token)
                 time.sleep(0.05)
         finally:
             stop_event.set()
             for thread in threads:
                 thread.join(timeout=0.2)
 
-        self._report_download_progress(num_chunks, started, throttle, force=True)
+        try:
+            self._report_download_progress(num_chunks, throttle, token, force=True)
 
-        if self._should_stop():
-            return False
+            if stopped_early or self.is_cancelled:
+                return False
 
-        with self._progress_lock:
-            completed = len(self.downloaded_chunks)
-        self.downloaded_size = sum(fkx_info['chunks'][i]['size'] for i in self.downloaded_chunks)
-        return completed == num_chunks
+            with self._progress_lock:
+                completed = len(self.downloaded_chunks)
+            self.downloaded_size = sum(fkx_info['chunks'][i]['size'] for i in self.downloaded_chunks)
+            return completed == num_chunks
+        finally:
+            self._leave_status_phase()
 
     def _merge_chunks(self, fkx_info, num_chunks, compute_sha256=True):
-        """合并分片：字节级合并交给 core.merge_chunks，命名/进度/字节核对留在这里。"""
         safe_name = self.sanitize_filename(os.path.basename(str(fkx_info.get('filename', ''))))
         try:
             target_path = utils.unique_path(utils.ensure_within_dir(self.output_dir, safe_name))
@@ -1052,9 +1172,8 @@ class FileDownloaderApp:
 
         def on_progress(merged_bytes):
             if throttle.ready():
-                elapsed = time.monotonic() - merge_start
-                speed = merged_bytes / elapsed if elapsed > 0 else 0
-                self._report_merge_progress(merged_bytes, speed)
+                self._report_merge_progress(
+                    merged_bytes, utils.measured_speed(merged_bytes, merge_start))
 
         try:
             result = core.merge_chunks(
@@ -1066,6 +1185,8 @@ class FileDownloaderApp:
             )
         except core.Cancelled:
             return None, None
+
+        self._report_merge_progress(result.size, utils.measured_speed(result.size, merge_start))
 
         expected_total = int(fkx_info.get('total_size') or 0)
         if expected_total and result.size != expected_total:
@@ -1079,7 +1200,7 @@ class FileDownloaderApp:
         percentage = merged_bytes / self.total_download_size * 100 if self.total_download_size else 0
         text = (f"合并: {utils.format_size(merged_bytes)} / {utils.format_size(self.total_download_size)}"
                 f" ({percentage:.0f}%)"
-                f" | {utils.format_size(int(speed))}/s")
+                f" | 速度: {utils.speed_text(speed)}")
         self._run_on_ui_latest('merge-progress', self._set_progress_value, percentage)
         self._run_on_ui_latest('detail', self._set_detail, text)
 
@@ -1219,7 +1340,6 @@ class FileDownloaderApp:
 
 
     def close(self, timeout=2.0):
-        """窗口关闭时调用：中止传输、等待线程退出、释放会话。"""
         if self._closed:
             return
         self._closed = True
@@ -1240,7 +1360,7 @@ class FileDownloaderApp:
 
 
 class _ChunkCancelled(Exception):
-    """单个分片传输被取消（合并阶段的取消请用 core.Cancelled）。"""
+    pass
 
 
 if __name__ == "__main__":

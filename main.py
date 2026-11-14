@@ -7,7 +7,6 @@ import wjxz
 
 
 def _make_window_noop(name):
-    """生成一个吸收窗口级调用的空方法。"""
 
     def _noop(self, *args, **kwargs):
         self.swallowed_calls.append(name)
@@ -18,14 +17,6 @@ def _make_window_noop(name):
 
 
 class ModuleHost(tk.Frame):
-    """把子模块当顶层窗口使用时的宿主。
-
-    子模块（wjfk / wjxz）本身是独立程序，内部会调用窗口级方法（title / geometry /
-    iconphoto …）。嵌进聚合窗口后这些调用必须被吸收，否则会去改真正的主窗口。
-
-    这里显式列出会用到的窗口方法；未列出的方法由 __getattr__ 兜底成空操作，
-    以后子模块多调一个 window API 也不会直接 AttributeError。
-    """
 
     _WINDOW_METHODS = (
         'title', 'geometry', 'minsize', 'maxsize', 'resizable',
@@ -175,7 +166,6 @@ class MainApp:
         self.content_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     def on_close(self):
-        """关闭窗口：先让各模块中止后台传输并等待线程退出，再销毁窗口。"""
         if getattr(self, "_closing", False):
             return
         self._closing = True

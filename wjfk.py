@@ -102,7 +102,6 @@ class FileSplitterApp:
 
 
     def _run_on_ui(self, func, *args, **kwargs):
-        """主线程内直接执行，工作线程则投递到 UI 队列。"""
         if threading.current_thread() is threading.main_thread():
             func(*args, **kwargs)
         else:
@@ -185,7 +184,6 @@ class FileSplitterApp:
 
 
     def _validate_split_inputs(self):
-        """只能在主线程调用：读取控件并完成全部合法性检查。"""
         entry_file = self.file_entry.get().strip()
         self.file_path = os.path.abspath(entry_file) if entry_file else ""
         entry_output = self.output_entry.get().strip()
@@ -273,7 +271,6 @@ class FileSplitterApp:
         self.split_thread.start()
 
     def _split_worker(self, file_path, file_name, output_dir, chunk_size, num_chunks):
-        """后台线程：分块与清单写入交给 core.split_file，这里只做进度/取消桥接。"""
         started = time.monotonic()
         throttle = utils.Throttle(0.15)
 
@@ -302,15 +299,13 @@ class FileSplitterApp:
                         result.num_chunks, result.fkx_path, output_dir)
 
     def _push_split_progress(self, processed, total, index, count, started):
-        """主线程：一次调用同时刷新进度条与状态文字。"""
         total = max(1, total)
         self.progress['maximum'] = total
         self.progress['value'] = min(processed, total)
-        elapsed = time.monotonic() - started
-        speed = processed / elapsed if elapsed > 0 else 0
+        speed = utils.measured_speed(processed, started)
         self.status_label.config(
             text=(f"状态: 正在分块 {index}/{count} | {utils.format_size(processed)}"
-                  f" / {utils.format_size(total)} | {utils.format_size(int(speed))}/s"),
+                  f" / {utils.format_size(total)} | 速度: {utils.speed_text(speed)}"),
             foreground=config.TEXT_NORMAL,
         )
 
@@ -353,7 +348,6 @@ class FileSplitterApp:
 
 
     def close(self, timeout=2.0):
-        """窗口关闭时调用：中止传输并等待线程退出，避免残留句柄。"""
         if self._closed:
             return
         self._closed = True

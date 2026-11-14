@@ -1,17 +1,3 @@
-"""最核心的分块 / 合并内核（纯标准库，可脱离界面单独调用与测试）。
-
-这里只负责两件事：
-
-1. `.fkx` 清单格式：后缀、分片命名、文本编解码、解析、原子写入
-2. 分片读写：`split_file()` 切分、`merge_chunks()` 合并
-
-除此之外的一切——SHA-256 比对、已有分片复用判定、文件名净化、路径越界防护、
-重名避让、累计字节核对——都是调用方的校验职责，分别留在 utils.py 与各界面模块，
-本模块只做"按格式读写字节"，不做数据是否可信的判断。
-
-进度与取消以回调注入（on_progress / should_stop），不依赖 tkinter。
-"""
-
 import hashlib
 import os
 from typing import NamedTuple, Optional, Sequence, Tuple
@@ -24,11 +10,7 @@ CHUNK_SUFFIX = ".fk"
 
 
 class Cancelled(Exception):
-    """调用方通过 should_stop() 请求中止时抛出。
-
-    分块/合并都会在抛出前清理临时文件（半成品分片、.part 文件），
-    调用方只需要把界面恢复到"已取消"即可。
-    """
+    pass
 
 
 class SplitResult(NamedTuple):
@@ -47,27 +29,21 @@ class MergeResult(NamedTuple):
     sha256: Optional[str]
 
 
-
 def manifest_name(file_name):
-    """清单文件名：主干 + .fkx。"""
     return f"{file_name}{MANIFEST_SUFFIX}"
 
 
 def chunk_name(file_name, index):
-    """分片文件名：主干-序号.fk。index 从 1 开始，与清单里的 chunk_N 下标一致。"""
     return f"{file_name}-{index}{CHUNK_SUFFIX}"
 
 
 def plan_num_chunks(file_size, chunk_size):
-    """按文件大小与分片大小算出分片数（向上取整，空文件为 0 片）。"""
     if chunk_size <= 0:
         raise ValueError("分片大小必须大于 0")
     return (file_size + chunk_size - 1) // chunk_size
 
 
-
 def decode_fkx(raw):
-    """清单文本解码：优先 UTF-8（含 BOM），退回 GB18030（记事本老默认）。"""
     if isinstance(raw, str):
         return raw
     for encoding in ('utf-8-sig', 'gb18030'):
@@ -79,16 +55,11 @@ def decode_fkx(raw):
 
 
 def read_fkx_text(file_path):
-    """读取 .fkx 清单文本（编码自适应）。"""
     with open(file_path, 'rb') as handle:
         return decode_fkx(handle.read())
 
 
 def write_fkx_text(path, text):
-    """清单原子写入：先写 .part 再 os.replace，避免中途崩溃留下半个清单。
-
-    返回是否写入成功；失败时残留的 .part 会被清掉。
-    """
     part = _part_path(path)
     try:
         with open(part, 'w', encoding='utf-8', newline='\n') as handle:
@@ -103,10 +74,6 @@ def write_fkx_text(path, text):
 
 
 def parse_fkx(content):
-    """解析 .fkx 清单，返回 {'filename': ..., 'chunks': [...], ...}。
-
-    格式即规则：chunks 按下标排序且必须从 chunk_1 开始连续，否则视为清单损坏。
-    """
     info = {'chunks': []}
     raw_chunks = {}
 
@@ -152,9 +119,7 @@ def parse_fkx(content):
     return info
 
 
-
 def _part_path(path):
-    """同目录临时文件名（带 pid），避免多实例互相覆盖。"""
     return f"{path}.{os.getpid()}.part"
 
 
@@ -166,18 +131,8 @@ def _quiet_remove(path):
         pass
 
 
-
 def split_file(source_path, output_dir, file_name, chunk_size, num_chunks=None,
                on_progress=None, should_stop=None):
-    """把 source_path 切成 file_name-1.fk、file_name-2.fk……并写 file_name.fkx。
-
-    - 源文件只读一遍：边写分片边算分片哈希与整文件哈希
-    - 每个分片先写 .part，完整落盘后再 os.replace，中途失败不留半成品
-    - on_progress(processed, total, index, count)：index 从 1 开始
-    - should_stop() 返回 True 时抛 Cancelled，并清理已产出的分片与清单
-
-    返回 SplitResult；调用方负责把异常转成界面文案。
-    """
     if chunk_size <= 0:
         raise ValueError("分片大小必须大于 0")
     file_size = os.path.getsize(source_path)
@@ -267,18 +222,8 @@ def split_file(source_path, output_dir, file_name, chunk_size, num_chunks=None,
     )
 
 
-
 def merge_chunks(chunk_paths: Sequence[Optional[str]], target_path,
                  compute_sha256=True, on_progress=None, should_stop=None):
-    """按分片顺序把字节写进 target_path（成品路径由调用方决定，重名避让也在调用方）。
-
-    - chunk_paths 必须已按分片序号排好；None 表示该分片缺失，直接报错
-    - compute_sha256 为真时边写边算成品 SHA-256，避免事后整读一遍
-    - on_progress(merged_bytes)
-    - should_stop() 返回 True 时抛 Cancelled，并删除成品 .part
-
-    返回 MergeResult；字节数是否正确、哈希是否吻合，由调用方自行核对。
-    """
     part_path = _part_path(target_path)
     hasher = hashlib.sha256() if compute_sha256 else None
     merged_bytes = 0

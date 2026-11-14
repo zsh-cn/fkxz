@@ -107,7 +107,7 @@ function startDownload() {
     document.body.appendChild(iframe);
     iframe.src = downloadUrl.href;
 
-    showMessage('下载已开始，请查看浏览器下载栏');
+    showMessage('下载已开始，请查看浏览器下载栏（中断后点「继续」可接着下）');
     setTimeout(() => {
         btn.disabled = false;
         if (iframe.parentNode) iframe.remove();

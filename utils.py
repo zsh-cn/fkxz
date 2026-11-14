@@ -7,6 +7,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinter import font as tkfont
 
 import config
 
@@ -21,11 +22,6 @@ MAX_FILENAME_LENGTH = config.MAX_FILENAME_LENGTH
 
 
 def safe_filename(name, default="未命名", max_length=MAX_FILENAME_LENGTH):
-    """把任意字符串净化成合法、可安全落盘的文件名。
-
-    处理：路径分隔符、Windows 非法字符、控制字符、首尾空白、
-    结尾的点/空格、保留设备名（CON/PRN/AUX/NUL/COM1..LPT9）、超长截断、空结果。
-    """
     if name is None:
         return default
     text = str(name)
@@ -49,7 +45,6 @@ def safe_filename(name, default="未命名", max_length=MAX_FILENAME_LENGTH):
 
 
 def unique_path(path):
-    """若目标已存在，依次尝试 "名称 (1).后缀"、"名称 (2).后缀"……"""
     if not os.path.exists(path):
         return path
     base, ext = os.path.splitext(path)
@@ -62,7 +57,6 @@ def unique_path(path):
 
 
 def ensure_within_dir(base_dir, name):
-    """拼出 base_dir/name 并校验结果仍在 base_dir 内，越界则抛 ValueError。"""
     base = os.path.abspath(base_dir)
     target = os.path.abspath(os.path.join(base, name))
     try:
@@ -85,16 +79,27 @@ def safe_remove(path):
 
 
 def part_path_for(path):
-    """生成同目录下的临时文件名，避免多实例互相覆盖。"""
     return f"{path}.{os.getpid()}.part"
+
+
+_REPLACE_RETRY_WINERRORS = (5, 32, 33)
+
+
+def replace_with_retry(src, dst, attempts=6, delay=0.1):
+    for attempt in range(1, attempts + 1):
+        try:
+            os.replace(src, dst)
+            return True
+        except OSError as exc:
+            winerror = getattr(exc, 'winerror', None)
+            if winerror not in _REPLACE_RETRY_WINERRORS or attempt >= attempts:
+                raise
+            time.sleep(delay * attempt)
+    return False
 
 
 def sha256_file(file_path, should_stop=None, on_progress=None,
                 block_size=config.IO_BLOCK_SIZE, interval=0.2):
-    """计算文件 SHA-256。大块读取 + 时间节流回调，避免刷爆调用方。
-
-    返回 None 表示中途被 should_stop() 取消。
-    """
     file_size = os.path.getsize(file_path)
     sha256_hash = hashlib.sha256()
     processed = 0
@@ -137,9 +142,30 @@ def format_size(size):
         return f"{size / (1024 * 1024 * 1024):.2f} GB"
 
 
+SPEED_PLACEHOLDER = "--"
+
+
+def speed_text(speed):
+    if speed is None:
+        return SPEED_PLACEHOLDER
+    return f"{format_size(int(speed))}/s"
+
+
+def measured_speed(processed, started, now=None, min_interval=None):
+    if started is None:
+        return None
+    if now is None:
+        now = time.monotonic()
+    if min_interval is None:
+        min_interval = config.SPEED_MIN_INTERVAL
+    elapsed = now - started
+    if elapsed < min_interval:
+        return None
+    return max(0.0, processed / elapsed)
+
+
 def calculate_sha256(file_path, cancel_check=None, progress_callback=None,
                      block_size=1024 * 1024, interval=0.2):
-    """兼容入口（历史 API）：转发到 sha256_file。"""
     return sha256_file(file_path, should_stop=cancel_check,
                        on_progress=progress_callback,
                        block_size=block_size, interval=interval)
@@ -154,7 +180,6 @@ def resolve_icon_path(icon_filename):
 
 
 def load_icon(filename, size=None, master=None):
-    """加载图标；master 用于把图片绑定到指定解释器（多窗口/宿主场景更稳）。"""
     icon_path = resolve_icon_path(filename)
     if not os.path.exists(icon_path):
         return None
@@ -212,8 +237,295 @@ def delete_selected(entry_widget):
         pass
 
 
+def make_popup_no_activate(window):
+    if sys.platform != 'win32':
+        return
+    try:
+        hwnd = window.winfo_id()
+    except tk.TclError:
+        return
+    try:
+        user32 = ctypes.windll.user32
+    except (AttributeError, OSError):
+        return
+
+    GWL_EXSTYLE = -20
+    WS_EX_NOACTIVATE = 0x08000000
+    WS_EX_TOOLWINDOW = 0x00000080
+    GA_ROOT = 2
+
+    targets = [hwnd]
+    try:
+        root_hwnd = user32.GetAncestor(hwnd, GA_ROOT)
+        if root_hwnd and root_hwnd != hwnd:
+            targets.append(root_hwnd)
+    except Exception:
+        pass
+
+    for target in targets:
+        try:
+            style = user32.GetWindowLongW(target, GWL_EXSTYLE)
+            user32.SetWindowLongW(target, GWL_EXSTYLE,
+                                  style | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)
+        except Exception:
+            pass
+
+
+class PopupMenu:
+
+    _BG = '#ffffff'
+    _FG = config.TEXT_NORMAL
+    _HOVER_BG = '#e9f0ff'
+    _HOVER_FG = config.TEXT_PRIMARY
+    _DISABLED_FG = '#b7b9bd'
+    _SEP_BG = '#e8eaed'
+    _BORDER = config.BORDER_COLOR
+    _FONT = (config.FONT_FAMILY, config.FONT_SIZE)
+    _MIN_TEXT_WIDTH = 76
+
+    def __init__(self, master):
+        self._master = master
+        self._items = []
+        self._top = None
+        self._ready = False
+        self._font_obj = None
+        self._focus_binds = []
+        self._focus_widget = None
+
+    def _font(self, master):
+        if self._font_obj is None:
+            self._font_obj = tkfont.Font(root=master, font=self._FONT)
+        return self._font_obj
+
+    def add_command(self, label='', command=None):
+        self._items.append({'type': 'command', 'label': label,
+                            'command': command, 'state': tk.NORMAL})
+        return len(self._items) - 1
+
+    def add_separator(self):
+        self._items.append({'type': 'separator'})
+        return len(self._items) - 1
+
+    def entryconfig(self, index, **kwargs):
+        item = self._items[index]
+        for key in ('label', 'command', 'state'):
+            if key in kwargs:
+                item[key] = kwargs[key]
+
+    def tk_popup(self, x_root, y_root):
+        if self._top is not None:
+            self._hide()
+
+        prev_focus = self._current_focus()
+
+        top = tk.Toplevel(self._master)
+        top.withdraw()
+        top.overrideredirect(True)
+        make_popup_no_activate(top)
+        try:
+            top.wm_attributes('-topmost', True)
+        except tk.TclError:
+            pass
+
+        border = tk.Frame(top, bg=self._BORDER)
+        border.pack()
+        inner = tk.Frame(border, bg=self._BG)
+        inner.pack(padx=1, pady=1)
+
+        font = self._font(top)
+        pad_x = max(10, font.measure('\u3000'))
+        pad_y = max(4, font.metrics('linespace') // 4)
+
+        labels = []
+        row = 0
+        for item in self._items:
+            if item['type'] == 'separator':
+                tk.Frame(inner, bg=self._SEP_BG, height=1).grid(
+                    row=row, column=0, sticky=tk.EW,
+                    padx=max(4, pad_x // 2), pady=max(3, pad_y // 2))
+            else:
+                disabled = item.get('state') != tk.NORMAL
+                label = tk.Label(
+                    inner, text=item.get('label') or '', font=self._FONT,
+                    anchor=tk.W, bg=self._BG,
+                    fg=self._DISABLED_FG if disabled else self._FG,
+                    padx=pad_x, pady=pad_y,
+                    cursor='arrow' if disabled else 'hand2',
+                )
+                label.grid(row=row, column=0, sticky=tk.EW)
+                labels.append(label)
+                if not disabled:
+                    label.bind('<Enter>', lambda e, w=label: w.configure(
+                        bg=self._HOVER_BG, fg=self._HOVER_FG))
+                    label.bind('<Leave>', lambda e, w=label: w.configure(
+                        bg=self._BG, fg=self._FG))
+                label.bind('<Button-1>', lambda e, it=item: self._invoke(it))
+            row += 1
+
+        top.update_idletasks()
+        content_width = max([self._MIN_TEXT_WIDTH] + [w.winfo_reqwidth() for w in labels])
+        inner.columnconfigure(0, minsize=content_width)
+        top.update_idletasks()
+
+        width = top.winfo_reqwidth()
+        height = top.winfo_reqheight()
+
+        sw = top.winfo_screenwidth()
+        sh = top.winfo_screenheight()
+        x = max(0, min(x_root, sw - width - 4))
+        y = max(0, min(y_root, sh - height - 4))
+        top.geometry(f'+{x}+{y}')
+
+        top.bind('<Button-1>', self._on_global_click)
+        top.bind('<Button-3>', self._on_global_click)
+        top.bind('<Escape>', lambda e: self._hide())
+        top.bind('<FocusOut>', self._on_focus_out)
+
+        self._top = top
+        top.deiconify()
+        top.lift()
+        try:
+            top.grab_set()
+        except tk.TclError:
+            pass
+        self._hold_focus(prev_focus, top)
+        self._ready = False
+        top.after(120, self._mark_ready)
+
+        try:
+            top.wait_window(top)
+        finally:
+            self._top = None
+            self._ready = False
+            self._release_focus()
+            try:
+                top.destroy()
+            except tk.TclError:
+                pass
+    def _current_focus(self):
+        try:
+            widget = self._master.focus_get()
+        except (tk.TclError, KeyError):
+            return None
+        try:
+            if widget is not None and widget.winfo_exists():
+                return widget
+        except tk.TclError:
+            return None
+        return None
+
+    def _hold_focus(self, widget, top):
+        self._focus_binds = []
+        if widget is not None:
+            try:
+                widget.focus_force()
+            except tk.TclError:
+                widget = None
+        self._focus_widget = widget
+        if widget is None:
+            try:
+                top.focus_force()
+            except tk.TclError:
+                pass
+            return
+
+        for seq, handler in (('<Escape>', self._on_key_escape),
+                             ('<Key>', self._on_key_swallow),
+                             ('<FocusOut>', self._on_focus_out)):
+            try:
+                funcid = widget.bind(seq, handler, add='+')
+            except tk.TclError:
+                continue
+            if funcid:
+                self._focus_binds.append((widget, seq, funcid))
+
+    def _release_focus(self):
+        binds, self._focus_binds = self._focus_binds, []
+        for widget, seq, funcid in binds:
+            try:
+                widget.unbind(seq, funcid)
+            except tk.TclError:
+                pass
+
+    def _on_key_escape(self, event):
+        self._hide()
+        return 'break'
+
+    def _on_key_swallow(self, event):
+        return 'break'
+
+    def _mark_ready(self):
+        self._ready = True
+
+    def _on_focus_out(self, event):
+        if not self._ready:
+            return
+        if self._focus_is_in_popup():
+            return
+        self._hide()
+
+    def _focus_is_in_popup(self):
+        top = self._top
+        if top is None:
+            return False
+        try:
+            current = self._master.focus_get()
+        except (tk.TclError, KeyError):
+            return False
+        if current is None:
+            return False
+        try:
+            name = str(current)
+            top_name = str(top)
+        except tk.TclError:
+            return False
+        return name == top_name or name.startswith(top_name + '.')
+
+    def _on_global_click(self, event):
+        top = self._top
+        if top is None:
+            return
+        try:
+            inside = (0 <= event.x < top.winfo_width()
+                      and 0 <= event.y < top.winfo_height())
+        except tk.TclError:
+            return
+        if not inside:
+            self._hide()
+
+    def _invoke(self, item):
+        if item.get('state') != tk.NORMAL:
+            return
+        command = item.get('command')
+        self._hide()
+        if callable(command):
+            command()
+
+    def _hide(self):
+        top = self._top
+        self._top = None
+        if top is None:
+            return
+        widget = self._focus_widget
+        self._focus_widget = None
+        self._release_focus()
+        try:
+            top.grab_release()
+        except tk.TclError:
+            pass
+        try:
+            top.destroy()
+        except tk.TclError:
+            pass
+        if widget is not None:
+            try:
+                widget.focus_set()
+            except tk.TclError:
+                pass
+
+
 def setup_context_menu(entry_widget, on_change=None):
-    menu = tk.Menu(entry_widget, tearoff=0)
+    menu = PopupMenu(entry_widget)
 
     def _after_action():
         if on_change:
@@ -273,7 +585,6 @@ def setup_context_menu(entry_widget, on_change=None):
 
 
 class Throttle:
-    """时间戳节流器：间隔内只放行一次，用于进度回调降频。"""
 
     __slots__ = ('_interval', '_last')
 
@@ -290,14 +601,6 @@ class Throttle:
 
 
 class UiDispatcher:
-    """工作线程 → Tk 主线程的调用桥。
-
-    Tk/Tcl 不是线程安全的：任何控件操作都必须回到主线程执行。
-    工作线程只往队列里放任务，由主线程定时泵出执行。
-
-    - call()        离散事件（状态文字、错误、完成），按顺序全部执行
-    - call_latest() 高频刷新（进度条、速度），同 key 只保留最后一次
-    """
 
     def __init__(self, widget, interval=40):
         self._widget = widget
@@ -365,10 +668,6 @@ class UiDispatcher:
 
 
 def scaled_geometry(window, width, height):
-    """按 DPI 缩放系数设置窗口尺寸与最小尺寸。
-
-    宿主模式（子模块拿到的是 Frame）下 geometry/minsize 会被宿主吸收，不影响布局。
-    """
     try:
         scale = float(window.tk.call('tk', 'scaling'))
     except Exception:
@@ -394,7 +693,6 @@ def show_about(window, title=None):
 
 
 def install_about_menu(window, title=None):
-    """给顶层窗口挂一个一级"关于"菜单项；宿主 Frame 上自动跳过。"""
     if not isinstance(window, (tk.Tk, tk.Toplevel)):
         return None
     if getattr(window, '_about_menu_installed', False):
