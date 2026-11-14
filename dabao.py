@@ -165,10 +165,6 @@ def create_exe_zips():
 
 
 def clean_dist_artifacts():
-    """打包失败时清掉 dist 里的旧产物。
-
-    否则上一次成功的 zip/exe 会留在 dist 里, 很容易被误当成本次构建的结果发布出去。
-    """
     if not os.path.isdir(DIST_DIR):
         return
 
@@ -204,6 +200,31 @@ def create_source_zip():
         print(f"跳过不存在的文件: {', '.join(skipped)}")
 
     return out_path
+
+
+def copy_web_to_docs():
+    web_src = os.path.join(MAIN_DIR, "web")
+    web_dest = os.path.join(DOCS_DIR, "wjxz")
+    if not os.path.isdir(web_src):
+        print("web 目录不存在，跳过同步")
+        return
+
+    os.makedirs(web_dest, exist_ok=True)
+    added = 0
+    replaced = 0
+    for root, _, files in os.walk(web_src):
+        rel = os.path.relpath(root, web_src)
+        target_dir = web_dest if rel == "." else os.path.join(web_dest, rel)
+        os.makedirs(target_dir, exist_ok=True)
+        for fname in files:
+            dst = os.path.join(target_dir, fname)
+            if os.path.exists(dst):
+                replaced += 1
+            else:
+                added += 1
+            shutil.copy2(os.path.join(root, fname), dst)
+
+    print(f"web 资源已同步到: {web_dest} (新增 {added} 个, 覆盖 {replaced} 个)")
 
 
 def main():
@@ -248,6 +269,7 @@ def main():
     print("=" * 60)
     cleanup()
     create_source_zip()
+    copy_web_to_docs()
 
     return 0 if all_ok else 1
 
