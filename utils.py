@@ -392,7 +392,6 @@ class PopupMenu:
         self._owner = None
         self._items = []
         self._top = None
-        self._ready = False
         self._font_obj = None
         self._focus_binds = []
         self._owner_binds = []
@@ -494,8 +493,6 @@ class PopupMenu:
         attach_popup_to_owner(top, owner)
         self._bind_owner(owner)
         self._hold_focus(prev_focus, top)
-        self._ready = False
-        top.after(120, self._mark_ready)
         self._watch_id = top.after(self._WATCH_INTERVAL, self._watch)
 
     def _owner_window(self):
@@ -642,8 +639,7 @@ class PopupMenu:
             return
 
         for seq, handler in (('<Escape>', self._on_key_escape),
-                             ('<Key>', self._on_key_swallow),
-                             ('<FocusOut>', self._on_focus_out)):
+                             ('<Key>', self._on_key_swallow)):
             try:
                 funcid = widget.bind(seq, handler, add='+')
             except tk.TclError:
@@ -660,39 +656,15 @@ class PopupMenu:
                 pass
 
     def _on_key_escape(self, event):
+        if self._top is None:
+            return None
         self._hide()
         return 'break'
 
     def _on_key_swallow(self, event):
+        if self._top is None:
+            return None
         return 'break'
-
-    def _mark_ready(self):
-        if self._top is not None:
-            self._ready = True
-
-    def _on_focus_out(self, event):
-        if not self._ready:
-            return
-        if self._focus_is_in_popup():
-            return
-        self._hide()
-
-    def _focus_is_in_popup(self):
-        top = self._top
-        if top is None:
-            return False
-        try:
-            current = self._master.focus_get()
-        except (tk.TclError, KeyError):
-            return False
-        if current is None:
-            return False
-        try:
-            name = str(current)
-            top_name = str(top)
-        except tk.TclError:
-            return False
-        return name == top_name or name.startswith(top_name + '.')
 
     def _invoke(self, item):
         if item.get('state') != tk.NORMAL:
@@ -720,7 +692,6 @@ class PopupMenu:
             except (tk.TclError, ValueError):
                 pass
 
-        self._ready = False
         widget = self._focus_widget
         self._focus_widget = None
         self._release_focus()
