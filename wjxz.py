@@ -156,7 +156,7 @@ class FileDownloaderApp:
         self._chunk_bytes = {}
         self._chunk_bytes_total = 0
         self._speed_base_bytes = 0
-        self._speed_start_time = None
+        self._speed_meter = utils.SpeedMeter()
         self._run_token = 0
         self._run_part_token = None
         self._run_part_names_cache = []
@@ -557,9 +557,6 @@ class FileDownloaderApp:
             self._chunk_bytes[index] = written
             if delta:
                 self._chunk_bytes_total += delta
-                if self._speed_start_time is None:
-                    self._speed_base_bytes = self._chunk_bytes_total - delta
-                    self._speed_start_time = time.monotonic()
 
     def _reset_progress_counters(self, num_chunks=0):
         with self._progress_lock:
@@ -568,7 +565,7 @@ class FileDownloaderApp:
             self._chunk_bytes = {i: 0 for i in range(num_chunks)}
             self._chunk_bytes_total = 0
             self._speed_base_bytes = 0
-            self._speed_start_time = None
+            self._speed_meter.reset()
         return token
 
     def _record_chunk_error(self, message):
@@ -889,12 +886,10 @@ class FileDownloaderApp:
 
     def _push_overall(self, completed, count, bytes_done, total_bytes, speed,
                       show_speed=True):
-        percent = 0.0
-        if total_bytes > 0:
-            percent = min(100.0, bytes_done / total_bytes * 100)
-            self.progress_bar['value'] = percent
+        percent = utils.progress_percent(bytes_done, total_bytes)
+        self.progress_bar['value'] = percent
         text = (f"已下载: {utils.format_size(bytes_done)} / {utils.format_size(total_bytes)}"
-                f" ({percent:.0f}%)")
+                f" ({percent}%)")
         if show_speed:
             text += f" | 速度: {utils.speed_text(speed)}"
         text += f" | 分片: {completed}/{count}"
@@ -908,9 +903,10 @@ class FileDownloaderApp:
                 return
             bytes_done = self._chunk_bytes_total
             completed = len(self.downloaded_chunks)
-            base_bytes = self._speed_base_bytes
-            started = self._speed_start_time
-        speed = utils.measured_speed(bytes_done - base_bytes, started)
+            speed_bytes = max(0, bytes_done - self._speed_base_bytes)
+            meter = self._speed_meter
+        meter.update(speed_bytes)
+        speed = meter.speed()
         self._run_on_ui_latest('overall', self._push_overall,
                                completed, num_chunks, bytes_done,
                                self.total_download_size, speed)
@@ -1170,13 +1166,13 @@ class FileDownloaderApp:
             return None, None
 
         self.update_status("状态: 正在合并文件...")
-        merge_start = time.monotonic()
         throttle = utils.Throttle(config.PROGRESS_INTERVAL)
+        meter = utils.SpeedMeter()
 
         def on_progress(merged_bytes):
             if throttle.ready():
-                self._report_merge_progress(
-                    merged_bytes, utils.measured_speed(merged_bytes, merge_start))
+                meter.update(merged_bytes)
+                self._report_merge_progress(merged_bytes, meter.speed())
 
         try:
             result = core.merge_chunks(
@@ -1189,7 +1185,10 @@ class FileDownloaderApp:
         except core.Cancelled:
             return None, None
 
-        self._report_merge_progress(result.size, utils.measured_speed(result.size, merge_start))
+        meter.update(result.size)
+        self._report_merge_progress(
+            result.size, meter.speed(),
+            finished=self.total_download_size > 0 and result.size >= self.total_download_size)
 
         expected_total = int(fkx_info.get('total_size') or 0)
         if expected_total and result.size != expected_total:
@@ -1199,12 +1198,12 @@ class FileDownloaderApp:
             return None, None
         return result.path, result.sha256
 
-    def _report_merge_progress(self, merged_bytes, speed):
-        percentage = merged_bytes / self.total_download_size * 100 if self.total_download_size else 0
+    def _report_merge_progress(self, merged_bytes, speed, finished=False):
+        percent = utils.progress_percent(merged_bytes, self.total_download_size, finished)
         text = (f"合并: {utils.format_size(merged_bytes)} / {utils.format_size(self.total_download_size)}"
-                f" ({percentage:.0f}%)"
+                f" ({percent}%)"
                 f" | 速度: {utils.speed_text(speed)}")
-        self._run_on_ui_latest('merge-progress', self._set_progress_value, percentage)
+        self._run_on_ui_latest('merge-progress', self._set_progress_value, percent)
         self._run_on_ui_latest('detail', self._set_detail, text)
 
     def download_and_merge(self, verify_sha256=True, use_enhanced=True, workers=1):

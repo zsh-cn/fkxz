@@ -1,6 +1,5 @@
 import os
 import threading
-import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -271,14 +270,15 @@ class FileSplitterApp:
         self.split_thread.start()
 
     def _split_worker(self, file_path, file_name, output_dir, chunk_size, num_chunks):
-        started = time.monotonic()
         throttle = utils.Throttle(0.15)
+        meter = utils.SpeedMeter()
 
         def on_progress(processed, total, index, count):
             if throttle.ready() or processed >= total:
+                meter.update(processed)
                 self._run_on_ui_latest(
                     'split-progress', self._push_split_progress,
-                    processed, total, index, count, started,
+                    processed, total, index, count, meter.speed(),
                 )
 
         try:
@@ -298,11 +298,10 @@ class FileSplitterApp:
         self._run_on_ui(self._finish_success, result.file_name, result.total_size,
                         result.num_chunks, result.fkx_path, output_dir)
 
-    def _push_split_progress(self, processed, total, index, count, started):
+    def _push_split_progress(self, processed, total, index, count, speed):
         total = max(1, total)
         self.progress['maximum'] = total
         self.progress['value'] = min(processed, total)
-        speed = utils.measured_speed(processed, started)
         self.status_label.config(
             text=(f"状态: 正在分块 {index}/{count} | {utils.format_size(processed)}"
                   f" / {utils.format_size(total)} | 速度: {utils.speed_text(speed)}"),

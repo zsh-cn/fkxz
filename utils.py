@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import tkinter as tk
+from collections import deque
 from tkinter import filedialog, messagebox
 from tkinter import font as tkfont
 
@@ -131,15 +132,18 @@ def setup_dpi_awareness():
             pass
 
 
+_SIZE_UNITS = ('B', 'KB', 'MB', 'GB', 'TB')
+
+
 def format_size(size):
-    if size < 1024:
-        return f"{size} B"
-    elif size < 1024 * 1024:
-        return f"{size / 1024:.2f} KB"
-    elif size < 1024 * 1024 * 1024:
-        return f"{size / (1024 * 1024):.2f} MB"
-    else:
-        return f"{size / (1024 * 1024 * 1024):.2f} GB"
+    value = float(max(0, size))
+    unit = 0
+    while unit < len(_SIZE_UNITS) - 1 and round(value, 2) >= 1024:
+        value /= 1024.0
+        unit += 1
+    if unit == 0:
+        return f"{int(round(value))} B"
+    return f"{value:.2f} {_SIZE_UNITS[unit]}"
 
 
 SPEED_PLACEHOLDER = "--"
@@ -148,20 +152,53 @@ SPEED_PLACEHOLDER = "--"
 def speed_text(speed):
     if speed is None:
         return SPEED_PLACEHOLDER
-    return f"{format_size(int(speed))}/s"
+    return f"{format_size(int(round(speed)))}/s"
 
 
-def measured_speed(processed, started, now=None, min_interval=None):
-    if started is None:
-        return None
-    if now is None:
-        now = time.monotonic()
-    if min_interval is None:
-        min_interval = config.SPEED_MIN_INTERVAL
-    elapsed = now - started
-    if elapsed < min_interval:
-        return None
-    return max(0.0, processed / elapsed)
+def progress_percent(done_bytes, total_bytes, finished=False):
+    if finished:
+        return 100
+    if total_bytes <= 0:
+        return 0
+    percent = int(done_bytes) * 100 // int(total_bytes)
+    return max(0, min(99, percent))
+
+
+class SpeedMeter:
+
+    __slots__ = ('_window', '_min_interval', '_samples')
+
+    def __init__(self, window=None, min_interval=None):
+        self._window = float(config.SPEED_WINDOW if window is None else window)
+        self._min_interval = float(
+            config.SPEED_MIN_INTERVAL if min_interval is None else min_interval)
+        self._samples = deque()
+
+    def reset(self):
+        self._samples.clear()
+
+    def update(self, total_bytes, now=None):
+        if now is None:
+            now = time.monotonic()
+        total_bytes = max(0, int(total_bytes))
+        samples = self._samples
+        if samples and samples[-1][1] == total_bytes and now - samples[-1][0] < 0.05:
+            return
+        samples.append((now, total_bytes))
+        cutoff = now - self._window
+        while len(samples) > 2 and samples[1][0] <= cutoff:
+            samples.popleft()
+
+    def speed(self):
+        samples = self._samples
+        if len(samples) < 2:
+            return None
+        start_time, start_bytes = samples[0]
+        end_time, end_bytes = samples[-1]
+        span = end_time - start_time
+        if span < self._min_interval:
+            return None
+        return max(0.0, (end_bytes - start_bytes) / span)
 
 
 def calculate_sha256(file_path, cancel_check=None, progress_callback=None,
