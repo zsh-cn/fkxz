@@ -237,38 +237,141 @@ def delete_selected(entry_widget):
         pass
 
 
-def make_popup_no_activate(window):
+_GWL_EXSTYLE = -20
+_GWLP_HWNDPARENT = -8
+_WS_EX_TOPMOST = 0x00000008
+_WS_EX_TOOLWINDOW = 0x00000080
+_WS_EX_NOACTIVATE = 0x08000000
+_GA_ROOT = 2
+_SWP_NOSIZE = 0x0001
+_SWP_NOMOVE = 0x0002
+_SWP_NOACTIVATE = 0x0010
+_SWP_FRAMECHANGED = 0x0020
+_HWND_TOP = 0
+
+
+def _user32():
     if sys.platform != 'win32':
-        return
+        return None
     try:
-        hwnd = window.winfo_id()
-    except tk.TclError:
-        return
-    try:
-        user32 = ctypes.windll.user32
+        return ctypes.windll.user32
     except (AttributeError, OSError):
-        return
+        return None
 
-    GWL_EXSTYLE = -20
-    WS_EX_NOACTIVATE = 0x08000000
-    WS_EX_TOOLWINDOW = 0x00000080
-    GA_ROOT = 2
 
-    targets = [hwnd]
+def _long_procs(user32):
+    get_long = user32.GetWindowLongW
+    set_long = getattr(user32, 'SetWindowLongPtrW', None) or user32.SetWindowLongW
+    get_long.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    get_long.restype = ctypes.c_long
+    set_long.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    set_long.restype = ctypes.c_void_p
+    return get_long, set_long
+
+
+def widget_hwnd(widget):
     try:
-        root_hwnd = user32.GetAncestor(hwnd, GA_ROOT)
-        if root_hwnd and root_hwnd != hwnd:
-            targets.append(root_hwnd)
-    except Exception:
-        pass
+        return int(widget.winfo_id())
+    except (tk.TclError, AttributeError, TypeError, ValueError):
+        return 0
 
-    for target in targets:
+
+def toplevel_hwnd(widget):
+    hwnd = widget_hwnd(widget)
+    if not hwnd:
+        return 0
+    user32 = _user32()
+    if user32 is None:
+        return hwnd
+    try:
+        user32.GetAncestor.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        user32.GetAncestor.restype = ctypes.c_void_p
+        root = user32.GetAncestor(hwnd, _GA_ROOT)
+    except Exception:
+        return hwnd
+    return int(root) if root else hwnd
+
+
+def foreground_pid():
+    user32 = _user32()
+    if user32 is None:
+        return None
+    try:
+        user32.GetForegroundWindow.argtypes = []
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return None
+        user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p,
+                                                    ctypes.POINTER(ctypes.c_uint)]
+        user32.GetWindowThreadProcessId.restype = ctypes.c_uint
+        pid = ctypes.c_uint(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return int(pid.value)
+    except Exception:
+        return None
+
+
+def app_in_foreground():
+    pid = foreground_pid()
+    if pid is None:
+        return True
+    return pid == os.getpid()
+
+
+def attach_popup_to_owner(window, owner):
+    user32 = _user32()
+    if user32 is None:
+        return False
+    try:
+        window.update_idletasks()
+    except tk.TclError:
+        return False
+    inner_hwnd = widget_hwnd(window)
+    wrapper_hwnd = toplevel_hwnd(window)
+    owner_hwnd = toplevel_hwnd(owner)
+    if not wrapper_hwnd or not owner_hwnd or wrapper_hwnd == owner_hwnd:
+        return False
+    try:
+        get_long, set_long = _long_procs(user32)
+    except (AttributeError, OSError, TypeError):
+        return False
+
+    for target in {inner_hwnd, wrapper_hwnd}:
+        if not target:
+            continue
         try:
-            style = user32.GetWindowLongW(target, GWL_EXSTYLE)
-            user32.SetWindowLongW(target, GWL_EXSTYLE,
-                                  style | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)
+            style = int(get_long(target, _GWL_EXSTYLE) or 0)
+            style = ((style | _WS_EX_TOOLWINDOW | _WS_EX_NOACTIVATE)
+                     & ~_WS_EX_TOPMOST) & 0xFFFFFFFF
+            set_long(target, _GWL_EXSTYLE, style)
         except Exception:
             pass
+
+    try:
+        set_long(wrapper_hwnd, _GWLP_HWNDPARENT, owner_hwnd)
+    except Exception:
+        return False
+
+    try:
+        user32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
+                                        ctypes.c_int, ctypes.c_int,
+                                        ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+        user32.SetWindowPos(wrapper_hwnd, _HWND_TOP, 0, 0, 0, 0,
+                            _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE
+                            | _SWP_FRAMECHANGED)
+    except Exception:
+        pass
+    return True
+
+
+_active_popup = None
+
+
+def close_open_popup(keep=None):
+    popup = _active_popup
+    if popup is not None and popup is not keep:
+        popup._hide()
 
 
 class PopupMenu:
@@ -282,15 +385,20 @@ class PopupMenu:
     _BORDER = config.BORDER_COLOR
     _FONT = (config.FONT_FAMILY, config.FONT_SIZE)
     _MIN_TEXT_WIDTH = 76
+    _WATCH_INTERVAL = 100
 
     def __init__(self, master):
         self._master = master
+        self._owner = None
         self._items = []
         self._top = None
         self._ready = False
         self._font_obj = None
         self._focus_binds = []
+        self._owner_binds = []
         self._focus_widget = None
+        self._owner_geom = None
+        self._watch_id = None
 
     def _font(self, master):
         if self._font_obj is None:
@@ -313,19 +421,17 @@ class PopupMenu:
                 item[key] = kwargs[key]
 
     def tk_popup(self, x_root, y_root):
-        if self._top is not None:
-            self._hide()
+        global _active_popup
 
+        self._hide()
+        close_open_popup(keep=self)
+
+        owner = self._owner_window()
         prev_focus = self._current_focus()
 
-        top = tk.Toplevel(self._master)
+        top = tk.Toplevel(owner)
         top.withdraw()
         top.overrideredirect(True)
-        make_popup_no_activate(top)
-        try:
-            top.wm_attributes('-topmost', True)
-        except tk.TclError:
-            pass
 
         border = tk.Frame(top, bg=self._BORDER)
         border.pack()
@@ -376,32 +482,138 @@ class PopupMenu:
         y = max(0, min(y_root, sh - height - 4))
         top.geometry(f'+{x}+{y}')
 
-        top.bind('<Button-1>', self._on_global_click)
-        top.bind('<Button-3>', self._on_global_click)
+        top.bind('<Button-3>', lambda e: 'break')
         top.bind('<Escape>', lambda e: self._hide())
-        top.bind('<FocusOut>', self._on_focus_out)
 
         self._top = top
+        self._owner = owner
+        _active_popup = self
+
         top.deiconify()
         top.lift()
-        try:
-            top.grab_set()
-        except tk.TclError:
-            pass
+        attach_popup_to_owner(top, owner)
+        self._bind_owner(owner)
         self._hold_focus(prev_focus, top)
         self._ready = False
         top.after(120, self._mark_ready)
+        self._watch_id = top.after(self._WATCH_INTERVAL, self._watch)
 
+    def _owner_window(self):
         try:
-            top.wait_window(top)
-        finally:
-            self._top = None
-            self._ready = False
-            self._release_focus()
+            return self._master.winfo_toplevel()
+        except tk.TclError:
+            return self._master
+
+    def _owner_geometry(self, owner):
+        try:
+            return (owner.winfo_rootx(), owner.winfo_rooty(),
+                    owner.winfo_width(), owner.winfo_height())
+        except tk.TclError:
+            return None
+
+    def _bind_owner(self, owner):
+        self._owner_geom = self._owner_geometry(owner)
+        handlers = (
+            ('<Configure>', self._on_owner_configure),
+            ('<Unmap>', self._on_owner_unmap),
+            ('<Button-1>', self._on_owner_press),
+            ('<Button-2>', self._on_owner_press),
+            ('<MouseWheel>', self._on_owner_press),
+            ('<Destroy>', self._on_owner_destroy),
+        )
+        for seq, handler in handlers:
             try:
-                top.destroy()
+                funcid = owner.bind(seq, handler, add='+')
+            except tk.TclError:
+                continue
+            if funcid:
+                self._owner_binds.append((owner, seq, funcid))
+
+        for seq, handler in (('<Unmap>', self._on_master_unmap),
+                             ('<Destroy>', self._on_master_destroy)):
+            try:
+                funcid = self._master.bind(seq, handler, add='+')
+            except tk.TclError:
+                continue
+            if funcid:
+                self._owner_binds.append((self._master, seq, funcid))
+
+    def _unbind_owner(self):
+        binds, self._owner_binds = self._owner_binds, []
+        self._owner_geom = None
+        for widget, seq, funcid in binds:
+            try:
+                widget.unbind(seq, funcid)
             except tk.TclError:
                 pass
+
+    def _on_owner_configure(self, event):
+        if self._owner is None or event.widget is not self._owner:
+            return
+        geom = self._owner_geometry(self._owner)
+        if self._owner_geom is None:
+            self._owner_geom = geom
+            return
+        if geom != self._owner_geom:
+            self._hide()
+
+    def _on_owner_unmap(self, event):
+        if self._owner is None or event.widget is not self._owner:
+            return
+        self._hide()
+
+    def _on_owner_press(self, event):
+        self._hide()
+
+    def _on_master_unmap(self, event):
+        if event.widget is not self._master:
+            return
+        self._hide()
+
+    def _on_master_destroy(self, event):
+        if event.widget is not self._master:
+            return
+        self._hide()
+
+    def _on_owner_destroy(self, event):
+        if self._owner is None or event.widget is not self._owner:
+            return
+        self._owner = None
+        self._hide()
+
+    def _master_viewable(self):
+        try:
+            return bool(self._master.winfo_exists()) and bool(self._master.winfo_ismapped())
+        except tk.TclError:
+            return False
+
+    def _watch(self):
+        self._watch_id = None
+        top = self._top
+        if top is None:
+            return
+        if (not self._owner_alive() or not self._master_viewable()
+                or not app_in_foreground()):
+            self._hide()
+            return
+        geom = self._owner_geometry(self._owner)
+        if self._owner_geom is not None and geom is not None and geom != self._owner_geom:
+            self._hide()
+            return
+        try:
+            self._watch_id = top.after(self._WATCH_INTERVAL, self._watch)
+        except tk.TclError:
+            self._watch_id = None
+
+    def _owner_alive(self):
+        owner = self._owner
+        if owner is None:
+            return False
+        try:
+            return bool(owner.winfo_exists())
+        except tk.TclError:
+            return False
+
     def _current_focus(self):
         try:
             widget = self._master.focus_get()
@@ -455,7 +667,8 @@ class PopupMenu:
         return 'break'
 
     def _mark_ready(self):
-        self._ready = True
+        if self._top is not None:
+            self._ready = True
 
     def _on_focus_out(self, event):
         if not self._ready:
@@ -481,18 +694,6 @@ class PopupMenu:
             return False
         return name == top_name or name.startswith(top_name + '.')
 
-    def _on_global_click(self, event):
-        top = self._top
-        if top is None:
-            return
-        try:
-            inside = (0 <= event.x < top.winfo_width()
-                      and 0 <= event.y < top.winfo_height())
-        except tk.TclError:
-            return
-        if not inside:
-            self._hide()
-
     def _invoke(self, item):
         if item.get('state') != tk.NORMAL:
             return
@@ -502,17 +703,28 @@ class PopupMenu:
             command()
 
     def _hide(self):
+        global _active_popup
+
         top = self._top
         self._top = None
+        if _active_popup is self:
+            _active_popup = None
         if top is None:
+            self._unbind_owner()
             return
+
+        watch_id, self._watch_id = self._watch_id, None
+        if watch_id is not None:
+            try:
+                top.after_cancel(watch_id)
+            except (tk.TclError, ValueError):
+                pass
+
+        self._ready = False
         widget = self._focus_widget
         self._focus_widget = None
         self._release_focus()
-        try:
-            top.grab_release()
-        except tk.TclError:
-            pass
+        self._unbind_owner()
         try:
             top.destroy()
         except tk.TclError:
@@ -665,6 +877,13 @@ class UiDispatcher:
             except Exception:
                 pass
             self._after_id = None
+
+
+def flush_ui(widget):
+    try:
+        widget.update_idletasks()
+    except (tk.TclError, RuntimeError):
+        pass
 
 
 def scaled_geometry(window, width, height):

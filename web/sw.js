@@ -13,11 +13,9 @@ self.addEventListener('fetch', (event) => {
     // 否则浏览器不会创建下载任务。此判断必须放在通用 OPTIONS 分支之前。
     if (url.pathname.endsWith('/fkxz')) {
         const fkxUrl = url.searchParams.get('fkx');
-        const resumeParam = url.searchParams.get('resume');
-        const resumeOffset = resumeParam ? parseInt(resumeParam, 10) || 0 : 0;
         if (fkxUrl) {
             event.respondWith(
-                streamDownload(fkxUrl, event.request, resumeOffset).catch(e => {
+                streamDownload(fkxUrl, event.request).catch(e => {
                     console.error('下载失败:', e);
                     return new Response('下载失败: ' + e.message, {
                         status: 500,
@@ -34,7 +32,6 @@ self.addEventListener('fetch', (event) => {
             );
         }
     } else if (event.request.method === 'OPTIONS') {
-        // 其他路径的 CORS 预检；204 属于 null body status，不能带 body
         event.respondWith(new Response(null, {
             status: 204,
             headers: {
@@ -46,7 +43,7 @@ self.addEventListener('fetch', (event) => {
     }
 });
 
-async function streamDownload(fkxUrl, request, resumeOffset) {
+async function streamDownload(fkxUrl, request) {
     try {
         const fkxRes = await fetch(fkxUrl);
         if (!fkxRes.ok) throw new Error('无法获取文件信息: HTTP ' + fkxRes.status);
@@ -63,7 +60,7 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
             .trim() || 'download';
         const asciiName = sanitizedName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\;]/g, '_');
 
-        let rangeStart = resumeOffset || 0;
+        let rangeStart = 0;
         let rangeEnd = totalSize - 1;
         const rangeHeader = request.headers.get('Range');
         const isRangeRequest = !!rangeHeader;
@@ -79,6 +76,16 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
         }
         const rangeLength = Math.max(0, rangeEnd - rangeStart + 1);
 
+        if (isRangeRequest && rangeStart >= totalSize) {
+            return new Response(null, {
+                status: 416,
+                headers: {
+                    'Content-Range': `bytes */${totalSize}`,
+                    'Access-Control-Allow-Origin': '*'
+                }
+            });
+        }
+
         let startChunkIdx = 0, startOffset = rangeStart;
         let cumulativeSize = 0;
         for (let i = 0; i < info.chunks.length; i++) {
@@ -90,28 +97,7 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
             cumulativeSize += info.chunks[i].size;
         }
 
-        const PREFETCH_AHEAD = 1;
-        const prefetched = new Map();
         const chunkUrl = (idx) => baseUrl + info.chunks[idx].filename;
-
-        // 每个预取请求独立的 controller：被取走并正在读取的分片不再被 abort，
-        // 只取消那些还没用上的预取，避免下载被取消时把正在传输的流一起打断。
-        const prefetch = (idx) => {
-            if (idx >= info.chunks.length || prefetched.has(idx)) return;
-            const ctrl = new AbortController();
-            const pending = fetch(chunkUrl(idx), { signal: ctrl.signal }).catch(() => null);
-            prefetched.set(idx, { pending, ctrl });
-        };
-
-        const takeChunk = async (idx, headers) => {
-            const entry = prefetched.get(idx);
-            if (entry) {
-                prefetched.delete(idx);
-                const buffered = await entry.pending;
-                if (buffered && buffered.ok) return buffered;
-            }
-            return fetch(chunkUrl(idx), { headers });
-        };
 
         const stream = new ReadableStream({
             async start(controller) {
@@ -122,10 +108,7 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
                         if (i === startChunkIdx && startOffset > 0) {
                             chunkHeaders['Range'] = 'bytes=' + startOffset + '-';
                         }
-                        if (rangeSent + info.chunks[i].size < rangeLength) {
-                            for (let k = 1; k <= PREFETCH_AHEAD; k++) prefetch(i + k);
-                        }
-                        const chunkRes = await takeChunk(i, chunkHeaders);
+                        const chunkRes = await fetch(chunkUrl(i), { headers: chunkHeaders });
                         if (!chunkRes.ok) {
                             throw new Error('无法下载分片: ' + info.chunks[i].filename);
                         }
@@ -166,13 +149,7 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
                         return;
                     }
                 }
-                for (const entry of prefetched.values()) entry.ctrl.abort();
-                prefetched.clear();
                 controller.close();
-            },
-            cancel() {
-                for (const entry of prefetched.values()) entry.ctrl.abort();
-                prefetched.clear();
             }
         });
 
@@ -184,7 +161,7 @@ async function streamDownload(fkxUrl, request, resumeOffset) {
             'Accept-Ranges': 'bytes'
         };
 
-        if (isRangeRequest || resumeOffset > 0) {
+        if (isRangeRequest) {
             headers['Content-Range'] = `bytes ${rangeStart}-${rangeEnd}/${totalSize}`;
             headers['Content-Length'] = String(rangeLength);
             return new Response(stream, { status: 206, headers });

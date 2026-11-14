@@ -1,3 +1,2 @@
 requests>=2.25.0
-# chrome131 指纹目标需要较新的版本，旧版本构造 Session 会直接抛 ValueError
 curl_cffi>=0.16.3

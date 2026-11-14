@@ -314,6 +314,7 @@ class FileSplitterApp:
         self._set_progress(max(1, file_size), max(1, file_size))
         self.update_status(f"状态: 分块完成！已生成 {num_chunks} 个分片", foreground=config.TEXT_SUCCESS)
         self.reset_ui()
+        utils.flush_ui(self.root)
         messagebox.showinfo(
             "完成",
             f"文件分块完成！\n文件名: {file_name}\n文件大小: {utils.format_size(file_size)}\n"

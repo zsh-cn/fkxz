@@ -263,7 +263,10 @@ class FileDownloaderApp:
             self.ui.call(func, *args, **kwargs)
 
     def _run_on_ui_latest(self, key, func, *args, **kwargs):
-        self.ui.call_latest(key, func, *args, **kwargs)
+        if threading.current_thread() is threading.main_thread():
+            func(*args, **kwargs)
+        else:
+            self.ui.call_latest(key, func, *args, **kwargs)
 
 
     @staticmethod
@@ -1280,6 +1283,8 @@ class FileDownloaderApp:
         enhanced_text = " (增强模式)" if self._use_enhanced and not self.is_local else ""
         safe_filename = utils.safe_filename(
             os.path.basename(str((self.file_info or {}).get('filename', ''))), default="文件")
+
+        utils.flush_ui(self.root)
         messagebox.showinfo(
             "完成",
             f"文件{action}完成！\n模式: {mode_text}{enhanced_text}\n"

@@ -239,8 +239,8 @@ Tkinter 图形界面，读取 `.fkx` 信息文件，获取所有分片并合并�
 
 - **sw.js**：Service Worker 脚本，拦截 `/fkxz` 路径的请求，解析 `.fkx` 文件获取分片列表，逐个抓取 `.fk` 分片并通过 `ReadableStream` 流式合并，最终以单个文件形式返回给浏览器下载。
 - **index.html**：配套前端页面，自动注册 Service Worker，解析 `.fkx` 文件并展示文件信息，点击下载按钮后通过 SW 代理完成流式合并下载。
-  SW 每推进一段就把已发送字节回报给页面，页面写入 `sessionStorage.fkx_resume`；下载中断后刷新或重试会显示"继续下载"，
-  带上断点参数即可从上次位置续传（换文件或换页签时不会误用旧断点）。
+  响应带 `Accept-Ranges: bytes`，暂停/继续完全交给浏览器下载管理器：它续传时会带 `Range` 头发起新请求，
+  SW 按字节偏移定位到对应分片，返回 `206 + Content-Range` 从断点继续拼接，页面侧不保存任何进度状态。
 
 Service Worker 方案的优势在于：
 - 无需 File System Access API，兼容性更好

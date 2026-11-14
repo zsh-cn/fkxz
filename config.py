@@ -1,5 +1,5 @@
 APP_NAME = "文件分块下载"
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.0.1"
 APP_LICENSE = "MPL-2.0"
 APP_HOMEPAGE = "https://fkxz.zhshh.cn"
 
