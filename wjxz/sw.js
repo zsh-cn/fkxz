@@ -1,3 +1,90 @@
+function toInt(value) {
+    const text = String(value === undefined || value === null ? '' : value).trim();
+    if (!/^[+-]?\d+$/.test(text)) return null;
+    const number = parseInt(text, 10);
+    return Number.isFinite(number) ? number : null;
+}
+
+function parseFkx(content) {
+    const info = { chunks: [] };
+    const indexed = new Map();
+    const lines = String(content === undefined || content === null ? '' : content).split(/\r?\n/);
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].replace(/^\uFEFF/, '').trim();
+        if (!line) continue;
+        const eqIdx = line.indexOf('=');
+        if (eqIdx < 0) continue;
+
+        const key = line.substring(0, eqIdx).trim();
+        const value = line.substring(eqIdx + 1).trim();
+        if (!key) continue;
+
+        if (key.indexOf('chunk_') === 0) {
+            const index = toInt(key.substring(6));
+            if (index === null) continue;
+            if (index < 1) throw new Error('分片编号无效: ' + key);
+            if (indexed.has(index)) throw new Error('分片编号重复: ' + key);
+
+            const parts = value.split(',');
+            if (parts.length < 2) throw new Error('分片条目格式不正确: ' + key);
+            const size = toInt(parts[1]);
+            if (size === null || size < 0) throw new Error('分片大小无效: ' + key);
+
+            indexed.set(index, {
+                index: index,
+                filename: parts[0].trim().replace(/^.*[\\/]/, ''),
+                size: size,
+                sha256: parts.length >= 3 ? parts[2].trim() : ''
+            });
+        } else {
+            info[key] = value;
+        }
+    }
+
+    const indexes = Array.from(indexed.keys()).sort((a, b) => a - b);
+    if (!indexes.length) throw new Error('未找到任何分片条目');
+    for (let n = 0; n < indexes.length; n++) {
+        if (indexes[n] !== n + 1) {
+            throw new Error('分片编号不连续: 期望 ' + (n + 1) + '，实际 ' + indexes[n]);
+        }
+    }
+
+    info.chunks = indexes.map((idx) => indexed.get(idx));
+    return validateManifest(info);
+}
+
+function validateManifest(info) {
+    const chunks = info.chunks || [];
+    if (!chunks.length) throw new Error('未找到任何分片条目');
+    if (!String(info.filename || '').trim()) throw new Error('缺少 filename 字段');
+
+    const total = chunks.reduce((sum, chunk) => sum + chunk.size, 0);
+    if (info.total_size !== undefined && info.total_size !== null && info.total_size !== '') {
+        const declaredTotal = toInt(info.total_size);
+        if (declaredTotal === null) throw new Error('total_size 不是数字');
+        if (declaredTotal !== total) {
+            throw new Error('清单总大小与分片之和不一致（' + declaredTotal + ' != ' + total + '）');
+        }
+    }
+    if (info.num_chunks !== undefined && info.num_chunks !== null && info.num_chunks !== '') {
+        const declaredCount = toInt(info.num_chunks);
+        if (declaredCount === null) throw new Error('num_chunks 不是数字');
+        if (declaredCount !== chunks.length) {
+            throw new Error('清单分片数与条目数不一致（' + declaredCount + ' != ' + chunks.length + '）');
+        }
+    }
+
+    info.totalSize = total;
+    return info;
+}
+
+async function loadManifestInfo(fkxUrl) {
+    const response = await fetch(fkxUrl);
+    if (!response.ok) throw new Error('无法获取文件信息: HTTP ' + response.status);
+    return parseFkx(await response.text());
+}
+
 self.addEventListener('install', (event) => {
     event.waitUntil(self.skipWaiting());
 });
@@ -6,11 +93,31 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener('message', (event) => {
+    const data = event.data || {};
+    if (data.type !== 'fkx-info') return;
+    const port = event.ports && event.ports[0];
+    if (!port) return;
+    event.waitUntil((async () => {
+        try {
+            const info = await loadManifestInfo(data.url);
+            port.postMessage({
+                ok: true,
+                info: {
+                    filename: info.filename,
+                    totalSize: info.totalSize,
+                    numChunks: info.chunks.length
+                }
+            });
+        } catch (e) {
+            port.postMessage({ ok: false, error: e.message });
+        }
+    })());
+});
+
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // /fkxz 是下载入口：任何方法（含 OPTIONS 探测）都必须生成带 Content-Disposition 的下载响应，
-    // 否则浏览器不会创建下载任务。此判断必须放在通用 OPTIONS 分支之前。
     if (url.pathname.endsWith('/fkxz')) {
         const fkxUrl = url.searchParams.get('fkx');
         if (fkxUrl) {
@@ -45,14 +152,11 @@ self.addEventListener('fetch', (event) => {
 
 async function streamDownload(fkxUrl, request) {
     try {
-        const fkxRes = await fetch(fkxUrl);
-        if (!fkxRes.ok) throw new Error('无法获取文件信息: HTTP ' + fkxRes.status);
-        const fkxText = await fkxRes.text();
-        const info = parseFkx(fkxText);
-        if (!info.filename || !info.chunks?.length) throw new Error('文件信息格式不正确');
+        const signal = request.signal;
+        const info = await loadManifestInfo(fkxUrl);
 
         const baseUrl = getBaseUrl(fkxUrl);
-        const totalSize = info.chunks.reduce((s, c) => s + c.size, 0);
+        const totalSize = info.totalSize;
         const sanitizedName = String(info.filename)
             .replace(/[\r\n\t]/g, '')
             .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_')
@@ -104,11 +208,12 @@ async function streamDownload(fkxUrl, request) {
                 let rangeSent = 0;
                 for (let i = startChunkIdx; i < info.chunks.length && rangeSent < rangeLength; i++) {
                     try {
+                        if (signal?.aborted) throw new Error('下载已取消');
                         const chunkHeaders = {};
                         if (i === startChunkIdx && startOffset > 0) {
                             chunkHeaders['Range'] = 'bytes=' + startOffset + '-';
                         }
-                        const chunkRes = await fetch(chunkUrl(i), { headers: chunkHeaders });
+                        const chunkRes = await fetch(chunkUrl(i), { headers: chunkHeaders, signal });
                         if (!chunkRes.ok) {
                             throw new Error('无法下载分片: ' + info.chunks[i].filename);
                         }
@@ -119,6 +224,7 @@ async function streamDownload(fkxUrl, request) {
                         }
                         let chunkOffset = 0;
                         while (true) {
+                            if (signal?.aborted) throw new Error('下载已取消');
                             const { done, value } = await reader.read();
                             if (done) break;
 
@@ -176,25 +282,6 @@ async function streamDownload(fkxUrl, request) {
             headers: { 'Access-Control-Allow-Origin': '*' }
         });
     }
-}
-
-function parseFkx(content) {
-    const info = { chunks: [] };
-    for (const line of content.trim().split('\n')) {
-        const eqIdx = line.indexOf('=');
-        if (eqIdx < 0) continue;
-        const key = line.substring(0, eqIdx), value = line.substring(eqIdx + 1);
-        if (key.startsWith('chunk_')) {
-            const parts = value.split(',');
-            if (parts.length >= 2) info.chunks.push({
-                filename: parts[0].trim().replace(/^.*[\\/]/, ''),
-                size: parseInt(parts[1].trim()) || 0
-            });
-        } else {
-            info[key] = value.trim();
-        }
-    }
-    return info;
 }
 
 function getBaseUrl(url) {

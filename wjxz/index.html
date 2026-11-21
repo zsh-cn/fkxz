@@ -3,42 +3,448 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1b1b" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="favicon.png" type="image/png">
 <title>文件下载</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: system-ui, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.container { background: #fff; border-radius: 8px; padding: 24px; max-width: 500px; width: 100%; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-h1 { font-size: 20px; color: #1a73e8; margin-bottom: 16px; text-align: center; }
-.file-info { background: #e8f0fe; border-radius: 4px; padding: 12px; margin-bottom: 16px; display: none; }
-.file-info.show { display: block; }
-.info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.info-label { color: #666; }
-.info-value { color: #1a73e8; font-weight: 500; }
-.progress-section { display: none; margin-bottom: 16px; }
-.progress-section.show { display: block; }
-.progress-text { font-size: 12px; color: #666; text-align: center; }
+:root {
+  color-scheme: light dark;
+  --font-base: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 
-.btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; background: #4285f4; color: white; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  --bg-1: #f8f8f9;
+  --bg-2: #eff0f2;
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-solid: #ffffff;
+  --subtle: rgba(0, 0, 0, 0.025);
+  --subtle-hover: rgba(0, 0, 0, 0.05);
+  --stroke-1: rgba(0, 0, 0, 0.09);
+  --stroke-2: rgba(0, 0, 0, 0.16);
+
+  --text-1: #1b1b1b;
+  --text-2: #5b5b5b;
+  --text-3: #767676;
+
+  --brand: #0f6cbd;
+  --brand-hover: #115ea3;
+  --brand-pressed: #0f548c;
+  --brand-tint: rgba(15, 108, 189, 0.10);
+  --on-brand: #ffffff;
+
+  --danger: #c42b1c;
+
+  --elev-4: 0 1px 2px rgba(0, 0, 0, 0.07), 0 2px 6px rgba(0, 0, 0, 0.05);
+  --elev-8: 0 2px 4px rgba(0, 0, 0, 0.10), 0 8px 22px rgba(0, 0, 0, 0.07);
+
+  --reveal: rgba(15, 108, 189, 0.55);
+
+  --ease: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-1: #212121;
+    --bg-2: #191919;
+    --surface: rgba(41, 41, 41, 0.78);
+    --surface-solid: #292929;
+    --subtle: rgba(255, 255, 255, 0.045);
+    --subtle-hover: rgba(255, 255, 255, 0.075);
+    --stroke-1: rgba(255, 255, 255, 0.10);
+    --stroke-2: rgba(255, 255, 255, 0.20);
+
+    --text-1: #ffffff;
+    --text-2: #d0d0d0;
+    --text-3: #adadad;
+
+    --brand: #479ef5;
+    --brand-hover: #62abf5;
+    --brand-pressed: #2886de;
+    --brand-tint: rgba(71, 158, 245, 0.14);
+    --on-brand: #0a0a0a;
+
+    --danger: #ff99a4;
+
+    --elev-4: 0 1px 2px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.28);
+    --elev-8: 0 2px 4px rgba(0, 0, 0, 0.45), 0 8px 22px rgba(0, 0, 0, 0.38);
+
+    --reveal: rgba(71, 158, 245, 0.62);
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-base);
+  background: var(--bg-2);
+  color: var(--text-1);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(880px 560px at 12% -12%, rgba(15, 108, 189, 0.09), transparent 62%),
+    radial-gradient(720px 520px at 104% 22%, rgba(15, 108, 189, 0.055), transparent 58%),
+    radial-gradient(640px 480px at 50% 118%, rgba(120, 90, 200, 0.045), transparent 60%),
+    linear-gradient(178deg, var(--bg-1) 0%, var(--bg-2) 55%, var(--bg-2) 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  body::before {
+    background:
+      radial-gradient(880px 560px at 12% -12%, rgba(71, 158, 245, 0.13), transparent 62%),
+      radial-gradient(720px 520px at 104% 22%, rgba(71, 158, 245, 0.07), transparent 58%),
+      linear-gradient(178deg, #242424 0%, #1b1b1b 55%, #171717 100%);
+  }
+}
+
+.surface {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke-1);
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  backdrop-filter: blur(30px) saturate(160%);
+  box-shadow: var(--elev-8);
+  overflow: hidden;
+  animation: surfaceIn 0.36s var(--ease-out) both;
+}
+
+.surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), var(--reveal), transparent 72%);
+  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+.surface:hover::before { opacity: 1; }
+
+@keyframes surfaceIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+
+.app-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.app-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke-1);
+  background: var(--surface-solid);
+  box-shadow: var(--elev-4);
+  overflow: hidden;
+}
+.app-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+
+.info-card {
+  display: none;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  border: 1px solid var(--stroke-1);
+  background: var(--subtle);
+}
+.info-card.show { display: block; animation: fadeIn 0.22s var(--ease) both; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.info-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 3px 0;
+}
+.info-row + .info-row { border-top: 1px solid var(--stroke-1); }
+
+.info-label {
+  flex: 0 0 auto;
+  color: var(--text-3);
+}
+
+.info-value {
+  min-width: 0;
+  color: var(--text-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-2);
+}
+
+.status-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  display: none;
+  color: var(--text-3);
+}
+.status-icon svg { width: 14px; height: 14px; display: block; }
+
+.status[data-state="loading"] .ico-loading,
+.status[data-state="ready"] .ico-ready,
+.status[data-state="error"] .ico-error,
+.status[data-state="info"] .ico-info { display: block; }
+
+.status[data-state="ready"] { color: var(--text-1); }
+.status[data-state="ready"] .status-icon { color: var(--brand); }
+.status[data-state="error"] { color: var(--danger); }
+.status[data-state="error"] .status-icon { color: var(--danger); }
+.status[data-state="loading"] .status-icon { color: var(--brand); }
+
+.ico-loading svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.progress {
+  display: none;
+  height: 2px;
+  margin-top: 10px;
+  border-radius: 1px;
+  background: var(--subtle-hover);
+  overflow: hidden;
+}
+.progress.on { display: block; }
+
+.progress > span {
+  display: block;
+  height: 100%;
+  width: 38%;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand) 30%, var(--brand) 70%, transparent);
+  animation: slide 1.8s var(--ease) infinite;
+}
+
+@keyframes slide {
+  from { transform: translateX(-105%); }
+  to   { transform: translateX(280%); }
+}
+
+.btn {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  margin-top: 20px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family: var(--font-base);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.1s var(--ease), border-color 0.1s var(--ease),
+              box-shadow 0.1s var(--ease), color 0.1s var(--ease);
+}
+.btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
+
+.btn-accent {
+  background: var(--brand);
+  color: var(--on-brand);
+  box-shadow: var(--elev-4);
+}
+.btn-accent:hover:not(:disabled) { background: var(--brand-hover); }
+.btn-accent:active:not(:disabled) {
+  background: var(--brand-pressed);
+  box-shadow: none;
+  transform: translateY(0.5px);
+}
+
+.btn:disabled {
+  background: var(--subtle);
+  color: var(--text-3);
+  border-color: var(--stroke-1);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--text-1);
+  outline-offset: 2px;
+}
+
+.hint {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.repo-link {
+  position: fixed;
+  left: 16px;
+  bottom: 14px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-3);
+  text-decoration: none;
+  transition: color 0.1s var(--ease), background 0.1s var(--ease),
+              border-color 0.1s var(--ease);
+}
+.repo-link svg { width: 14px; height: 14px; flex: 0 0 auto; }
+
+.repo-link:hover {
+  color: var(--text-1);
+  background: var(--subtle-hover);
+  border-color: var(--stroke-1);
+}
+.repo-link:active { background: var(--subtle); }
+
+.repo-link:focus-visible {
+  outline: 2px solid var(--text-1);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 </style>
 </head>
 <body>
-<div class="container">
-    <h1>文件下载</h1>
-    <div class="file-info" id="fileInfo">
-        <div class="info-row"><span class="info-label">文件名：</span><span class="info-value" id="fileName">-</span></div>
-        <div class="info-row"><span class="info-label">文件大小：</span><span class="info-value" id="fileSize">-</span></div>
-    </div>
-    <div class="progress-section" id="progressSection">
-        <div class="progress-text" id="progressText">准备中...</div>
+
+<main class="surface" id="surface">
+    <header class="app-header">
+        <div class="app-icon" aria-hidden="true">
+            <img src="favicon.png" alt="" width="40" height="40" decoding="async">
+        </div>
+        <h1>文件下载</h1>
+    </header>
+
+    <section class="info-card" id="fileInfo" aria-label="文件信息">
+        <div class="info-row">
+            <span class="info-label">文件名</span>
+            <span class="info-value" id="fileName">-</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">文件大小</span>
+            <span class="info-value" id="fileSize">-</span>
+        </div>
+    </section>
+
+    <div class="status" id="status" data-state="loading" aria-live="polite" aria-atomic="true">
+        <span class="status-icon ico-loading" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.8"/>
+                <path d="M8 2a6 6 0 0 1 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+        </span>
+        <span class="status-icon ico-ready" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm3.15 5.36-3.6 3.6a.9.9 0 0 1-1.27 0L4.86 8.54a.9.9 0 1 1 1.27-1.27l.79.79 2.96-2.97a.9.9 0 1 1 1.27 1.27Z"/>
+            </svg>
+        </span>
+        <span class="status-icon ico-error" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm-.9 3.2h1.8v5.2H7.1V4.2Zm.9 8.4a1.05 1.05 0 1 1 0-2.1 1.05 1.05 0 0 1 0 2.1Z"/>
+            </svg>
+        </span>
+        <span class="status-icon ico-info" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm-.9 3h1.8v1.8H7.1V4Zm0 3.1h1.8v4.9H7.1V7.1Z"/>
+            </svg>
+        </span>
+        <span id="progressText">正在准备…</span>
     </div>
 
-    <button class="btn" id="downloadBtn" disabled>下载</button>
-</div>
+    <div class="progress on" id="progress" aria-hidden="true"><span></span></div>
+
+    <button class="btn btn-accent" id="downloadBtn" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+            <path d="M11 3h2v9.59l3.29-3.3a1 1 0 1 1 1.42 1.41l-4.71 4.71a1 1 0 0 1-1.41 0L6.87 10.7a1 1 0 1 1 1.42-1.41L11 12.59V3Z"/>
+            <rect x="4.5" y="17.25" width="15" height="2.25" rx="1.125"/>
+        </svg>
+        下载
+    </button>
+
+    <p class="hint">若无响应，请检查浏览器下载栏及浏览器兼容性</p>
+</main>
+
+<a class="repo-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener noreferrer"
+   aria-label="在 GitHub 上查看项目「文件分块下载」">
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+    </svg>
+    <span>文件分块下载</span>
+</a>
+
 <script>
 let fkxInfo = null;
 let _fkxParam = null;
+let _downloadFrame = null;
+
+const $ = (id) => document.getElementById(id);
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -48,53 +454,70 @@ function formatSize(bytes) {
     return (bytes / 1024 / 1024 / 1024 / 1024).toFixed(2) + ' TB';
 }
 
-function parseFkx(content) {
-    const info = { chunks: [] };
-    for (const line of content.trim().split('\n')) {
-        const eqIdx = line.indexOf('=');
-        if (eqIdx < 0) continue;
-        const key = line.substring(0, eqIdx), value = line.substring(eqIdx + 1);
-        if (key.startsWith('chunk_')) {
-            const parts = value.split(',');
-            if (parts.length >= 2) info.chunks.push({
-                filename: parts[0].trim().replace(/^.*[\\/]/, ''),
-                size: parseInt(parts[1].trim()) || 0
-            });
-        } else info[key] = value.trim();
-    }
-    return info;
+function setStatus(text, state = 'info') {
+    $('status').dataset.state = state;
+    $('progressText').textContent = text;
+    $('progress').classList.toggle('on', state === 'loading');
 }
 
-function showMessage(text) {
-    document.getElementById('progressSection').classList.add('show');
-    document.getElementById('progressText').textContent = text;
+function requestManifestInfo(url) {
+    return new Promise((resolve, reject) => {
+        if (!('serviceWorker' in navigator)) {
+            reject(new Error('浏览器不支持 Service Worker'));
+            return;
+        }
+        let settled = false;
+        let timer = 0;
+        const fail = (message) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(new Error(message));
+        };
+        timer = setTimeout(() => fail('读取文件信息超时'), 20000);
+
+        navigator.serviceWorker.ready.then((registration) => {
+            const worker = registration.active;
+            if (!worker) {
+                fail('Service Worker 未就绪');
+                return;
+            }
+            const channel = new MessageChannel();
+            channel.port1.onmessage = (event) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                const data = event.data || {};
+                if (data.ok) resolve(data.info);
+                else reject(new Error(data.error || '解析失败'));
+            };
+            worker.postMessage({ type: 'fkx-info', url }, [channel.port2]);
+        }, () => fail('Service Worker 未就绪'));
+    });
 }
 
 async function parseFkxUrl(url) {
-    const btn = document.getElementById('downloadBtn');
-    document.getElementById('fileInfo').classList.remove('show');
+    const btn = $('downloadBtn');
+    $('fileInfo').classList.remove('show');
     btn.disabled = true;
     try {
-        showMessage('获取文件信息...');
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        fkxInfo = parseFkx(await res.text());
-        if (!fkxInfo.filename || !fkxInfo.chunks?.length) throw new Error('格式错误');
+        setStatus('正在获取文件信息…', 'loading');
+        fkxInfo = await requestManifestInfo(url);
+        if (!fkxInfo?.filename || !fkxInfo.numChunks) throw new Error('格式错误');
 
-        const totalSize = fkxInfo.chunks.reduce((s, c) => s + c.size, 0);
-        document.getElementById('fileName').textContent = fkxInfo.filename;
-        document.getElementById('fileSize').textContent = formatSize(totalSize);
-        document.getElementById('fileInfo').classList.add('show');
+        $('fileName').textContent = fkxInfo.filename;
+        $('fileSize').textContent = formatSize(fkxInfo.totalSize);
+        $('fileInfo').classList.add('show');
         btn.disabled = false;
-        showMessage('准备就绪');
+        setStatus('准备就绪，可以开始下载', 'ready');
     } catch (e) {
-        showMessage('解析失败: ' + e.message);
+        setStatus('解析失败：' + e.message, 'error');
     }
 }
 
 function startDownload() {
-    if (!fkxInfo?.chunks?.length) return;
-    const btn = document.getElementById('downloadBtn');
+    if (!fkxInfo?.numChunks) return;
+    const btn = $('downloadBtn');
     btn.disabled = true;
 
     const fkxUrl = /^https?:\/\//i.test(_fkxParam) ? _fkxParam : new URL(_fkxParam, window.location.href).href;
@@ -102,37 +525,64 @@ function startDownload() {
     const downloadUrl = new URL('./fkxz', window.location.href);
     downloadUrl.searchParams.set('fkx', absoluteFkxUrl);
 
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;';
-    document.body.appendChild(iframe);
-    iframe.src = downloadUrl.href;
+    if (!_downloadFrame) {
+        _downloadFrame = document.createElement('iframe');
+        _downloadFrame.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;';
+        _downloadFrame.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(_downloadFrame);
+    }
+    _downloadFrame.src = downloadUrl.href;
 
-    showMessage('下载已开始，请查看浏览器下载栏');
+    setStatus('正在开始下载…', 'loading');
     setTimeout(() => {
         btn.disabled = false;
-        if (iframe.parentNode) iframe.remove();
+        setStatus('下载已开始，请查看浏览器下载栏', 'info');
     }, 5000);
 }
 
+(function enableReveal() {
+    const surface = $('surface');
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!surface || !fine || calm) return;
+    surface.addEventListener('pointermove', (e) => {
+        const r = surface.getBoundingClientRect();
+        surface.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+        surface.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    }, { passive: true });
+})();
+
 window.addEventListener('DOMContentLoaded', async () => {
+    $('downloadBtn').addEventListener('click', () => startDownload());
+
+    let swReady = false;
     if ('serviceWorker' in navigator) {
         try {
             const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
             await navigator.serviceWorker.ready;
             console.log('SW 已注册:', reg.scope);
+            swReady = true;
         } catch (e) {
-            showMessage('Service Worker 注册失败: ' + e.message);
+            setStatus('Service Worker 注册失败：' + e.message, 'error');
         }
+    } else {
+        setStatus('当前浏览器不支持 Service Worker，无法下载', 'error');
     }
 
     const fkxParam = new URLSearchParams(window.location.search).get('fkx');
-    if (fkxParam) {
-        _fkxParam = fkxParam;
-        parseFkxUrl(fkxParam);
-    } else {
-        showMessage('缺少文件参数');
+    if (!fkxParam) {
+        setStatus('缺少文件参数，请通过分享链接打开', 'error');
+        return;
     }
-    document.getElementById('downloadBtn').addEventListener('click', () => startDownload());
+    const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(fkxParam);
+    if (hasScheme && !/^https?:/i.test(fkxParam)) {
+        setStatus('文件参数不受支持，请通过分享链接打开', 'error');
+        return;
+    }
+    _fkxParam = fkxParam;
+    if (swReady) {
+        parseFkxUrl(fkxParam);
+    }
 });
 </script>
 </body>

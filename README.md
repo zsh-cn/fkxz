@@ -7,6 +7,8 @@ fkxz-docs/
 ├── index.html                     # 官网主页
 ├── download.html                  # 下载页面
 ├── dev.html                       # 文档页面
+├── README.md                      # 官网维护说明
+├── dabao.py                       # Release 程序安全性验证脚本
 ├── favicon.png                    # 官网图标
 ├── logo.png                       # 官网大图（导航与首屏，favicon 仅供图标使用）
 ├── dist/                          # 打包产物（每个 zip 内是单个 exe）

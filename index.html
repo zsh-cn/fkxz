@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>文件分块下载</title>
 <meta name="description" content="将大文件分块为多个小分片，支持本地合并与远程下载合并，可用于绕过文件上传大小限制或便于文件传输">
+<meta name="theme-color" content="#F4F4F4">
+<script>(function(){try{var t=localStorage.getItem('fkxz-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t?t==='dark':d){document.documentElement.classList.add('dark');}}catch(e){}})();</script>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -13,18 +15,22 @@
 <header>
     <div class="container">
         <a class="logo" href="index.html">
-            <img src="logo.png" alt="fkxz">
-            文件分块下载
+            <img src="logo.png" alt="">
+            <span>文件分块下载</span>
         </a>
         <nav class="nav-links">
             <a href="index.html" class="active">首页</a>
             <a href="download.html">下载</a>
             <a href="wjxz/experience.html">体验</a>
             <a href="dev.html">文档</a>
-            <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                GitHub
+            <a class="gh-link" href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener" aria-label="GitHub 仓库">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                <span>GitHub</span>
             </a>
+            <button class="theme-toggle" type="button" aria-label="切换深色模式" title="切换深色模式">
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 13.8A8.5 8.5 0 1110.2 3.5a6.8 6.8 0 0010.3 10.3z"/></svg>
+            </button>
         </nav>
     </div>
 </header>
@@ -33,110 +39,155 @@
 
 <section class="hero">
     <div class="container">
-        <img class="hero-icon" src="logo.png" alt="fkxz">
+        <img class="hero-icon" src="logo.png" alt="文件分块下载">
         <h1>文件分块下载</h1>
-        <p class="site-links">
-            <a href="https://fkxz.zhshh.cn">主站</a>
-            <span> | </span>
-            <a href="https://zsh-cn.github.io/fkxz/">备用站</a>
-        </p>
-        <p class="desc">将大文件分块为多个小分片，支持本地合并与远程下载合并，可用于绕过文件上传大小限制或便于文件传输</p>
+        <p class="desc">把大文件切成小分片，上传更省事；下载时并发拉取、断点续传、失败自动重试，并按四档校验策略还原成原文件。</p>
         <div class="hero-actions">
             <a href="download.html" class="btn btn-primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v10"/><path d="M8 9.5l4 4 4-4"/><path d="M4.5 16v2.5a2 2 0 002 2h11a2 2 0 002-2V16"/></svg>
                 下载已打包程序
             </a>
-            <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener" class="btn btn-outline">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                GitHub 仓库
+            <a href="wjxz/experience.html" class="btn btn-outline">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.2"/><path d="M3.2 8.6h17.6"/><path d="M10.4 12.2l3.8 2.3-3.8 2.3z"/></svg>
+                在线体验
             </a>
         </div>
+        <div class="hero-meta">
+            <span class="chip">Windows 10 / 11</span>
+            <span class="chip">Python 3.8+</span>
+            <span class="chip">MPL-2.0</span>
+        </div>
+        <p class="site-links">
+            <a href="https://fkxz.zhshh.cn">主站</a>
+            <span class="sep">·</span>
+            <a href="https://zsh-cn.github.io/fkxz/">备用站</a>
+        </p>
     </div>
 </section>
 
-<section class="section">
+<section class="section" id="features">
     <div class="container">
-        <h2 class="section-title">项目功能特点</h2>
-        <p class="section-subtitle">一站式大文件分片传输解决方案</p>
+        <h2 class="section-title">核心能力</h2>
+        <p class="section-subtitle">从分块、分发到并发下载与完整性校验，一条链路解决大文件传输</p>
         <div class="features">
             <div class="feature-card">
-                <h3>文件分块</h3>
-                <p>将大文件按指定大小分块为多个 <code>.fk</code> 分片，并生成 <code>.fkx</code> 信息文件</p>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>
+                </span>
+                <div>
+                    <h3>文件分块</h3>
+                    <p>按 1–1024 MB 自定义分片大小（默认 10 MB），切成多个 <code>.fk</code> 分片并生成 <code>.fkx</code> 清单。</p>
+                </div>
             </div>
             <div class="feature-card">
-                <h3>文件下载</h3>
-                <p>支持本地 <code>.fkx</code> 合并还原与远程 URL 下载分片合并，支持 SHA-256 完整性校验</p>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 015.5 5H14l2 2h4.5A2.5 2.5 0 0123 9.5v7A2.5 2.5 0 0120.5 19h-15A2.5 2.5 0 013 16.5z"/><path d="M12 10.5v4.5"/><path d="M9.8 13l2.2 2.2 2.2-2.2"/></svg>
+                </span>
+                <div>
+                    <h3>文件下载与合并</h3>
+                    <p>本地 <code>.fkx</code> 直接合并，或按清单地址远程下载分片后合并还原。</p>
+                </div>
             </div>
             <div class="feature-card">
-                <h3>断点续传</h3>
-                <p>远程下载支持 1-4 个分片并发、单分片失败自动重试；中断后已下载分片自动保留，重试时按大小 + SHA-256 跳过完整分片，残缺分片用 Range 从断点续传</p>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3.2v5.6c0 4.3-3 7.9-7.5 9.2-4.5-1.3-7.5-4.9-7.5-9.2V6.2z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.4"/></svg>
+                </span>
+                <div>
+                    <h3>四档校验</h3>
+                    <p>双校验、只校验分片、只校验整文件、不校验四档可选，清单缺少对应校验值时自动降级。</p>
+                </div>
             </div>
             <div class="feature-card">
-                <h3>增强模式</h3>
-                <p>集成 <code>curl_cffi</code> 浏览器模拟，可模拟 Chrome 浏览器请求头，绕过 Cloudflare 验证、EdgeOne Pages、防盗链等反爬虫保护</p>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 11-2.4-5.7"/><path d="M20 4v4.5h-4.5"/><path d="M12 8.5V12l2.4 1.6"/></svg>
+                </span>
+                <div>
+                    <h3>断点续传</h3>
+                    <p>已下载分片保留在临时目录，再次开始时跳过完整分片，未完成分片用 Range 从断点继续。</p>
+                </div>
             </div>
             <div class="feature-card">
-                <h3>多端支持</h3>
-                <p>提供聚合 GUI 程序、独立 GUI 程序、网页端工具等多种使用方式</p>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3v7.5"/><path d="M4.5 7.5l3 3 3-3"/><path d="M16.5 3v7.5"/><path d="M13.5 7.5l3 3 3-3"/><path d="M3.5 16.5h17"/><path d="M3.5 20h17"/></svg>
+                </span>
+                <div>
+                    <h3>并发与重试</h3>
+                    <p>并发数量可调；单个分片失败不影响其余分片，整轮结束后自动重试未完成的分片。</p>
+                </div>
             </div>
             <div class="feature-card">
-                <h3>跨平台</h3>
-                <p>Python 工具支持 Windows / Linux / macOS；网页端下载页面支持所有现代浏览器</p>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7 2.8v5.2c0 4-2.8 7.4-7 8.7-4.2-1.3-7-4.7-7-8.7V6.3z"/><path d="M9 11.6l2 2 4-4.2"/></svg>
+                </span>
+                <div>
+                    <h3>增强模式</h3>
+                    <p>集成 <code>curl_cffi</code> 模拟 Chrome 请求特征，兼容 Cloudflare、防盗链等访问限制。</p>
+                </div>
             </div>
-            
+            <div class="feature-card">
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v7"/><path d="M7.2 6.3a7 7 0 109.6 0"/></svg>
+                </span>
+                <div>
+                    <h3>完成即关机</h3>
+                    <p>可勾选完成后自动打开输出目录；也可勾选任务结束后关机，倒计时期间随时取消。</p>
+                </div>
+            </div>
+            <div class="feature-card">
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h4"/><path d="M12 17h8"/><circle cx="10" cy="17" r="2"/></svg>
+                </span>
+                <div>
+                    <h3>少一步操作</h3>
+                    <p>文件可直接拖入窗口，输出目录留空即用程序所在目录，并记住上次填写的目录。</p>
+                </div>
+            </div>
+            <div class="feature-card">
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.4 3.7 5.3 3.7 8.5S14.4 18.1 12 20.5c-2.4-2.4-3.7-5.3-3.7-8.5S9.6 5.9 12 3.5z"/></svg>
+                </span>
+                <div>
+                    <h3>多端支持</h3>
+                    <p>聚合界面、独立界面与网页版共用同一分片格式，程序可运行于 Windows / Linux / macOS。</p>
+                </div>
+            </div>
         </div>
     </div>
 </section>
 
-<section class="section section-alt">
+<section class="section section-alt" id="steps">
     <div class="container">
-        <h2 class="section-title">多端支持</h2>
-        <p class="section-subtitle">提供多种使用方式，满足不同场景需求</p>
-        <div class="platform-grid">
-            <div class="platform-card">
-                <h3>聚合 GUI 程序</h3>
-                <p style="margin-bottom:10px;">一个聚合入口，集成文件分块与文件下载两大功能。</p>
-                <ul>
-                    <li><strong>wjfkxz.exe</strong>：聚合程序，集成文件分块与文件下载，侧边栏一键切换</li>
-                    <li>一个窗口完成分块与下载</li>
-                    <li>SHA-256 完整性校验</li>
-                    <li>断点续传：下载中断后分片保留</li>
-                    <li>增强模式：curl_cffi 浏览器模拟</li>
-                </ul>
+        <h2 class="section-title">三步上手</h2>
+        <p class="section-subtitle">分块、上传、分享链接，对方即可下载还原</p>
+        <div class="steps">
+            <div class="step">
+                <span class="step-num">1</span>
+                <h3>分块文件</h3>
+                <p>拖入文件、设置分片大小与校验方式后开始分块，得到多个 <code>.fk</code> 和一个 <code>.fkx</code>。</p>
             </div>
-            <div class="platform-card">
-                <h3>独立 GUI 程序</h3>
-                <p style="margin-bottom:10px;">两个独立工具，各司其职，满足不同使用场景。</p>
-                <ul>
-                    <li><strong>wjfk.exe</strong>：独立程序，功能为文件分块</li>
-                    <li><strong>wjxz.exe</strong>：独立程序，支持本地合并与远程下载</li>
-                    <li>SHA-256 完整性校验</li>
-                    <li>断点续传：下载中断后分片保留</li>
-                    <li>增强模式：curl_cffi 浏览器模拟</li>
-                </ul>
+            <div class="step">
+                <span class="step-num">2</span>
+                <h3>上传到服务器</h3>
+                <p>把分片与清单一起上传到同一目录，无需改变服务器配置，也无需支持断点请求。</p>
             </div>
-            <div class="platform-card">
-                <h3>网页端工具</h3>
-                <p style="margin-bottom:10px;">轻量级浏览器端工具，无需安装任何软件。</p>
-                <ul>
-                    <li><strong>index.html + sw.js</strong>：Service Worker 下载器</li>
-                    <li>纯前端实现，无需后端支持</li>
-                    <li>支持流式下载和实时进度</li>
-                </ul>
+            <div class="step">
+                <span class="step-num">3</span>
+                <h3>分享与下载</h3>
+                <p>分发 <code>.fkx</code> 的链接，对方用桌面程序或网页端下载、校验并还原成原文件。</p>
             </div>
         </div>
     </div>
 </section>
 
-<section class="section">
+<section class="section" id="start">
     <div class="container">
         <h2 class="section-title">快速开始</h2>
         <p class="section-subtitle">源码运行或直接下载 exe，两种方式任选其一</p>
 
         <div class="tab-container">
             <div class="tabs">
-                <button class="tab-btn active" data-tab="source">源码运行</button>
-                <button class="tab-btn" data-tab="exe">直接下载 exe</button>
+                <button class="tab-btn active" type="button" data-tab="source">源码运行</button>
+                <button class="tab-btn" type="button" data-tab="exe">直接下载 exe</button>
             </div>
 
             <div class="tab-panel active" data-tab="source">
@@ -154,91 +205,106 @@
             </div>
 
             <div class="tab-panel" data-tab="exe">
-                <div class="web-experience-grid">
-                    <a href="download.html" class="web-exp-card">
-                        <div class="web-exp-icon"></div>
-                        <h3>直接下载 exe</h3>
-                        <p>无需安装 Python 环境，下载已打包程序后直接运行。支持 Windows 系统，开箱即用。</p>
-                        <span class="web-exp-link">前往下载页 →</span>
-                    </a>
+                <div class="panel">
+                    <p class="lead mb-16">无需安装 Python 环境，下载已打包程序后直接运行。支持 Windows 系统，开箱即用。</p>
+                    <div class="actions">
+                        <a href="download.html" class="btn btn-primary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v10"/><path d="M8 9.5l4 4 4-4"/><path d="M4.5 16v2.5a2 2 0 002 2h11a2 2 0 002-2V16"/></svg>
+                            前往下载页
+                        </a>
+                        <a href="https://github.com/zsh-cn/fkxz/releases/latest" target="_blank" rel="noopener" class="btn btn-outline">最新 Release</a>
+                    </div>
+                    <p class="note">wjfkxz.exe 为聚合程序，wjfk.exe 与 wjxz.exe 为独立程序，按需选择其一即可。</p>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<section class="section">
+<section class="section section-alt" id="platforms">
     <div class="container">
-        <h2 class="section-title">Web 在线体验</h2>
-        <p class="section-subtitle">无需安装任何软件，浏览器直接使用</p>
+        <h2 class="section-title">多端支持</h2>
+        <p class="section-subtitle">提供多种使用方式，满足不同场景需求</p>
+        <div class="platform-grid">
+            <div class="platform-card">
+                <span class="icon-tile is-neutral" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="4.2" width="18.4" height="12.6" rx="2"/><path d="M8.5 20h7"/><path d="M12 16.8V20"/></svg>
+                </span>
+                <h3>聚合 GUI 程序</h3>
+                <p>一个聚合入口，集成文件分块与文件下载两大功能，侧边栏一键切换。</p>
+                <ul>
+                    <li><strong>wjfkxz.exe</strong>：单个窗口完成分块与下载</li>
+                    <li>切换功能后保留各自状态，关闭窗口统一结束任务</li>
+                    <li>四档校验方式，失败分片自动重试</li>
+                    <li>断点续传与并发数量可调</li>
+                </ul>
+            </div>
+            <div class="platform-card">
+                <span class="icon-tile is-neutral" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.2" width="8" height="8" rx="1.8"/><rect x="13" y="3.2" width="8" height="8" rx="1.8"/><rect x="3" y="12.8" width="8" height="8" rx="1.8"/><rect x="13" y="12.8" width="8" height="8" rx="1.8"/></svg>
+                </span>
+                <h3>独立 GUI 程序</h3>
+                <p>两个独立工具，各司其职，可按需只取其中一个。</p>
+                <ul>
+                    <li><strong>wjfk.exe</strong>：仅文件分块</li>
+                    <li><strong>wjxz.exe</strong>：本地合并与远程下载</li>
+                    <li>完成后可自动打开文件夹或关机</li>
+                    <li>增强模式：curl_cffi 浏览器模拟</li>
+                </ul>
+            </div>
+            <div class="platform-card">
+                <span class="icon-tile is-neutral" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 9.5h16.8"/><path d="M3.6 14.5h16.8"/><path d="M12 3.4c2.2 2.3 3.4 5.3 3.4 8.6S14.2 18.3 12 20.6c-2.2-2.3-3.4-5.3-3.4-8.6S9.8 5.7 12 3.4z"/></svg>
+                </span>
+                <h3>网页端工具</h3>
+                <p>轻量级浏览器端工具，无需安装任何软件。</p>
+                <ul>
+                    <li>Service Worker 流式合并下载</li>
+                    <li>纯前端实现，无需后端支持</li>
+                    <li>可用浏览器下载管理器暂停与继续</li>
+                    <li>不做完整性校验，仅按清单长度合并</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="more">
+    <div class="container">
+        <h2 class="section-title">继续了解</h2>
+        <p class="section-subtitle">在线试用、阅读文档或反馈问题</p>
         <div class="web-experience-grid">
             <a href="wjxz/experience.html" class="web-exp-card">
-                <div class="web-exp-icon"></div>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.2"/><path d="M3.2 8.6h17.6"/><path d="M10.4 12.2l3.8 2.3-3.8 2.3z"/></svg>
+                </span>
                 <h3>在线体验</h3>
-                <p>输入 .fkx 文件地址，选择标准模式或 Service Worker 模式，在浏览器中直接下载合并文件。无需安装任何软件。</p>
-                <span class="web-exp-link">立即体验 →</span>
+                <p>输入 <code>.fkx</code> 文件地址，在浏览器中直接下载并合并，无需安装任何软件。</p>
+                <span class="web-exp-link">立即体验
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5-5.5 5.5"/></svg>
+                </span>
             </a>
-        </div>
-    </div>
-</section>
-
-<section class="section">
-    <div class="container">
-        <h2 class="section-title">文档</h2>
-        <p class="section-subtitle">了解项目结构、文件格式、环境要求及自行打包指南</p>
-        <div class="web-experience-grid">
             <a href="dev.html" class="web-exp-card">
-                <div class="web-exp-icon"></div>
-                <h3>查看文档</h3>
-                <p>包含项目结构、文件格式说明、环境要求、网页端工具详情和 PyInstaller 打包指南，帮助开发者快速上手。</p>
-                <span class="web-exp-link">查看详情 →</span>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h6.5A3.5 3.5 0 0114 8v11.5a2.5 2.5 0 00-2.5-2.5H4z"/><path d="M20 4.5h-2.5A3.5 3.5 0 0014 8v11.5a2.5 2.5 0 012.5-2.5H20z"/></svg>
+                </span>
+                <h3>完整文档</h3>
+                <p>项目结构、文件格式、环境要求、组件说明与 PyInstaller 打包指南。</p>
+                <span class="web-exp-link">查看文档
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5-5.5 5.5"/></svg>
+                </span>
             </a>
-        </div>
-    </div>
-</section>
-
-<section class="section section-alt">
-    <div class="container">
-        <h2 class="section-title">问题反馈</h2>
-        <p class="section-subtitle">如遇到问题或有功能建议，请通过以下方式反馈</p>
-        <div class="web-experience-grid">
             <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener" class="web-exp-card">
-                <div class="web-exp-icon"></div>
-                <h3>GitHub Issues</h3>
-                <p style="margin-bottom:4px;">提交 Issue 时请尽量提供以下信息：</p>
-                <ul style="list-style:none;padding:0;font-size:13px;color:var(--text-secondary);line-height:2;">
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>使用的程序版本（wjfkxz.exe / wjfk.exe / wjxz.exe /源码运行或网页端下载页面）</li>
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>操作系统/浏览器版本</li>
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>问题的详细描述和复现步骤</li>
-                    <li style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--primary);">•</span>相关的错误信息或截图</li>
-                </ul>
-                <span class="web-exp-link">提交 Issue →</span>
+                <span class="icon-tile" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 15.2a2.3 2.3 0 01-2.3 2.3H8l-4 2.8V6.3A2.3 2.3 0 016.3 4h11.4A2.3 2.3 0 0120 6.3z"/><path d="M8.5 9h7"/><path d="M8.5 12.5h4.5"/></svg>
+                </span>
+                <h3>问题反馈</h3>
+                <p>遇到问题或有功能建议，请在 GitHub Issues 提交，并附上版本、系统与复现步骤。</p>
+                <span class="web-exp-link">提交 Issue
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5-5.5 5.5"/></svg>
+                </span>
             </a>
         </div>
-    </div>
-</section>
-
-<section class="section">
-    <div class="container">
-        <h2 class="section-title">免责声明</h2>
-        <p class="section-subtitle">使用前请仔细阅读</p>
-        <div class="usage-detail">
-            <p style="font-size:14px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">本工具仅供学习、研究和个人合法用途。使用者应遵守所在国家/地区的法律法规及平台的服务条款，不得将本工具用于任何违法或侵权、违反平台规定的活动。</p>
-            <ul>
-                <li>本项目开发者不对使用者的任何不当行为承担责任，使用者需自行承担使用本工具所产生的一切后果和风险</li>
-            </ul>
-        </div>
-    </div>
-</section>
-
-<section class="section section-alt">
-    <div class="container" style="text-align:center;">
-        <h2 class="section-title">许可证</h2>
-        <p class="section-subtitle">本项目采用 Mozilla Public License Version 2.0 (MPL-2.0) 许可证</p>
-        <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener" class="btn btn-outline" style="margin-top:8px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            查看完整许可证
-        </a>
     </div>
 </section>
 
@@ -256,6 +322,7 @@
             <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener">问题反馈</a>
             <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener">MPL-2.0</a>
         </div>
+        <p class="footer-note">本工具仅供学习、研究和个人合法用途。使用者应遵守所在国家/地区的法律法规及平台服务条款，不得用于任何违法、侵权或违反平台规定的活动，并自行承担由此产生的一切后果和风险。</p>
         <p class="copyright">&copy; 2025 zhshh. All rights reserved.</p>
     </div>
 </footer>

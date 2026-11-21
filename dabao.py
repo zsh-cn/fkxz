@@ -262,14 +262,18 @@ def main():
         print("=" * 60)
         print("压缩各 exe 为 zip...")
         create_exe_zips()
+
+        print("=" * 60)
+        cleanup()
+        create_source_zip()
+        copy_web_to_docs()
     else:
         print("部分目标打包失败, 请检查上方日志。")
         clean_dist_artifacts()
 
-    print("=" * 60)
-    cleanup()
-    create_source_zip()
-    copy_web_to_docs()
+        print("=" * 60)
+        cleanup()
+        print("已跳过源码压缩包与网页资源同步, docs 产物保持上次成功构建的状态。")
 
     return 0 if all_ok else 1
 
