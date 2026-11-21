@@ -1,16 +1,25 @@
 import ctypes
 import hashlib
+import json
 import os
 import queue
+import re
+import shutil
+import subprocess
 import sys
 import threading
 import time
 import tkinter as tk
+import traceback
+import uuid
+import webbrowser
 from collections import deque
 from tkinter import filedialog, messagebox
 from tkinter import font as tkfont
+from tkinter import ttk
 
 import config
+import core
 
 
 RESERVED_FILENAMES = {'CON', 'PRN', 'AUX', 'NUL'}
@@ -77,10 +86,6 @@ def safe_remove(path):
             os.remove(path)
     except OSError:
         pass
-
-
-def part_path_for(path):
-    return f"{path}.{os.getpid()}.part"
 
 
 _REPLACE_RETRY_WINERRORS = (5, 32, 33)
@@ -165,7 +170,6 @@ def progress_percent(done_bytes, total_bytes, finished=False):
 
 
 class SpeedMeter:
-
     __slots__ = ('_window', '_min_interval', '_samples')
 
     def __init__(self, window=None, min_interval=None):
@@ -199,13 +203,6 @@ class SpeedMeter:
         if span < self._min_interval:
             return None
         return max(0.0, (end_bytes - start_bytes) / span)
-
-
-def calculate_sha256(file_path, cancel_check=None, progress_callback=None,
-                     block_size=1024 * 1024, interval=0.2):
-    return sha256_file(file_path, should_stop=cancel_check,
-                       on_progress=progress_callback,
-                       block_size=block_size, interval=interval)
 
 
 def resolve_icon_path(icon_filename):
@@ -268,9 +265,10 @@ def set_app_user_model_id(app_id):
 
 def delete_selected(entry_widget):
     try:
-        if entry_widget.selection_present():
+        if callable(getattr(entry_widget, 'selection_present', None)) \
+                and entry_widget.selection_present():
             entry_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
-    except tk.TclError:
+    except (tk.TclError, AttributeError):
         pass
 
 
@@ -327,6 +325,301 @@ def toplevel_hwnd(widget):
     except Exception:
         return hwnd
     return int(root) if root else hwnd
+
+
+_TASKBAR_NOPROGRESS = 0x0
+_TASKBAR_INDETERMINATE = 0x1
+_TASKBAR_NORMAL = 0x2
+_TASKBAR_ERROR = 0x4
+_TASKBAR_PAUSED = 0x8
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [
+        ('Data1', ctypes.c_uint32),
+        ('Data2', ctypes.c_uint16),
+        ('Data3', ctypes.c_uint16),
+        ('Data4', ctypes.c_ubyte * 8),
+    ]
+
+
+def _guid_from_text(text):
+    value = uuid.UUID(text)
+    guid = _GUID()
+    guid.Data1 = value.time_low
+    guid.Data2 = value.time_mid
+    guid.Data3 = value.time_hi_version
+    for index, byte in enumerate(value.bytes[8:]):
+        guid.Data4[index] = byte
+    return guid
+
+
+class _TaskbarList3:
+    _CLSID = "{56FDF344-FD6D-11D0-958A-006097C9A090}"
+    _IID = "{EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF}"
+    _CLSCTX_INPROC_SERVER = 0x1
+    _COINIT_APARTMENTTHREADED = 0x2
+    _RPC_E_CHANGED_MODE = -2147417850
+
+    _VTBL_RELEASE = 2
+    _VTBL_HR_INIT = 3
+    _VTBL_SET_PROGRESS_VALUE = 9
+    _VTBL_SET_PROGRESS_STATE = 10
+    _VTBL_SET_OVERLAY_ICON = 18
+
+    def __init__(self):
+        self._ptr = 0
+        self._set_value = None
+        self._set_state = None
+        self._release = None
+        self._com_initialized = False
+        self._failed = False
+
+    def open(self):
+        if self._ptr:
+            return True
+        if self._failed:
+            return False
+        try:
+            ole32 = ctypes.windll.ole32
+            ole32.CoInitializeEx.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            ole32.CoInitializeEx.restype = ctypes.c_long
+            ole32.CoCreateInstance.argtypes = [
+                ctypes.POINTER(_GUID), ctypes.c_void_p, ctypes.c_uint,
+                ctypes.POINTER(_GUID), ctypes.POINTER(ctypes.c_void_p)]
+            ole32.CoCreateInstance.restype = ctypes.c_long
+            ole32.CoUninitialize.argtypes = []
+            ole32.CoUninitialize.restype = None
+        except (AttributeError, OSError):
+            self._failed = True
+            return False
+
+        hr = ole32.CoInitializeEx(None, self._COINIT_APARTMENTTHREADED)
+        self._com_initialized = hr >= 0
+        if hr < 0 and hr != self._RPC_E_CHANGED_MODE:
+            self._failed = True
+            return False
+
+        clsid = _guid_from_text(self._CLSID)
+        iid = _guid_from_text(self._IID)
+        ptr = ctypes.c_void_p()
+        hr = ole32.CoCreateInstance(ctypes.byref(clsid), None,
+                                    self._CLSCTX_INPROC_SERVER,
+                                    ctypes.byref(iid), ctypes.byref(ptr))
+        if hr < 0 or not ptr.value:
+            self._failed = True
+            self._uninitialize()
+            return False
+
+        vtbl = ctypes.cast(ptr, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+        release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(
+            vtbl[self._VTBL_RELEASE])
+        hr_init = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(
+            vtbl[self._VTBL_HR_INIT])
+        if hr_init(ptr.value) < 0:
+            release(ptr.value)
+            self._failed = True
+            self._uninitialize()
+            return False
+
+        self._ptr = int(ptr.value)
+        self._release = release
+        self._set_value = ctypes.WINFUNCTYPE(
+            ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.c_ulonglong, ctypes.c_ulonglong)(vtbl[self._VTBL_SET_PROGRESS_VALUE])
+        self._set_state = ctypes.WINFUNCTYPE(
+            ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int)(
+                vtbl[self._VTBL_SET_PROGRESS_STATE])
+        return True
+
+    def set_value(self, hwnd, completed, total):
+        if not self._ptr:
+            return False
+        try:
+            return self._set_value(self._ptr, int(hwnd),
+                                   int(completed), int(total)) >= 0
+        except Exception:
+            return False
+
+    def set_state(self, hwnd, state):
+        if not self._ptr:
+            return False
+        try:
+            return self._set_state(self._ptr, int(hwnd), int(state)) >= 0
+        except Exception:
+            return False
+
+    def close(self):
+        if self._ptr and self._release is not None:
+            try:
+                self._release(self._ptr)
+            except Exception:
+                pass
+        self._ptr = 0
+        self._set_value = None
+        self._set_state = None
+        self._release = None
+        self._uninitialize()
+
+    def _uninitialize(self):
+        if not self._com_initialized:
+            return
+        self._com_initialized = False
+        try:
+            ctypes.windll.ole32.CoUninitialize()
+        except Exception:
+            pass
+
+
+class _FLASHWINFO(ctypes.Structure):
+    _fields_ = [
+        ('cbSize', ctypes.c_uint),
+        ('hwnd', ctypes.c_void_p),
+        ('dwFlags', ctypes.c_uint),
+        ('uCount', ctypes.c_uint),
+        ('dwTimeout', ctypes.c_uint),
+    ]
+
+
+def flash_taskbar(widget, count=4):
+    if sys.platform != 'win32' or app_in_foreground():
+        return False
+    user32 = _user32()
+    hwnd = toplevel_hwnd(widget)
+    if user32 is None or not hwnd:
+        return False
+    try:
+        info = _FLASHWINFO()
+        info.cbSize = ctypes.sizeof(_FLASHWINFO)
+        info.hwnd = hwnd
+        info.dwFlags = 0x3
+        info.uCount = max(1, int(count))
+        info.dwTimeout = 0
+        user32.FlashWindowEx.argtypes = [ctypes.POINTER(_FLASHWINFO)]
+        user32.FlashWindowEx.restype = ctypes.c_bool
+        user32.FlashWindowEx(ctypes.byref(info))
+        return True
+    except Exception:
+        return False
+
+
+class TaskbarProgress:
+    SUCCESS_HOLD_MS = 2500
+    ERROR_HOLD_MS = 6000
+
+    def __init__(self, widget):
+        self._widget = widget
+        self._hwnd = 0
+        self._api = _TaskbarList3() if sys.platform == 'win32' else None
+        self._state = _TASKBAR_NOPROGRESS
+        self._percent = -1
+        self._timer = None
+
+    @property
+    def available(self):
+        return self._api is not None
+
+    def _window(self):
+        if not self._hwnd:
+            self._hwnd = toplevel_hwnd(self._widget)
+        return self._hwnd
+
+    def _ready(self):
+        api = self._api
+        if api is None:
+            return 0
+        hwnd = self._window()
+        if not hwnd:
+            return 0
+        if not api.open():
+            self._api = None
+            return 0
+        return hwnd
+
+    def update(self, done, total):
+        if self._api is None:
+            return
+        try:
+            done = max(0, int(done))
+            total = max(1, int(total))
+        except (TypeError, ValueError):
+            return
+        hwnd = self._ready()
+        if not hwnd:
+            return
+        self._cancel_timer()
+        percent = min(100, done * 100 // total)
+        if self._state != _TASKBAR_NORMAL:
+            self._api.set_state(hwnd, _TASKBAR_NORMAL)
+            self._state = _TASKBAR_NORMAL
+            self._percent = -1
+        if percent != self._percent:
+            self._api.set_value(hwnd, done, total)
+            self._percent = percent
+
+    def indeterminate(self):
+        self._set_state(_TASKBAR_INDETERMINATE)
+
+    def pause(self):
+        if self._state in (_TASKBAR_NORMAL, _TASKBAR_INDETERMINATE):
+            self._set_state(_TASKBAR_PAUSED)
+
+    wait = pause
+
+    def complete(self, flash=True):
+        if not self._ready():
+            return
+        self.update(100, 100)
+        self._schedule_clear(self.SUCCESS_HOLD_MS)
+        if flash:
+            flash_taskbar(self._widget)
+
+    def fail(self, flash=True):
+        if not self._ready():
+            return
+        self._set_state(_TASKBAR_ERROR, reset_after=self.ERROR_HOLD_MS)
+        if flash:
+            flash_taskbar(self._widget)
+
+    def clear(self):
+        self._cancel_timer()
+        self._percent = -1
+        self._set_state(_TASKBAR_NOPROGRESS)
+
+    def close(self):
+        self.clear()
+        api, self._api = self._api, None
+        if api is not None:
+            api.close()
+
+    def _set_state(self, state, reset_after=None):
+        hwnd = self._ready()
+        if not hwnd:
+            return
+        self._cancel_timer()
+        if state != self._state:
+            self._api.set_state(hwnd, state)
+            self._state = state
+        if reset_after:
+            self._schedule_clear(reset_after)
+
+    def _schedule_clear(self, delay):
+        try:
+            self._timer = self._widget.after(delay, self._on_timer)
+        except (tk.TclError, RuntimeError):
+            self._timer = None
+
+    def _on_timer(self):
+        self._timer = None
+        self.clear()
+
+    def _cancel_timer(self):
+        timer, self._timer = self._timer, None
+        if timer is not None:
+            try:
+                self._widget.after_cancel(timer)
+            except (tk.TclError, ValueError, RuntimeError):
+                pass
 
 
 def foreground_pid():
@@ -412,7 +705,6 @@ def close_open_popup(keep=None):
 
 
 class PopupMenu:
-
     _BG = '#ffffff'
     _FG = config.TEXT_NORMAL
     _HOVER_BG = '#e9f0ff'
@@ -746,6 +1038,8 @@ class PopupMenu:
 
 def setup_context_menu(entry_widget, on_change=None):
     menu = PopupMenu(entry_widget)
+    can_selection = callable(getattr(entry_widget, 'selection_present', None))
+    can_select_range = callable(getattr(entry_widget, 'select_range', None))
 
     def _after_action():
         if on_change:
@@ -761,43 +1055,74 @@ def setup_context_menu(entry_widget, on_change=None):
         except tk.TclError:
             pass
 
-    menu.add_command(label="剪切", command=lambda: (entry_widget.event_generate('<<Cut>>'), _after_action()))
-    menu.add_command(label="复制", command=lambda: entry_widget.event_generate('<<Copy>>'))
-    menu.add_command(label="粘贴", command=lambda: (entry_widget.event_generate('<<Paste>>'), _after_action()))
+    def _generate(sequence, notify=True):
+        def _run():
+            try:
+                entry_widget.event_generate(sequence)
+            except tk.TclError:
+                return
+            if notify:
+                _after_action()
+        return _run
+
+    def _select_all():
+        if can_select_range:
+            try:
+                entry_widget.select_range(0, tk.END)
+            except tk.TclError:
+                pass
+
+    index = {
+        'cut': menu.add_command(label="剪切", command=_generate('<<Cut>>')),
+        'copy': menu.add_command(label="复制", command=_generate('<<Copy>>', notify=False)),
+        'paste': menu.add_command(label="粘贴", command=_generate('<<Paste>>')),
+    }
     menu.add_separator()
-    menu.add_command(label="删除", command=lambda: (delete_selected(entry_widget), _after_action()))
+    index['delete'] = menu.add_command(
+        label="删除", command=lambda: (delete_selected(entry_widget), _after_action()))
     menu.add_separator()
-    menu.add_command(label="全选", command=lambda: entry_widget.select_range(0, tk.END))
+    index['select_all'] = menu.add_command(label="全选", command=_select_all)
 
     def _show_menu(event):
-        if str(entry_widget['state']) == 'disabled':
+        try:
+            if str(entry_widget['state']) == 'disabled':
+                return
+        except tk.TclError:
             return
         if entry_widget.focus_get() != entry_widget:
             entry_widget.focus_set()
-            entry_widget.select_range(0, tk.END)
+            _select_all()
+
         has_selection = False
         saved_selection = None
-        try:
-            has_selection = entry_widget.selection_present()
-            if has_selection:
-                saved_selection = entry_widget.selection_get()
-        except tk.TclError:
-            pass
+        if can_selection:
+            try:
+                has_selection = bool(entry_widget.selection_present())
+                if has_selection:
+                    saved_selection = entry_widget.selection_get()
+            except tk.TclError:
+                has_selection = False
+
         state = tk.NORMAL if has_selection else tk.DISABLED
-        menu.entryconfig(0, state=state)
-        menu.entryconfig(1, state=state, command=lambda: _copy_to_clipboard(saved_selection))
-        menu.entryconfig(4, state=state)
+        menu.entryconfig(index['cut'], state=state)
+        menu.entryconfig(index['copy'], state=state,
+                         command=lambda: _copy_to_clipboard(saved_selection))
+        menu.entryconfig(index['delete'], state=state)
 
         paste_state = tk.DISABLED
         try:
             if entry_widget.clipboard_get():
                 paste_state = tk.NORMAL
-        except (tk.TclError, Exception):
-            pass
-        menu.entryconfig(2, state=paste_state)
+        except Exception:
+            paste_state = tk.DISABLED
+        menu.entryconfig(index['paste'], state=paste_state)
 
-        select_all_state = tk.NORMAL if entry_widget.get() else tk.DISABLED
-        menu.entryconfig(6, state=select_all_state)
+        try:
+            has_text = bool(entry_widget.get())
+        except (tk.TclError, AttributeError):
+            has_text = False
+        menu.entryconfig(index['select_all'],
+                         state=tk.NORMAL if (has_text and can_select_range) else tk.DISABLED)
 
         menu.tk_popup(event.x_root, event.y_root)
 
@@ -805,7 +1130,6 @@ def setup_context_menu(entry_widget, on_change=None):
 
 
 class Throttle:
-
     __slots__ = ('_interval', '_last')
 
     def __init__(self, interval=0.15):
@@ -821,20 +1145,22 @@ class Throttle:
 
 
 class UiDispatcher:
-
-    def __init__(self, widget, interval=40):
+    def __init__(self, widget, interval=None, idle_interval=None):
         self._widget = widget
-        self._interval = max(10, int(interval))
+        self._interval = max(10, int(config.UI_PUMP_INTERVAL if interval is None else interval))
+        self._idle_interval = max(
+            self._interval, int(config.UI_IDLE_PUMP_INTERVAL if idle_interval is None else idle_interval))
         self._queue = queue.Queue()
         self._latest = {}
         self._lock = threading.Lock()
         self._after_id = None
         self._stopped = False
-        self._schedule()
+        self._schedule(idle=True)
 
-    def _schedule(self):
+    def _schedule(self, idle=True):
+        delay = self._idle_interval if idle else self._interval
         try:
-            self._after_id = self._widget.after(self._interval, self._pump)
+            self._after_id = self._widget.after(delay, self._pump)
         except (tk.TclError, RuntimeError):
             self._stopped = True
 
@@ -845,6 +1171,7 @@ class UiDispatcher:
         with self._lock:
             latest = self._latest
             self._latest = {}
+        busy = bool(latest)
         for item in latest.values():
             self._invoke(item)
         while True:
@@ -852,9 +1179,10 @@ class UiDispatcher:
                 item = self._queue.get_nowait()
             except queue.Empty:
                 break
+            busy = True
             self._invoke(item)
         if not self._stopped:
-            self._schedule()
+            self._schedule(idle=not busy)
 
     @staticmethod
     def _invoke(item):
@@ -864,7 +1192,8 @@ class UiDispatcher:
         except (tk.TclError, RuntimeError):
             pass
         except Exception:
-            pass
+            if sys.stderr is not None:
+                traceback.print_exc()
 
     def call(self, func, *args, **kwargs):
         if self._stopped:
@@ -907,35 +1236,182 @@ def scaled_geometry(window, width, height):
     return width, height
 
 
+def open_external_url(url):
+    if not url:
+        return False
+    try:
+        if webbrowser.open(url, new=2):
+            return True
+    except Exception:
+        pass
+    if sys.platform == 'win32':
+        try:
+            os.startfile(url)
+            return True
+        except Exception:
+            pass
+    return False
+
+
+def _dialog_font(size=None, bold=False, underline=False):
+    try:
+        font = tkfont.nametofont("TkDefaultFont").copy()
+    except Exception:
+        return (config.FONT_FAMILY, size or config.FONT_SIZE)
+    if size:
+        font.configure(size=size)
+    if bold:
+        font.configure(weight="bold")
+    if underline:
+        font.configure(underline=True)
+    return font
+
+
+def center_dialog(dialog, master, min_width=0):
+    dialog.update_idletasks()
+    try:
+        width = max(dialog.winfo_width(), int(min_width))
+        height = dialog.winfo_height()
+        parent_x = master.winfo_rootx()
+        parent_y = master.winfo_rooty()
+        parent_w = master.winfo_width()
+        parent_h = master.winfo_height()
+    except tk.TclError:
+        return
+    x = parent_x + max(0, (parent_w - width) // 2)
+    y = parent_y + max(0, (parent_h - height) // 3)
+    dialog.geometry(f"{width}x{height}+{x}+{y}")
+
+
+class AboutDialog(tk.Toplevel):
+
+    def __init__(self, master, title=None):
+        super().__init__(master)
+        self.title(f"关于 {title or config.APP_NAME}")
+        self.resizable(False, False)
+        self.transient(master)
+
+        self._link_fonts = []
+        self._build_widgets(title or config.APP_NAME)
+        self._center_on(master)
+
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.bind("<Escape>", lambda event: self.destroy())
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+
+    def _build_widgets(self, title):
+        outer = ttk.Frame(self, padding="18")
+        outer.pack(fill=tk.BOTH, expand=True)
+
+        header = ttk.Frame(outer)
+        header.pack(fill=tk.X)
+        tk.Label(header, text=title, font=_dialog_font(size=15, bold=True),
+                 foreground=config.TEXT_PRIMARY).pack(anchor=tk.W)
+        tk.Label(header, text=f"版本 {config.APP_VERSION}",
+                 foreground=config.TEXT_SECONDARY).pack(anchor=tk.W, pady=(4, 0))
+
+        info = ttk.LabelFrame(outer, text="应用信息", padding="12")
+        info.pack(fill=tk.X, pady=(14, 0))
+        info.columnconfigure(1, minsize=90)
+        for row, (label, value) in enumerate((
+                ("用途", "大文件分片传输工具"),
+                ("许可证", config.APP_LICENSE),
+        )):
+            ttk.Label(info, text=f"{label}:").grid(
+                row=row, column=0, sticky=tk.E, pady=4)
+            ttk.Label(info, text=value).grid(
+                row=row, column=1, sticky=tk.W, padx=(10, 0), pady=4)
+
+        links = ttk.LabelFrame(outer, text="相关链接", padding="12")
+        links.pack(fill=tk.X, pady=(12, 0))
+        links.columnconfigure(1, minsize=90)
+        link_specs = (
+            ("官网", config.APP_HOMEPAGE, config.APP_HOMEPAGE),
+            ("GitHub", config.APP_REPO_URL, config.APP_REPO_URL),
+        )
+        for row, (label, text, url) in enumerate(link_specs):
+            ttk.Label(links, text=f"{label}:").grid(
+                row=row, column=0, sticky=tk.E, pady=4)
+            self._add_link(links, text, url).grid(
+                row=row, column=1, sticky=tk.W, padx=(10, 0), pady=4)
+
+        ttk.Label(outer, text="点击链接可在浏览器中打开。",
+                  foreground=config.TEXT_SECONDARY).pack(anchor=tk.W, pady=(12, 0))
+
+        buttons = ttk.Frame(outer)
+        buttons.pack(fill=tk.X, pady=(14, 0))
+        ttk.Button(buttons, text="关闭", command=self.destroy,
+                   width=10).pack(side=tk.RIGHT)
+
+    def _add_link(self, parent, text, url):
+        font = _dialog_font(underline=True)
+        self._link_fonts.append(font)
+        label = tk.Label(parent, text=text, font=font,
+                         foreground=config.NAV_ACCENT, cursor="hand2")
+        label.bind("<Button-1>", lambda event: open_external_url(url))
+        label.bind("<Enter>", lambda event: label.configure(foreground=config.TEXT_PRIMARY))
+        label.bind("<Leave>", lambda event: label.configure(foreground=config.NAV_ACCENT))
+        return label
+
+    def _center_on(self, master):
+        center_dialog(self, master, min_width=420)
+
+
 def show_about(window, title=None):
     title = title or config.APP_NAME
-    messagebox.showinfo(
-        f"关于 {title}",
-        f"{title}\n版本 {config.APP_VERSION}\n\n"
-        f"大文件分片传输工具\n"
-        f"许可证: {config.APP_LICENSE}\n"
-        f"{config.APP_HOMEPAGE}",
-        parent=window,
-    )
+    existing = getattr(window, '_about_dialog', None)
+    if existing is not None:
+        try:
+            if existing.winfo_exists():
+                existing.lift()
+                existing.focus_set()
+                return existing
+        except tk.TclError:
+            pass
+    dialog = AboutDialog(window, title)
+    try:
+        window._about_dialog = dialog
+    except tk.TclError:
+        pass
+    return dialog
 
 
-def install_about_menu(window, title=None):
+def install_about_menu(window, title=None, show_network=True):
     if not isinstance(window, (tk.Tk, tk.Toplevel)):
         return None
     if getattr(window, '_about_menu_installed', False):
         return None
-    menubar = tk.Menu(window)
+    menubar = tk.Menu(window, tearoff=0)
+    menubar.add_command(
+        label="设置",
+        command=lambda: open_settings_dialog(window, show_network=show_network))
     menubar.add_command(label="关于", command=lambda: show_about(window, title))
     window.config(menu=menubar)
     window._about_menu_installed = True
     return menubar
 
 
-def run_gui_app(app_factory):
+def run_gui_app(app_factory, app_id=None):
+    if app_id:
+        set_app_user_model_id(app_id)
     setup_dpi_awareness()
 
     root = tk.Tk()
+    apply_default_font()
 
+    app = app_factory(root)
+    closer = getattr(app, 'on_close', None)
+    if callable(closer):
+        root.protocol("WM_DELETE_WINDOW", closer)
+
+    root.mainloop()
+    return app
+
+
+def apply_default_font():
     try:
         from tkinter import font
         default_font = font.nametofont("TkDefaultFont")
@@ -943,6 +1419,696 @@ def run_gui_app(app_factory):
     except Exception:
         pass
 
-    app_factory(root)
 
-    root.mainloop()
+def nearest_existing_dir(path):
+    current = os.path.abspath(path or '.')
+    while True:
+        if os.path.isdir(current):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        current = parent
+
+
+def app_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    script = sys.argv[0] if sys.argv else ''
+    if script:
+        candidate = os.path.abspath(script)
+        if os.path.isfile(candidate):
+            return os.path.dirname(candidate)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def check_free_space(directory, required_bytes, margin=None):
+    if required_bytes <= 0:
+        return True
+    base = nearest_existing_dir(directory)
+    if not base:
+        return True
+    try:
+        usage = shutil.disk_usage(base)
+    except OSError:
+        return True
+    margin = config.DISK_SPACE_MARGIN if margin is None else margin
+    needed = int(required_bytes) + margin
+    if usage.free >= needed:
+        return True
+    raise OSError(
+        f"磁盘空间不足：需要 {format_size(needed)}，可用 {format_size(usage.free)}")
+
+
+def open_folder(path):
+    if not path:
+        return False
+    target = os.path.normpath(path)
+    is_file = os.path.isfile(target)
+    folder = os.path.dirname(target) if is_file else target
+    if not folder or not os.path.isdir(folder):
+        return False
+    try:
+        if sys.platform == 'win32':
+            if is_file:
+                subprocess.Popen(['explorer', f'/select,{target}'])
+            else:
+                os.startfile(folder)
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', '-R', target] if is_file else ['open', folder])
+        else:
+            subprocess.Popen(['xdg-open', folder])
+        return True
+    except Exception:
+        return False
+
+
+def _hidden_process_kwargs():
+    if sys.platform == 'win32':
+        return {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
+    return {}
+
+
+def shutdown_system(delay=None, comment="下载任务已完成，系统即将关机"):
+    if delay is None:
+        delay = getattr(config, 'SHUTDOWN_DELAY_SECONDS', 60)
+    try:
+        delay = max(0, int(delay))
+    except (TypeError, ValueError):
+        delay = 60
+    try:
+        if sys.platform == 'win32':
+            command = ['shutdown', '/s', '/t', str(delay)]
+            if comment:
+                command.extend(['/c', comment])
+            result = subprocess.run(command, timeout=10, **_hidden_process_kwargs())
+        elif sys.platform == 'darwin':
+            minutes = max(1, (delay + 59) // 60)
+            result = subprocess.run(['shutdown', '-h', f'+{minutes}'], timeout=10)
+        else:
+            minutes = max(1, (delay + 59) // 60)
+            result = subprocess.run(['shutdown', '-h', f'+{minutes}'], timeout=10)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def cancel_shutdown():
+    try:
+        if sys.platform == 'win32':
+            result = subprocess.run(['shutdown', '/a'], timeout=10, **_hidden_process_kwargs())
+        else:
+            result = subprocess.run(['shutdown', '-c'], timeout=10)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def center_over(window, owner):
+    try:
+        window.update_idletasks()
+        top = owner.winfo_toplevel()
+        x = top.winfo_rootx() + max(0, (top.winfo_width() - window.winfo_width()) // 2)
+        y = top.winfo_rooty() + max(0, (top.winfo_height() - window.winfo_height()) // 3)
+        window.geometry(f"+{x}+{y}")
+    except tk.TclError:
+        pass
+
+
+class ShutdownCountdown:
+    def __init__(self, owner, delay=None, message="文件已处理完成，系统将在 {left} 秒后关机。",
+                 on_status=None):
+        self.owner = owner
+        default_delay = getattr(config, 'SHUTDOWN_DELAY_SECONDS', 60)
+        self.delay = max(0, int(default_delay if delay is None else delay))
+        self.message = message
+        self.on_status = on_status
+        self.window = None
+        self._text = None
+        self._button = None
+        self._after_id = None
+
+    @property
+    def active(self):
+        return self.window is not None
+
+    def start(self):
+        if self.window is not None:
+            return True
+        if not shutdown_system(self.delay):
+            return False
+        self._build()
+        return True
+
+    def _build(self):
+        from tkinter import ttk
+
+        window = tk.Toplevel(self.owner)
+        self.window = window
+        window.title("自动关机")
+        window.resizable(False, False)
+
+        body = ttk.Frame(window, padding="20")
+        body.pack(fill=tk.BOTH, expand=True)
+
+        self._text = tk.StringVar(master=window, value="")
+        ttk.Label(body, textvariable=self._text, font=(config.FONT_FAMILY, 11),
+                  foreground=config.TEXT_NORMAL).pack(anchor=tk.W)
+        ttk.Label(body, text="关闭本窗口或点击「取消关机」可继续使用计算机。",
+                  foreground=config.TEXT_SECONDARY).pack(anchor=tk.W, pady=(6, 14))
+
+        self._button = ttk.Button(body, text="取消关机", command=self.cancel)
+        self._button.pack(anchor=tk.E)
+
+        window.protocol("WM_DELETE_WINDOW", self.cancel)
+        center_over(window, self.owner)
+        self._tick(self.delay)
+
+    def _tick(self, left):
+        window = self.window
+        if window is None:
+            return
+        if left <= 0:
+            self._text.set("系统正在关机...")
+            self._button.config(state=tk.DISABLED)
+            return
+        self._text.set(self.message.format(left=left))
+        try:
+            self._after_id = window.after(1000, lambda: self._tick(left - 1))
+        except tk.TclError:
+            pass
+
+    def _teardown(self):
+        window = self.window
+        self.window = None
+        if window is None:
+            return
+        if self._after_id is not None:
+            try:
+                window.after_cancel(self._after_id)
+            except tk.TclError:
+                pass
+            self._after_id = None
+        try:
+            window.destroy()
+        except tk.TclError:
+            pass
+
+    def cancel(self):
+        if self.window is None:
+            return
+        cancel_shutdown()
+        if self.on_status:
+            self.on_status("状态: 已取消自动关机")
+        self._teardown()
+
+    def dispose(self):
+        if self.window is None:
+            return
+        cancel_shutdown()
+        self._teardown()
+
+
+def config_dir():
+    override = os.environ.get('FKXZ_CONFIG_DIR')
+    if override:
+        return os.path.abspath(override)
+    if sys.platform == 'win32':
+        base = os.environ.get('APPDATA') or os.path.expanduser('~')
+    elif sys.platform == 'darwin':
+        base = os.path.expanduser('~/Library/Application Support')
+    else:
+        base = os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config')
+    return os.path.join(base, config.CONFIG_DIR_NAME)
+
+
+LEGACY_OUTPUT_DIR_KEY = 'output_dir'
+OUTPUT_DIR_KEYS = ('split_output_dir', 'download_output_dir')
+
+_SETTINGS_CACHE = {}
+_SETTINGS_LOCK = threading.Lock()
+
+
+class Settings:
+
+    def __new__(cls, path=None):
+        resolved = os.path.abspath(
+            path or os.path.join(config_dir(), 'settings.json'))
+        with _SETTINGS_LOCK:
+            instance = _SETTINGS_CACHE.get(resolved)
+            if instance is None:
+                instance = super().__new__(cls)
+                instance._path = resolved
+                instance._lock = threading.RLock()
+                instance._data = instance._load()
+                _SETTINGS_CACHE[resolved] = instance
+            return instance
+
+    def __init__(self, path=None):
+        pass
+
+    def _load(self):
+        try:
+            with open(self._path, 'r', encoding='utf-8') as handle:
+                data = json.load(handle)
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def get(self, key, default=None):
+        with self._lock:
+            value = self._data.get(key, default)
+        return default if value is None else value
+
+    def set(self, key, value):
+        with self._lock:
+            if self._data.get(key) == value:
+                return
+            self._data[key] = value
+            self._save()
+
+    def discard(self, key):
+        with self._lock:
+            if key not in self._data:
+                return
+            del self._data[key]
+            self._save()
+
+    def _save(self):
+        try:
+            os.makedirs(os.path.dirname(self._path), exist_ok=True)
+            text = json.dumps(self._data, ensure_ascii=False, indent=2)
+        except (OSError, TypeError, ValueError):
+            return
+        core.write_text_atomic(self._path, f"{text}\n")
+
+
+def migrate_legacy_settings(settings):
+    legacy = settings.get(LEGACY_OUTPUT_DIR_KEY, '')
+    if legacy:
+        for key in OUTPUT_DIR_KEYS:
+            if not settings.get(key, ''):
+                settings.set(key, legacy)
+    settings.discard(LEGACY_OUTPUT_DIR_KEY)
+
+
+def output_dir_setting(settings, key):
+    saved = settings.get(key, '')
+    if not saved:
+        legacy = settings.get(LEGACY_OUTPUT_DIR_KEY, '')
+        if legacy:
+            settings.set(key, legacy)
+            settings.discard(LEGACY_OUTPUT_DIR_KEY)
+            saved = legacy
+    return saved
+
+
+def apply_network_settings(settings):
+    for spec in config.NETWORK_SETTING_SPECS:
+        try:
+            value = int(settings.get(spec.key))
+        except (TypeError, ValueError):
+            continue
+        setattr(config, spec.const, max(spec.low, min(spec.high, value)))
+
+
+def available_themes(root=None):
+    try:
+        return list(ttk.Style(master=root).theme_names())
+    except tk.TclError:
+        return []
+
+
+def apply_theme(root, name=None):
+    try:
+        style = ttk.Style(master=root)
+    except tk.TclError:
+        return ''
+    names = list(style.theme_names())
+    if name and name != config.THEME_AUTO and name in names:
+        style.theme_use(name)
+        return name
+    for candidate in config.THEME_PREFERENCE:
+        if candidate in names:
+            style.theme_use(candidate)
+            return candidate
+    return style.theme_use()
+
+
+_GEOMETRY_RE = re.compile(r'^(\d+)x(\d+)([+-]\d+)?([+-]\d+)?$')
+
+
+def parse_geometry(text):
+    match = _GEOMETRY_RE.match((text or '').strip())
+    if not match:
+        return None
+    width = int(match.group(1))
+    height = int(match.group(2))
+    x = int(match.group(3)) if match.group(3) else None
+    y = int(match.group(4)) if match.group(4) else None
+    return width, height, x, y
+
+
+def save_geometry(window, settings, key):
+    try:
+        geometry = window.winfo_geometry()
+    except tk.TclError:
+        return
+    if geometry:
+        settings.set(key, geometry)
+
+
+def restore_geometry(window, settings, key, fallback_size):
+    default_w, default_h = scaled_geometry(window, *fallback_size)
+    saved = parse_geometry(settings.get(key, ''))
+    if saved is None:
+        return False
+
+    width, height, x, y = saved
+    screen_w = window.winfo_screenwidth()
+    screen_h = window.winfo_screenheight()
+    width = max(default_w, min(width, screen_w))
+    height = max(default_h, min(height, screen_h))
+
+    if x is None or y is None:
+        window.geometry(f"{width}x{height}")
+        return True
+    if (x > screen_w - 120 or y > screen_h - 80
+            or x + width < 120 or y + height < 80):
+        window.geometry(f"{width}x{height}")
+        return True
+    window.geometry(f"{width}x{height}{x:+d}{y:+d}")
+    return True
+
+
+class SettingsDialog(tk.Toplevel):
+
+    def __init__(self, master, settings=None, show_network=True):
+        super().__init__(master)
+        self.title("设置")
+        self.resizable(False, False)
+        self.transient(master)
+        self.settings = settings if settings is not None else Settings()
+        self.show_network = show_network
+
+        self._vars = {}
+        self._theme_choices = []
+        self._theme_var = tk.StringVar()
+
+        self._build_widgets()
+        self._load_values()
+        self._center_on(master)
+
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.bind("<Escape>", lambda event: self.destroy())
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+
+    def _build_network_frame(self, outer):
+        net_frame = ttk.LabelFrame(outer, text="网络与重试", padding="12")
+        net_frame.pack(fill=tk.X)
+        net_frame.columnconfigure(1, minsize=90)
+
+        for row, spec in enumerate(config.NETWORK_SETTING_SPECS):
+            ttk.Label(net_frame, text=f"{spec.label}:").grid(
+                row=row, column=0, sticky=tk.E, pady=4)
+            var = tk.StringVar()
+            self._vars[spec.key] = var
+            spin = ttk.Spinbox(net_frame, from_=spec.low, to=spec.high,
+                               textvariable=var, width=8)
+            spin.grid(row=row, column=1, sticky=tk.W, padx=(10, 10), pady=4)
+            setup_context_menu(spin)
+            ttk.Label(net_frame,
+                      text=f"{spec.hint}（{spec.low}-{spec.high}）",
+                      foreground=config.TEXT_SECONDARY).grid(
+                row=row, column=2, sticky=tk.W, pady=4)
+
+    def _build_widgets(self):
+        outer = ttk.Frame(self, padding="16")
+        outer.pack(fill=tk.BOTH, expand=True)
+
+        if self.show_network:
+            self._build_network_frame(outer)
+
+        ui_frame = ttk.LabelFrame(outer, text="界面", padding="12")
+        ui_frame.pack(fill=tk.X, pady=(12, 0) if self.show_network else 0)
+        ui_frame.columnconfigure(1, minsize=90)
+
+        ttk.Label(ui_frame, text="界面主题:").grid(row=0, column=0, sticky=tk.E, pady=4)
+        self._theme_choices = [config.THEME_AUTO]
+        self._theme_choices.extend(available_themes(self))
+        self.theme_combo = ttk.Combobox(
+            ui_frame, state="readonly", width=14,
+            values=self._theme_choices,
+            textvariable=self._theme_var)
+        self.theme_combo.grid(row=0, column=1, sticky=tk.W, padx=(10, 10), pady=4)
+        ttk.Label(ui_frame, text="保存后立即生效",
+                  foreground=config.TEXT_SECONDARY).grid(
+            row=0, column=2, sticky=tk.W, pady=4)
+
+        if self.show_network:
+            ttk.Label(outer, text="网络参数在每次新建任务时生效，不影响正在进行的任务。",
+                      foreground=config.TEXT_SECONDARY).pack(anchor=tk.W, pady=(12, 0))
+
+        buttons = ttk.Frame(outer)
+        buttons.pack(fill=tk.X, pady=(14, 0))
+        ttk.Button(buttons, text="恢复默认", command=self._restore_defaults,
+                   width=10).pack(side=tk.LEFT)
+        ttk.Button(buttons, text="保存", command=self._save,
+                   width=10).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="取消", command=self.destroy,
+                   width=10).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def _load_values(self):
+        if self.show_network:
+            for spec in config.NETWORK_SETTING_SPECS:
+                try:
+                    value = int(self.settings.get(spec.key))
+                except (TypeError, ValueError):
+                    value = spec.default
+                value = max(spec.low, min(spec.high, value))
+                self._vars[spec.key].set(str(value))
+
+        saved_theme = self.settings.get('ttk_theme', config.THEME_AUTO)
+        self._theme_var.set(self._theme_value(saved_theme))
+
+    def _theme_value(self, value):
+        return value if value in self._theme_choices else config.THEME_AUTO
+
+    def _selected_theme(self):
+        value = self._theme_var.get()
+        return value if value in self._theme_choices else config.THEME_AUTO
+
+    def _restore_defaults(self):
+        if self.show_network:
+            for spec in config.NETWORK_SETTING_SPECS:
+                self._vars[spec.key].set(str(spec.default))
+        self._theme_var.set(config.THEME_AUTO)
+
+    def _collect_values(self):
+        values = {}
+        if not self.show_network:
+            return values
+        for spec in config.NETWORK_SETTING_SPECS:
+            raw = (self._vars[spec.key].get() or "").strip()
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                self._warn(f"「{spec.label}」必须是整数。")
+                return None
+            if not spec.low <= value <= spec.high:
+                self._warn(f"「{spec.label}」应在 {spec.low}-{spec.high} 之间。")
+                return None
+            values[spec.key] = value
+        return values
+
+    def _warn(self, message):
+        messagebox.showerror("设置无效", message, parent=self)
+
+    def _save(self):
+        values = self._collect_values()
+        if values is None:
+            return
+
+        for key, value in values.items():
+            self.settings.set(key, value)
+        theme = self._selected_theme()
+        self.settings.set('ttk_theme', theme)
+
+        if self.show_network:
+            apply_network_settings(self.settings)
+        apply_theme(self.master, theme)
+        self.destroy()
+
+    def _center_on(self, master):
+        center_dialog(self, master)
+
+
+def open_settings_dialog(window, settings=None, show_network=True):
+    existing = getattr(window, '_settings_dialog', None)
+    if existing is not None:
+        try:
+            if existing.winfo_exists():
+                existing.lift()
+                existing.focus_set()
+                return existing
+        except tk.TclError:
+            pass
+    dialog = SettingsDialog(window, settings, show_network=show_network)
+    try:
+        window._settings_dialog = dialog
+    except tk.TclError:
+        pass
+    return dialog
+
+
+WM_DROPFILES = 0x0233
+_GWLP_WNDPROC = -4
+_DROP_POLL_MS = 100
+_drop_targets = {}
+_drop_keepalive = []
+_drop_pending = {}
+
+
+def _wndproc_pointers(user32):
+    get_ptr = getattr(user32, 'GetWindowLongPtrW', None) or user32.GetWindowLongW
+    set_ptr = getattr(user32, 'SetWindowLongPtrW', None) or user32.SetWindowLongW
+    get_ptr.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    get_ptr.restype = ctypes.c_void_p
+    set_ptr.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    set_ptr.restype = ctypes.c_void_p
+    return get_ptr, set_ptr
+
+
+def _dropped_paths(hdrop):
+    shell32 = ctypes.windll.shell32
+    shell32.DragQueryFileW.argtypes = [ctypes.c_void_p, ctypes.c_uint,
+                                       ctypes.c_wchar_p, ctypes.c_uint]
+    shell32.DragQueryFileW.restype = ctypes.c_uint
+    total = int(shell32.DragQueryFileW(hdrop, 0xFFFFFFFF, None, 0))
+    paths = []
+    for index in range(max(0, total)):
+        length = int(shell32.DragQueryFileW(hdrop, index, None, 0))
+        if length <= 0:
+            continue
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        shell32.DragQueryFileW(hdrop, index, buffer, length + 1)
+        if buffer.value:
+            paths.append(buffer.value)
+    return paths
+
+
+def _print_exc_safe():
+    try:
+        traceback.print_exc()
+    except Exception:
+        pass
+
+
+def enable_file_drop(window, on_drop):
+    if sys.platform != 'win32' or window is None:
+        return False
+    if getattr(window, '_drop_callback', None) is not None:
+        return False
+    user32 = _user32()
+    if user32 is None:
+        return False
+    try:
+        shell32 = ctypes.windll.shell32
+        shell32.DragAcceptFiles.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+        shell32.DragAcceptFiles.restype = None
+        shell32.DragFinish.argtypes = [ctypes.c_void_p]
+        shell32.DragFinish.restype = None
+
+        get_ptr, set_ptr = _wndproc_pointers(user32)
+        user32.CallWindowProcW.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
+                                           ctypes.c_uint, ctypes.c_void_p,
+                                           ctypes.c_void_p]
+        user32.CallWindowProcW.restype = ctypes.c_void_p
+        proc_type = ctypes.WINFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint,
+                                       ctypes.c_void_p, ctypes.c_void_p)
+
+        pending = deque()
+        ctx = {'hwnd': 0, 'old_proc': 0}
+
+        def handler(hwnd_, msg, wparam, lparam):
+            if msg == WM_DROPFILES:
+                try:
+                    paths = _dropped_paths(wparam)
+                except Exception:
+                    paths = []
+                try:
+                    shell32.DragFinish(wparam)
+                except Exception:
+                    pass
+                if paths:
+                    pending.append(paths)
+                return 0
+            return user32.CallWindowProcW(ctypes.c_void_p(ctx['old_proc']),
+                                          ctypes.c_void_p(hwnd_), msg, wparam, lparam)
+
+        callback = proc_type(handler)
+        callback_ptr = ctypes.cast(callback, ctypes.c_void_p)
+        _drop_keepalive.append(callback)
+        window._drop_callback = callback
+        window._drop_pending = pending
+
+        def install():
+            hwnd = toplevel_hwnd(window)
+            if not hwnd:
+                return False
+            if ctx['hwnd'] != hwnd:
+                old_proc = get_ptr(hwnd, _GWLP_WNDPROC)
+                if not old_proc:
+                    return False
+                if old_proc == callback_ptr.value:
+                    ctx['hwnd'] = hwnd
+                    return True
+                if ctx['hwnd']:
+                    _drop_targets.pop(ctx['hwnd'], None)
+                    _drop_pending.pop(ctx['hwnd'], None)
+                ctx['hwnd'] = hwnd
+                ctx['old_proc'] = old_proc
+                _drop_targets[hwnd] = (callback, old_proc)
+                _drop_pending[hwnd] = pending
+                shell32.DragAcceptFiles(hwnd, True)
+            if get_ptr(hwnd, _GWLP_WNDPROC) == callback_ptr.value:
+                return True
+            set_ptr(hwnd, _GWLP_WNDPROC, callback_ptr)
+            return bool(get_ptr(hwnd, _GWLP_WNDPROC) == callback_ptr.value)
+
+        def pump():
+            alive = True
+            try:
+                if window.winfo_exists() and window.winfo_viewable():
+                    install()
+                while pending:
+                    batch = pending.popleft()
+                    try:
+                        on_drop(batch)
+                    except Exception:
+                        _print_exc_safe()
+            except tk.TclError:
+                alive = False
+            finally:
+                if alive:
+                    try:
+                        window.after(_DROP_POLL_MS, pump)
+                    except tk.TclError:
+                        pass
+
+        def _on_destroy(event):
+            if event.widget is window:
+                _drop_targets.pop(ctx['hwnd'], None)
+                _drop_pending.pop(ctx['hwnd'], None)
+
+        try:
+            window.bind('<Destroy>', _on_destroy, add='+')
+            window.after(_DROP_POLL_MS, pump)
+        except tk.TclError:
+            return False
+        return True
+    except Exception:
+        return False

@@ -1,26 +1,18 @@
 import tkinter as tk
 
 import config
+import core
 import utils
 import wjfk
 import wjxz
 
 
-def _make_window_noop(name):
-
-    def _noop(self, *args, **kwargs):
-        self.swallowed_calls.append(name)
-        return None
-
-    _noop.__name__ = name
-    return _noop
-
-
 class ModuleHost(tk.Frame):
-
     _WINDOW_METHODS = (
         'title', 'geometry', 'minsize', 'maxsize', 'resizable',
         'iconphoto', 'iconbitmap', 'protocol', 'mainloop', 'quit',
+        'wm_title', 'wm_geometry', 'wm_minsize', 'wm_maxsize',
+        'wm_resizable', 'wm_iconbitmap', 'wm_protocol',
     )
 
     def __init__(self, master, **kwargs):
@@ -28,8 +20,9 @@ class ModuleHost(tk.Frame):
         self.swallowed_calls = []
 
     def __getattr__(self, name):
-        if name.startswith('_'):
-            raise AttributeError(name)
+        if name.startswith('_') or name not in self._WINDOW_METHODS:
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {name!r}")
 
         def _noop(*args, **kwargs):
             self.swallowed_calls.append(name)
@@ -38,15 +31,18 @@ class ModuleHost(tk.Frame):
         return _noop
 
 
-for _method_name in ModuleHost._WINDOW_METHODS:
-    setattr(ModuleHost, _method_name, _make_window_noop(_method_name))
-
-
 class MainApp:
     def __init__(self, root):
         self.root = root
         self.root.title(config.APP_NAME)
-        utils.scaled_geometry(self.root, *config.MAIN_WINDOW_SIZE)
+
+        self.settings = utils.Settings()
+        utils.migrate_legacy_settings(self.settings)
+        utils.apply_network_settings(self.settings)
+        utils.apply_theme(self.root, self.settings.get('ttk_theme', config.THEME_AUTO))
+
+        utils.restore_geometry(self.root, self.settings, 'main_geometry',
+                               config.MAIN_WINDOW_SIZE)
 
         self._set_icon()
         utils.install_about_menu(self.root, config.APP_NAME)
@@ -57,8 +53,12 @@ class MainApp:
 
         self._create_sidebar()
         self._create_content()
+        utils.enable_file_drop(self.root, self.handle_drop)
 
-        self.show_splitter()
+        if self.settings.get('last_module', 'split') == 'download':
+            self.show_downloader()
+        else:
+            self.show_splitter()
 
     def _set_icon(self):
         self._icon = utils.apply_window_icon(self.root, 'wjfkxz.png')
@@ -165,10 +165,23 @@ class MainApp:
         self.content_frame = tk.Frame(self.root, bg=config.CONTENT_BG)
         self.content_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
+    def handle_drop(self, paths):
+        fkx_paths = [p for p in paths if p.lower().endswith(core.MANIFEST_SUFFIX)]
+        if fkx_paths:
+            self.show_downloader()
+            target, payload = self.current_app, fkx_paths
+        else:
+            self.show_splitter()
+            target, payload = self.current_app, paths
+        handler = getattr(target, 'handle_drop', None)
+        if callable(handler):
+            handler(payload)
+
     def on_close(self):
         if getattr(self, "_closing", False):
             return
         self._closing = True
+        utils.save_geometry(self.root, self.settings, 'main_geometry')
         for _host, app in self.module_cache.values():
             closer = getattr(app, "close", None)
             if callable(closer):
@@ -207,6 +220,7 @@ class MainApp:
         self.current_host = host
         self.current_app = app
         self._set_active_nav(key)
+        self.settings.set('last_module', key)
 
     def show_splitter(self):
         self._switch_to("split")
@@ -216,17 +230,4 @@ class MainApp:
 
 
 if __name__ == "__main__":
-    utils.setup_dpi_awareness()
-    utils.set_app_user_model_id(config.APP_ID_MAIN)
-
-    root = tk.Tk()
-
-    try:
-        from tkinter import font
-        font.nametofont("TkDefaultFont").configure(size=config.FONT_SIZE)
-    except Exception:
-        pass
-
-    app = MainApp(root)
-    root.protocol("WM_DELETE_WINDOW", app.on_close)
-    root.mainloop()
+    utils.run_gui_app(MainApp, config.APP_ID_MAIN)
