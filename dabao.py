@@ -30,7 +30,7 @@ else:
 def build_wjfk():
     return [
         PYTHON_EXE, "-m", "PyInstaller",
-        "--onefile",
+        "--onedir",
         "--windowed",
         "--clean",
         "--noconfirm",
@@ -45,7 +45,7 @@ def build_wjfk():
 def build_wjxz():
     return [
         PYTHON_EXE, "-m", "PyInstaller",
-        "--onefile",
+        "--onedir",
         "--windowed",
         "--clean",
         "--noconfirm",
@@ -61,7 +61,7 @@ def build_wjxz():
 def build_wjfkxz():
     return [
         PYTHON_EXE, "-m", "PyInstaller",
-        "--onefile",
+        "--onedir",
         "--windowed",
         "--clean",
         "--noconfirm",
@@ -78,6 +78,8 @@ BUILD_TASKS = [
     ("wjxz.exe", build_wjxz),
     ("wjfkxz.exe", build_wjfkxz),
 ]
+
+APP_NAMES = tuple(name.replace(".exe", "") for name, _ in BUILD_TASKS)
 
 
 def run_build(name, cmd_func):
@@ -144,24 +146,46 @@ SOURCE_FILES = [
     "web/sw.js",
 ]
 
-def create_exe_zips():
+def _zip_directory(src_dir, zip_path, arc_root):
+    """把整个目录压缩到 zip 中，zip 内以 arc_root 作为顶层目录。"""
+    total = 0
+    file_count = 0
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for root, dirs, files in os.walk(src_dir):
+            dirs.sort()
+            for fname in sorted(files):
+                full = os.path.join(root, fname)
+                rel = os.path.relpath(full, src_dir).replace(os.sep, "/")
+                zf.write(full, arcname=f"{arc_root}/{rel}")
+                total += os.path.getsize(full)
+                file_count += 1
+    return total, file_count
+
+
+def create_package_zips():
+    """把每个 onedir 产物目录压缩为 zip（解压后得到同名文件夹，双击其中 exe 即可运行）。"""
     if not os.path.isdir(DIST_DIR):
         print("dist 目录不存在，跳过压缩")
         return
 
-    for fname in os.listdir(DIST_DIR):
-        if not fname.lower().endswith(".exe"):
+    for fname in sorted(os.listdir(DIST_DIR)):
+        if fname not in APP_NAMES:
             continue
-        exe_path = os.path.join(DIST_DIR, fname)
-        base = os.path.splitext(fname)[0]
-        zip_path = os.path.join(DIST_DIR, f"{base}.zip")
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-            zf.write(exe_path, arcname=fname)
-        exe_size = os.path.getsize(exe_path)
+        src_dir = os.path.join(DIST_DIR, fname)
+        if not os.path.isdir(src_dir):
+            continue
+        exe_name = f"{fname}.exe"
+        if not os.path.isfile(os.path.join(src_dir, exe_name)):
+            print(f"[zip] 跳过 {fname}：目录内未找到 {exe_name}")
+            continue
+
+        zip_path = os.path.join(DIST_DIR, f"{fname}.zip")
+        total, file_count = _zip_directory(src_dir, zip_path, fname)
         zip_size = os.path.getsize(zip_path)
-        print(f"[zip] {fname} ({exe_size} bytes) -> {base}.zip ({zip_size} bytes), 压缩率 {zip_size / exe_size * 100:.1f}%")
-        os.remove(exe_path)
-        print(f"[zip] 已删除 {fname}")
+        ratio = zip_size / total * 100 if total else 0.0
+        print(f"[zip] {fname}/ ({file_count} 个文件, {total} bytes) -> {fname}.zip ({zip_size} bytes), 压缩率 {ratio:.1f}%")
+        shutil.rmtree(src_dir, ignore_errors=True)
+        print(f"[zip] 已删除 {fname}/ 目录")
 
 
 def clean_dist_artifacts():
@@ -170,10 +194,16 @@ def clean_dist_artifacts():
 
     removed = []
     for fname in os.listdir(DIST_DIR):
-        if not fname.lower().endswith((".zip", ".exe")):
-            continue
+        path = os.path.join(DIST_DIR, fname)
         try:
-            os.remove(os.path.join(DIST_DIR, fname))
+            if os.path.isdir(path):
+                if fname not in APP_NAMES:
+                    continue
+                shutil.rmtree(path)
+            elif fname.lower().endswith((".zip", ".exe")):
+                os.remove(path)
+            else:
+                continue
             removed.append(fname)
         except OSError as exc:
             print(f"[warn] 无法删除 {fname}: {exc}")
@@ -260,8 +290,8 @@ def main():
         print("全部打包成功!")
         print(f"已放置到: {DIST_DIR}")
         print("=" * 60)
-        print("压缩各 exe 为 zip...")
-        create_exe_zips()
+        print("压缩各程序目录为 zip...")
+        create_package_zips()
 
         print("=" * 60)
         cleanup()
