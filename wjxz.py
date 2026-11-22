@@ -308,6 +308,8 @@ class FileDownloaderApp:
         self.auto_shutdown = False
         self.auto_shutdown_var = tk.BooleanVar(value=self.auto_shutdown)
         self.open_folder_var = tk.BooleanVar(value=config.DEFAULT_OPEN_FOLDER)
+        self.auto_clean_chunks_var = tk.BooleanVar(value=config.DEFAULT_AUTO_CLEAN_CHUNKS)
+        self.auto_clean_chunks = config.DEFAULT_AUTO_CLEAN_CHUNKS
         self._shutdown = utils.ShutdownCountdown(
             self.root, message="文件已完成，系统将在 {left} 秒后关机。",
             on_status=self.update_status)
@@ -467,6 +469,11 @@ class FileDownloaderApp:
             variable=self.auto_shutdown_var,
             command=self._on_auto_shutdown_toggle)
         self.shutdown_checkbox.pack(side=tk.LEFT, padx=(16, 0))
+        self.clean_chunks_checkbox = ttk.Checkbutton(
+            option_frame, text="下载完成后自动删除分片",
+            variable=self.auto_clean_chunks_var,
+            command=self._on_auto_clean_toggle)
+        self.clean_chunks_checkbox.pack(side=tk.LEFT, padx=(16, 0))
 
     def _verify_index(self):
         mode = self.verify_mode_var.get()
@@ -548,6 +555,11 @@ class FileDownloaderApp:
         saved_open_folder = self.settings.get('download_open_folder')
         if isinstance(saved_open_folder, bool):
             self.open_folder_var.set(saved_open_folder)
+
+        saved_auto_clean = self.settings.get('download_auto_clean_chunks')
+        if isinstance(saved_auto_clean, bool):
+            self.auto_clean_chunks = saved_auto_clean
+            self.auto_clean_chunks_var.set(saved_auto_clean)
 
         self.workers_var.trace_add('write', self._on_workers_var_change)
         self.enhanced_mode.trace_add('write', self._on_enhanced_mode_change)
@@ -1749,10 +1761,15 @@ class FileDownloaderApp:
                     self._fail(f"{self._action_name()}失败", "SHA-256校验失败")
                     return
 
+            kept_chunk_dir = ""
             if not self.is_local:
-                self.cleanup_chunk_dir(self.output_dir)
+                if self.auto_clean_chunks:
+                    self.cleanup_chunk_dir(self.output_dir)
+                else:
+                    kept_chunk_dir = self.chunk_dir
 
-            self._run_on_ui(self._on_success, num_chunks, self._verified_label(), output_path)
+            self._run_on_ui(self._on_success, num_chunks, self._verified_label(),
+                            output_path, kept_chunk_dir)
         except Exception as exc:
             error_msg = str(exc) or exc.__class__.__name__
             self.show_error(f"{self._action_name()}失败 - {error_msg}")
@@ -1777,6 +1794,18 @@ class FileDownloaderApp:
     def _on_open_folder_toggle(self):
         self.settings.set('download_open_folder', bool(self.open_folder_var.get()))
 
+    def _on_auto_clean_toggle(self):
+        self.set_auto_clean_chunks(self.auto_clean_chunks_var.get())
+
+    def set_auto_clean_chunks(self, enabled):
+        self.auto_clean_chunks = bool(enabled)
+        try:
+            if self.auto_clean_chunks_var.get() != self.auto_clean_chunks:
+                self.auto_clean_chunks_var.set(self.auto_clean_chunks)
+        except tk.TclError:
+            pass
+        self.settings.set('download_auto_clean_chunks', self.auto_clean_chunks)
+
     def _on_auto_shutdown_toggle(self):
         self.set_auto_shutdown(self.auto_shutdown_var.get())
 
@@ -1787,6 +1816,8 @@ class FileDownloaderApp:
                 self.auto_shutdown_var.set(self.auto_shutdown)
         except tk.TclError:
             pass
+        if not self.auto_shutdown and self._shutdown.active:
+            self._shutdown.cancel()
 
     def _begin_auto_shutdown(self):
         if self._shutdown.start():
@@ -1797,7 +1828,7 @@ class FileDownloaderApp:
             "已勾选完成后关机，但无法安排系统关机。\n请检查系统权限，或手动关闭计算机。",
             parent=self.root)
 
-    def _on_success(self, num_chunks, verified_label, output_path):
+    def _on_success(self, num_chunks, verified_label, output_path, kept_chunk_dir=""):
         self.progress_bar['value'] = 100
         self.taskbar.complete()
         action = "合并" if self.is_local else "下载"
@@ -1808,8 +1839,10 @@ class FileDownloaderApp:
         safe_filename = utils.safe_filename(
             os.path.basename(str((self.file_info or {}).get('filename', ''))), default="文件")
         self.update_status(f"状态: {action}成功{verified_label}", foreground=config.TEXT_SUCCESS)
-        self.download_detail_label.config(
-            text=f"{safe_filename} | 保存位置: {output_path}")
+        detail = f"{safe_filename} | 保存位置: {output_path}"
+        if kept_chunk_dir:
+            detail += f" | 分片已保留: {kept_chunk_dir}"
+        self.download_detail_label.config(text=detail)
 
         if self.open_folder_var.get():
             utils.open_folder(output_path)

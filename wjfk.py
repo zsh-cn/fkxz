@@ -159,6 +159,8 @@ class FileSplitterApp:
                 self.auto_shutdown_var.set(self.auto_shutdown)
         except tk.TclError:
             pass
+        if not self.auto_shutdown and self._shutdown.active:
+            self._shutdown.cancel()
 
     def _begin_auto_shutdown(self):
         if self._shutdown.start():

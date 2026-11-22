@@ -1629,10 +1629,7 @@ class ShutdownCountdown:
         self._teardown()
 
 
-def config_dir():
-    override = os.environ.get('FKXZ_CONFIG_DIR')
-    if override:
-        return os.path.abspath(override)
+def legacy_config_dir():
     if sys.platform == 'win32':
         base = os.environ.get('APPDATA') or os.path.expanduser('~')
     elif sys.platform == 'darwin':
@@ -1640,6 +1637,51 @@ def config_dir():
     else:
         base = os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config')
     return os.path.join(base, config.CONFIG_DIR_NAME)
+
+
+def _dir_writable(path):
+    probe = os.path.join(path, '.fk_write_test')
+    try:
+        os.makedirs(path, exist_ok=True)
+        with open(probe, 'w', encoding='utf-8') as handle:
+            handle.write('')
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            os.remove(probe)
+        except OSError:
+            pass
+
+
+_CONFIG_DIR_CACHE = []
+
+
+def config_dir():
+    if _CONFIG_DIR_CACHE:
+        return _CONFIG_DIR_CACHE[0]
+    override = os.environ.get('FKXZ_CONFIG_DIR')
+    if override:
+        resolved = os.path.abspath(override)
+    else:
+        program_dir = app_dir()
+        resolved = program_dir if _dir_writable(program_dir) else legacy_config_dir()
+    _CONFIG_DIR_CACHE.append(resolved)
+    return resolved
+
+
+def _migrate_settings_file(target):
+    if os.path.exists(target):
+        return
+    source = os.path.join(legacy_config_dir(), 'settings.json')
+    try:
+        if not os.path.isfile(source):
+            return
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(source, target)
+    except OSError:
+        pass
 
 
 LEGACY_OUTPUT_DIR_KEY = 'output_dir'
@@ -1654,6 +1696,8 @@ class Settings:
     def __new__(cls, path=None):
         resolved = os.path.abspath(
             path or os.path.join(config_dir(), 'settings.json'))
+        if path is None:
+            _migrate_settings_file(resolved)
         with _SETTINGS_LOCK:
             instance = _SETTINGS_CACHE.get(resolved)
             if instance is None:
