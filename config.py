@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 APP_NAME = "文件分块下载"
-APP_VERSION = "4.2.0"
+APP_VERSION = "4.2.1"
 APP_LICENSE = "MPL-2.0"
 APP_HOMEPAGE = "https://fkxz.zhshh.cn"
 APP_REPO_URL = "https://github.com/zsh-cn/fkxz"
@@ -94,7 +94,7 @@ DEFAULT_THEME = THEME_AUTO
 THEME_PREFERENCE = ("vista", "xpnative", "winnative", "clam", "alt", "default", "classic")
 
 DEFAULT_OPEN_FOLDER = True
-DEFAULT_AUTO_CLEAN_CHUNKS = True
+DEFAULT_KEEP_CHUNKS = False
 
 SIDEBAR_BG = "#f4f5f7"
 SIDEBAR_WIDTH = 200

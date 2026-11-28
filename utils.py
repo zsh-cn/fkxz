@@ -162,11 +162,23 @@ def speed_text(speed):
 
 def progress_percent(done_bytes, total_bytes, finished=False):
     if finished:
-        return 100
+        return 100.0
     if total_bytes <= 0:
-        return 0
-    percent = int(done_bytes) * 100 // int(total_bytes)
-    return max(0, min(99, percent))
+        return 0.0
+    percent = float(done_bytes) * 100.0 / float(total_bytes)
+    return max(0.0, min(99.99, percent))
+
+
+def format_percent(percent):
+    try:
+        value = float(percent)
+    except (TypeError, ValueError):
+        value = 0.0
+    if value < 0:
+        value = 0.0
+    elif value > 100:
+        value = 100.0
+    return f"{value:.2f}"
 
 
 class SpeedMeter:
@@ -512,7 +524,7 @@ class TaskbarProgress:
         self._hwnd = 0
         self._api = _TaskbarList3() if sys.platform == 'win32' else None
         self._state = _TASKBAR_NOPROGRESS
-        self._percent = -1
+        self._unit = -1
         self._timer = None
 
     @property
@@ -548,14 +560,14 @@ class TaskbarProgress:
         if not hwnd:
             return
         self._cancel_timer()
-        percent = min(100, done * 100 // total)
+        unit = min(10000, done * 10000 // total)
         if self._state != _TASKBAR_NORMAL:
             self._api.set_state(hwnd, _TASKBAR_NORMAL)
             self._state = _TASKBAR_NORMAL
-            self._percent = -1
-        if percent != self._percent:
+            self._unit = -1
+        if unit != self._unit:
             self._api.set_value(hwnd, done, total)
-            self._percent = percent
+            self._unit = unit
 
     def indeterminate(self):
         self._set_state(_TASKBAR_INDETERMINATE)
@@ -583,7 +595,7 @@ class TaskbarProgress:
 
     def clear(self):
         self._cancel_timer()
-        self._percent = -1
+        self._unit = -1
         self._set_state(_TASKBAR_NOPROGRESS)
 
     def close(self):
@@ -1489,7 +1501,7 @@ def _hidden_process_kwargs():
     return {}
 
 
-def shutdown_system(delay=None, comment="下载任务已完成，系统即将关机"):
+def shutdown_system(delay=None, comment="任务已完成，系统即将关机"):
     if delay is None:
         delay = getattr(config, 'SHUTDOWN_DELAY_SECONDS', 60)
     try:
@@ -1537,12 +1549,13 @@ def center_over(window, owner):
 
 class ShutdownCountdown:
     def __init__(self, owner, delay=None, message="文件已处理完成，系统将在 {left} 秒后关机。",
-                 on_status=None):
+                 on_status=None, comment="任务已完成，系统即将关机"):
         self.owner = owner
         default_delay = getattr(config, 'SHUTDOWN_DELAY_SECONDS', 60)
         self.delay = max(0, int(default_delay if delay is None else delay))
         self.message = message
         self.on_status = on_status
+        self.comment = comment
         self.window = None
         self._text = None
         self._button = None
@@ -1552,10 +1565,10 @@ class ShutdownCountdown:
     def active(self):
         return self.window is not None
 
-    def start(self):
+    def start(self, comment=None):
         if self.window is not None:
             return True
-        if not shutdown_system(self.delay):
+        if not shutdown_system(self.delay, comment or self.comment):
             return False
         self._build()
         return True

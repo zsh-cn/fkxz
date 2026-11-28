@@ -163,7 +163,7 @@ class FileSplitterApp:
             self._shutdown.cancel()
 
     def _begin_auto_shutdown(self):
-        if self._shutdown.start():
+        if self._shutdown.start("分块任务已完成，系统即将关机"):
             return
         self.update_status("状态: 自动关机指令下发失败", foreground=config.TEXT_ERROR)
         messagebox.showwarning(
@@ -484,9 +484,12 @@ class FileSplitterApp:
         self.progress['maximum'] = total
         self.progress['value'] = min(processed, total)
         self.taskbar.update(processed, total)
+        percent = utils.progress_percent(processed, total)
         self.status_label.config(
             text=(f"状态: 正在分块 {index}/{count} | {utils.format_size(processed)}"
-                  f" / {utils.format_size(total)} | 速度: {utils.speed_text(speed)}"),
+                  f" / {utils.format_size(total)}"
+                  f" ({utils.format_percent(percent)}%)"
+                  f" | 速度: {utils.speed_text(speed)}"),
             foreground=config.TEXT_NORMAL,
         )
 

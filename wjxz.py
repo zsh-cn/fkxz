@@ -308,8 +308,8 @@ class FileDownloaderApp:
         self.auto_shutdown = False
         self.auto_shutdown_var = tk.BooleanVar(value=self.auto_shutdown)
         self.open_folder_var = tk.BooleanVar(value=config.DEFAULT_OPEN_FOLDER)
-        self.auto_clean_chunks_var = tk.BooleanVar(value=config.DEFAULT_AUTO_CLEAN_CHUNKS)
-        self.auto_clean_chunks = config.DEFAULT_AUTO_CLEAN_CHUNKS
+        self.keep_chunks_var = tk.BooleanVar(value=config.DEFAULT_KEEP_CHUNKS)
+        self.keep_chunks = config.DEFAULT_KEEP_CHUNKS
         self._shutdown = utils.ShutdownCountdown(
             self.root, message="文件已完成，系统将在 {left} 秒后关机。",
             on_status=self.update_status)
@@ -469,11 +469,11 @@ class FileDownloaderApp:
             variable=self.auto_shutdown_var,
             command=self._on_auto_shutdown_toggle)
         self.shutdown_checkbox.pack(side=tk.LEFT, padx=(16, 0))
-        self.clean_chunks_checkbox = ttk.Checkbutton(
-            option_frame, text="下载完成后自动删除分片",
-            variable=self.auto_clean_chunks_var,
-            command=self._on_auto_clean_toggle)
-        self.clean_chunks_checkbox.pack(side=tk.LEFT, padx=(16, 0))
+        self.keep_chunks_checkbox = ttk.Checkbutton(
+            option_frame, text="下载完成后保留分片",
+            variable=self.keep_chunks_var,
+            command=self._on_keep_chunks_toggle)
+        self.keep_chunks_checkbox.pack(side=tk.LEFT, padx=(16, 0))
 
     def _verify_index(self):
         mode = self.verify_mode_var.get()
@@ -556,10 +556,16 @@ class FileDownloaderApp:
         if isinstance(saved_open_folder, bool):
             self.open_folder_var.set(saved_open_folder)
 
-        saved_auto_clean = self.settings.get('download_auto_clean_chunks')
-        if isinstance(saved_auto_clean, bool):
-            self.auto_clean_chunks = saved_auto_clean
-            self.auto_clean_chunks_var.set(saved_auto_clean)
+        saved_keep = self.settings.get('download_keep_chunks')
+        if not isinstance(saved_keep, bool):
+            legacy_clean = self.settings.get('download_auto_clean_chunks')
+            if isinstance(legacy_clean, bool):
+                saved_keep = not legacy_clean
+                self.settings.set('download_keep_chunks', saved_keep)
+        if isinstance(saved_keep, bool):
+            self.keep_chunks = saved_keep
+            self.keep_chunks_var.set(saved_keep)
+        self.settings.discard('download_auto_clean_chunks')
 
         self.workers_var.trace_add('write', self._on_workers_var_change)
         self.enhanced_mode.trace_add('write', self._on_enhanced_mode_change)
@@ -719,21 +725,33 @@ class FileDownloaderApp:
             return os.path.abspath(path)
         return path
 
+    def _refresh_keep_chunks_state(self, is_local=None):
+        checkbox = getattr(self, 'keep_chunks_checkbox', None)
+        if checkbox is None:
+            return
+        if is_local is None:
+            is_local = self.is_local
+        checkbox.config(state=tk.DISABLED if is_local else tk.NORMAL)
+
     def _update_path_type_ui(self, path, is_local=False):
         if not path:
             if self._enhanced_available:
                 self.enhanced_checkbox.config(state=tk.NORMAL)
             self.workers_spinbox.config(state=tk.NORMAL)
+            self.is_local = False
+            self._refresh_keep_chunks_state(is_local=False)
             return
         if not is_local and (self._is_remote_url(path) or self._is_domain_like(path)):
             if self._enhanced_available:
                 self.enhanced_checkbox.config(state=tk.NORMAL)
             self.workers_spinbox.config(state=tk.NORMAL)
             self.start_button.config(text="开始下载")
+            self._refresh_keep_chunks_state(is_local=False)
         else:
             self.enhanced_checkbox.config(state=tk.DISABLED)
             self.workers_spinbox.config(state=tk.DISABLED)
             self.start_button.config(text="开始合并")
+            self._refresh_keep_chunks_state(is_local=True)
 
 
     def validate_input(self, event=None):
@@ -794,6 +812,7 @@ class FileDownloaderApp:
         self.filesize_label.config(text=utils.format_size(total_size))
         self.chunks_label.config(text=str(num_chunks))
         self.is_local = not self._is_remote_url(path)
+        self._refresh_keep_chunks_state()
         self.file_info = fkx_info
         self._file_info_source = path
         self.total_download_size = total_size
@@ -887,6 +906,8 @@ class FileDownloaderApp:
 
         workers_enabled = (not running) and (not self.is_local)
         self.workers_spinbox.config(state=tk.NORMAL if workers_enabled else tk.DISABLED)
+
+        self._refresh_keep_chunks_state()
 
         self._refresh_open_folder_state()
 
@@ -1324,10 +1345,24 @@ class FileDownloaderApp:
     def show_error(self, message):
         self.update_status(f"状态: {message}", foreground=config.TEXT_ERROR)
 
-    def _set_progress_value(self, value):
-        value = max(0.0, min(100.0, value))
-        self.progress_bar['value'] = value
+    def _set_progress_bytes(self, done, total, update_taskbar=True):
+        total = max(1, int(total))
+        done = max(0, min(int(done), total))
+        self.progress_bar['maximum'] = total
+        self.progress_bar['value'] = done
+        if update_taskbar:
+            self.taskbar.update(done, total)
+
+    def _set_merge_progress(self, done, total):
+        self._set_progress_bytes(done, total, update_taskbar=False)
         self.taskbar.indeterminate()
+
+    def _mark_progress_complete(self):
+        try:
+            maximum = float(self.progress_bar['maximum'])
+        except (tk.TclError, TypeError, ValueError):
+            maximum = 100.0
+        self.progress_bar['value'] = max(1.0, maximum)
 
     def _set_detail(self, text):
         self.download_detail_label.config(text=text)
@@ -1335,10 +1370,9 @@ class FileDownloaderApp:
     def _push_overall(self, completed, count, bytes_done, total_bytes, speed,
                       show_speed=True):
         percent = utils.progress_percent(bytes_done, total_bytes)
-        self.progress_bar['value'] = percent
-        self.taskbar.update(bytes_done, total_bytes or 1)
+        self._set_progress_bytes(bytes_done, total_bytes)
         text = (f"已下载: {utils.format_size(bytes_done)} / {utils.format_size(total_bytes)}"
-                f" ({percent}%)")
+                f" ({utils.format_percent(percent)}%)")
         if show_speed:
             text += f" | 速度: {utils.speed_text(speed)}"
         text += f" | 分片: {completed}/{count}"
@@ -1448,7 +1482,7 @@ class FileDownloaderApp:
         self.filename_label.config(text=str(fkx_info.get('filename', '-')))
         self.filesize_label.config(text=utils.format_size(total_size))
         self.chunks_label.config(text=str(num_chunks))
-        self.progress_bar['maximum'] = 100
+        self.progress_bar['maximum'] = max(1, int(total_size))
         self.progress_bar['value'] = 0
         self._refresh_open_folder_state()
 
@@ -1692,9 +1726,10 @@ class FileDownloaderApp:
     def _report_merge_progress(self, merged_bytes, speed, finished=False):
         percent = utils.progress_percent(merged_bytes, self.total_download_size, finished)
         text = (f"合并: {utils.format_size(merged_bytes)} / {utils.format_size(self.total_download_size)}"
-                f" ({percent}%)"
+                f" ({utils.format_percent(percent)}%)"
                 f" | 速度: {utils.speed_text(speed)}")
-        self._run_on_ui_latest('merge-progress', self._set_progress_value, percent)
+        self._run_on_ui_latest('merge-progress', self._set_merge_progress,
+                               merged_bytes, self.total_download_size)
         self._run_on_ui_latest('detail', self._set_detail, text)
 
     @staticmethod
@@ -1763,10 +1798,10 @@ class FileDownloaderApp:
 
             kept_chunk_dir = ""
             if not self.is_local:
-                if self.auto_clean_chunks:
-                    self.cleanup_chunk_dir(self.output_dir)
-                else:
+                if self.keep_chunks:
                     kept_chunk_dir = self.chunk_dir
+                else:
+                    self.cleanup_chunk_dir(self.output_dir)
 
             self._run_on_ui(self._on_success, num_chunks, self._verified_label(),
                             output_path, kept_chunk_dir)
@@ -1794,17 +1829,17 @@ class FileDownloaderApp:
     def _on_open_folder_toggle(self):
         self.settings.set('download_open_folder', bool(self.open_folder_var.get()))
 
-    def _on_auto_clean_toggle(self):
-        self.set_auto_clean_chunks(self.auto_clean_chunks_var.get())
+    def _on_keep_chunks_toggle(self):
+        self.set_keep_chunks(self.keep_chunks_var.get())
 
-    def set_auto_clean_chunks(self, enabled):
-        self.auto_clean_chunks = bool(enabled)
+    def set_keep_chunks(self, enabled):
+        self.keep_chunks = bool(enabled)
         try:
-            if self.auto_clean_chunks_var.get() != self.auto_clean_chunks:
-                self.auto_clean_chunks_var.set(self.auto_clean_chunks)
+            if self.keep_chunks_var.get() != self.keep_chunks:
+                self.keep_chunks_var.set(self.keep_chunks)
         except tk.TclError:
             pass
-        self.settings.set('download_auto_clean_chunks', self.auto_clean_chunks)
+        self.settings.set('download_keep_chunks', self.keep_chunks)
 
     def _on_auto_shutdown_toggle(self):
         self.set_auto_shutdown(self.auto_shutdown_var.get())
@@ -1820,7 +1855,7 @@ class FileDownloaderApp:
             self._shutdown.cancel()
 
     def _begin_auto_shutdown(self):
-        if self._shutdown.start():
+        if self._shutdown.start(f"{self._action_name()}任务已完成，系统即将关机"):
             return
         self.update_status("状态: 自动关机指令下发失败", foreground=config.TEXT_ERROR)
         messagebox.showwarning(
@@ -1829,7 +1864,7 @@ class FileDownloaderApp:
             parent=self.root)
 
     def _on_success(self, num_chunks, verified_label, output_path, kept_chunk_dir=""):
-        self.progress_bar['value'] = 100
+        self._mark_progress_complete()
         self.taskbar.complete()
         action = "合并" if self.is_local else "下载"
         self.settings.discard('download_pending_source')
