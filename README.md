@@ -7,6 +7,8 @@ fkxz-docs/
 ├── index.html                     # 官网主页
 ├── download.html                  # 下载页面
 ├── dev.html                       # 文档页面
+├── share.html                     # 分块文件分享落地页（独立单页，不进入官网导航）
+│                                  # 通过 ?fkx=<清单地址> 解析并展示文件信息，引导下载桌面程序
 ├── README.md                      # 官网维护说明
 ├── dabao.py                       # Release 程序安全性验证脚本
 ├── favicon.png                    # 官网图标

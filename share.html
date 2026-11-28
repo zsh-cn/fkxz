@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分块文件分享 · 下载指引</title>
+<meta name="description" content="收到一个 .fkx 分块清单链接？下载分块下载工具，粘贴链接即可自动拉取分片、校验并还原原文件。">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#F4F4F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1B1B1B" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F6CBD'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 8v10'/%3E%3Cpath d='M12 14l4 4 4-4'/%3E%3Cpath d='M10 22h12'/%3E%3C/g%3E%3C/svg%3E">
+<script>
+(function () {
+    try {
+        var saved = localStorage.getItem('fkxz-share-theme');
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved ? saved === 'dark' : dark) document.documentElement.classList.add('dark');
+    } catch (e) {}
+})();
+</script>
+<style>
+:root {
+    color-scheme: light;
+
+    --brand: #0F6CBD;
+    --brand-hover: #115EA3;
+    --brand-pressed: #0C3B5E;
+    --brand-tint: #EBF3FC;
+    --brand-stroke: #C7E0F4;
+    --on-brand: #FFFFFF;
+
+    --bg: #F4F4F4;
+    --bg-glow-1: rgba(15, 108, 189, 0.10);
+    --bg-glow-2: rgba(120, 90, 200, 0.06);
+    --surface: #FFFFFF;
+    --surface-2: #F7F7F7;
+    --surface-3: #F0F0F0;
+
+    --text: #1A1A1A;
+    --text-2: #525252;
+    --text-3: #767676;
+
+    --stroke: #E4E4E4;
+    --stroke-strong: #D3D3D3;
+
+    --success: #0F7B0F;
+    --success-bg: #EEF8EE;
+    --success-stroke: #CFE8CF;
+    --warning: #B26205;
+    --warning-bg: #FFF8EF;
+    --warning-stroke: #F2D9B4;
+    --danger: #C42B1C;
+    --danger-bg: #FDF1F0;
+    --danger-stroke: #F3CFCB;
+
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.05);
+    --shadow-4: 0 2px 6px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.06);
+    --shadow-8: 0 8px 18px rgba(0, 0, 0, 0.09), 0 0 1px rgba(0, 0, 0, 0.06);
+
+    --r-control: 4px;
+    --r-md: 6px;
+    --r-card: 10px;
+    --r-lg: 14px;
+    --r-pill: 999px;
+
+    --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui,
+            -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI",
+                    system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Code", "Cascadia Mono", "SF Mono", Consolas, "Fira Code", monospace;
+
+    --ease: cubic-bezier(0.33, 0, 0.67, 1);
+    --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+    --max-width: 880px;
+}
+
+html.dark {
+    color-scheme: dark;
+
+    --brand: #479EF5;
+    --brand-hover: #62ABF5;
+    --brand-pressed: #2886DE;
+    --brand-tint: #0C2B44;
+    --brand-stroke: #14456B;
+    --on-brand: #08121C;
+
+    --bg: #1B1B1B;
+    --bg-glow-1: rgba(71, 158, 245, 0.13);
+    --bg-glow-2: rgba(120, 90, 200, 0.07);
+    --surface: #252525;
+    --surface-2: #2C2C2C;
+    --surface-3: #333333;
+
+    --text: #F5F5F5;
+    --text-2: #C9C9C9;
+    --text-3: #9C9C9C;
+
+    --stroke: #383838;
+    --stroke-strong: #4A4A4A;
+
+    --success: #54BE54;
+    --success-bg: #1B2A1B;
+    --success-stroke: #2F4A2F;
+    --warning: #F0B45E;
+    --warning-bg: #2A2117;
+    --warning-stroke: #4A3A22;
+    --danger: #FF8A80;
+    --danger-bg: #2B1D1C;
+    --danger-stroke: #4C302E;
+
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.36), 0 0 1px rgba(0, 0, 0, 0.30);
+    --shadow-4: 0 2px 6px rgba(0, 0, 0, 0.40), 0 0 1px rgba(0, 0, 0, 0.30);
+    --shadow-8: 0 8px 18px rgba(0, 0, 0, 0.46), 0 0 1px rgba(0, 0, 0, 0.30);
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100vh;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(760px 460px at 8% -8%, var(--bg-glow-1), transparent 64%),
+        radial-gradient(620px 420px at 100% 8%, var(--bg-glow-2), transparent 62%);
+}
+
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--mono); font-size: 0.92em; }
+
+.container {
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* ---------- header ---------- */
+.top {
+    border-bottom: 1px solid transparent;
+}
+.top .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    height: 64px;
+}
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+}
+.brand:hover { text-decoration: none; }
+.brand svg { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 7px; }
+.brand .tag {
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--text-3);
+    padding: 2px 8px;
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background var(--ease) 120ms, color var(--ease) 120ms, border-color var(--ease) 120ms;
+}
+.theme-toggle:hover { background: var(--surface-2); color: var(--text); }
+.theme-toggle svg { width: 17px; height: 17px; }
+.theme-toggle .icon-sun { display: none; }
+html.dark .theme-toggle .icon-sun { display: block; }
+html.dark .theme-toggle .icon-moon { display: none; }
+
+/* ---------- hero ---------- */
+.hero { padding: 44px 0 26px; }
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--brand);
+    background: var(--brand-tint);
+    border: 1px solid var(--brand-stroke);
+    border-radius: var(--r-pill);
+    padding: 3px 10px;
+    margin-bottom: 14px;
+}
+.eyebrow::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+}
+h1 {
+    font-family: var(--font-display);
+    font-size: clamp(26px, 4.2vw, 34px);
+    line-height: 1.28;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    word-break: break-word;
+}
+.hero .lead {
+    margin-top: 12px;
+    font-size: 15px;
+    color: var(--text-2);
+    max-width: 62ch;
+}
+.hero .lead strong { color: var(--text); font-weight: 600; }
+
+/* ---------- share card ---------- */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-4);
+}
+.share { padding: 22px; margin-bottom: 34px; }
+.share[hidden] { display: none; }
+
+.file-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--stroke);
+}
+.file-icon {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: var(--brand-tint);
+    border: 1px solid var(--brand-stroke);
+    color: var(--brand);
+}
+.file-icon svg { width: 22px; height: 22px; }
+.file-title { min-width: 0; }
+.file-title h2 {
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+.file-title p {
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: var(--text-3);
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 0;
+    background: var(--stroke);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    margin-top: 18px;
+}
+.facts > div {
+    background: var(--surface);
+    padding: 12px 14px;
+    min-width: 0;
+}
+.facts dt {
+    font-size: 11.5px;
+    color: var(--text-3);
+    letter-spacing: 0.01em;
+}
+.facts dd {
+    margin-top: 3px;
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.facts dd.pending { color: var(--text-3); font-weight: 500; }
+.facts dd.ok { color: var(--success); }
+.facts dd.warn { color: var(--warning); }
+
+.link-block { margin-top: 18px; }
+.link-block > label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 6px;
+}
+.input-group {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+.input-group input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 36px;
+    padding: 0 11px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-control);
+    text-overflow: ellipsis;
+}
+.input-group input:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 15px;
+    font-family: var(--font);
+    font-size: 13.5px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    border-radius: var(--r-control);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms var(--ease), border-color 120ms var(--ease),
+                box-shadow 120ms var(--ease), color 120ms var(--ease);
+}
+.btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.btn-primary {
+    background: var(--brand);
+    color: var(--on-brand);
+    box-shadow: var(--shadow-2);
+}
+.btn-primary:hover { background: var(--brand-hover); text-decoration: none; }
+.btn-primary:active { background: var(--brand-pressed); box-shadow: none; }
+.btn-outline {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--stroke-strong);
+}
+.btn-outline:hover { background: var(--surface-2); text-decoration: none; }
+.btn-quiet {
+    background: var(--surface-2);
+    color: var(--text-2);
+    border-color: var(--stroke);
+}
+.btn-quiet:hover { background: var(--surface-3); color: var(--text); }
+.btn:focus-visible, .theme-toggle:focus-visible, a:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+.status {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin-top: 14px;
+    padding: 9px 12px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    border-radius: var(--r-md);
+    border: 1px solid var(--stroke);
+    background: var(--surface-2);
+    color: var(--text-2);
+}
+.status[hidden] { display: none; }
+.status svg { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 1px; }
+.status .ico { display: none; }
+.status[data-state="loading"] .ico-loading,
+.status[data-state="ready"] .ico-ready,
+.status[data-state="warn"] .ico-warn,
+.status[data-state="error"] .ico-error { display: block; }
+.status[data-state="loading"] { color: var(--brand); border-color: var(--brand-stroke); background: var(--brand-tint); }
+.status[data-state="ready"] { color: var(--success); border-color: var(--success-stroke); background: var(--success-bg); }
+.status[data-state="warn"] { color: var(--warning); border-color: var(--warning-stroke); background: var(--warning-bg); }
+.status[data-state="error"] { color: var(--danger); border-color: var(--danger-stroke); background: var(--danger-bg); }
+.status[data-state="error"] a { color: inherit; text-decoration: underline; }
+.ico-loading svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- download block ---------- */
+.block { margin-bottom: 38px; }
+.block-head { margin-bottom: 16px; }
+h2.section-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: var(--text);
+}
+.section-sub {
+    margin-top: 6px;
+    font-size: 13.5px;
+    color: var(--text-3);
+}
+
+.tools {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 14px;
+}
+.tool {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-2);
+}
+.tool.primary { border-color: var(--brand-stroke); box-shadow: var(--shadow-4); }
+.tool .pill {
+    position: absolute;
+    top: -10px;
+    left: 18px;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    color: var(--on-brand);
+    background: var(--brand);
+    border-radius: var(--r-pill);
+    padding: 2px 9px;
+}
+.tool h3 {
+    font-size: 15.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.tool h3 .file {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-3);
+}
+.tool p.desc {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--text-2);
+}
+.tool ul {
+    list-style: none;
+    margin: 12px 0 16px;
+    display: grid;
+    gap: 6px;
+}
+.tool li {
+    position: relative;
+    padding-left: 18px;
+    font-size: 12.5px;
+    color: var(--text-2);
+}
+.tool li::before {
+    content: "";
+    position: absolute;
+    left: 1px;
+    top: 7px;
+    width: 8px;
+    height: 5px;
+    border-left: 1.6px solid var(--brand);
+    border-bottom: 1.6px solid var(--brand);
+    transform: rotate(-45deg);
+}
+.tool .actions { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.tool .actions .btn { width: 100%; }
+.tool .alt {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-3);
+}
+.tool .alt a { color: var(--text-3); text-decoration: underline; text-underline-offset: 2px; }
+.tool .alt a:hover { color: var(--brand); }
+
+/* ---------- steps ---------- */
+.steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    counter-reset: step;
+}
+.step {
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-card);
+}
+.step h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 650;
+    color: var(--text);
+    margin-bottom: 6px;
+}
+.step h4::before {
+    counter-increment: step;
+    content: counter(step);
+    flex: 0 0 auto;
+    width: 19px;
+    height: 19px;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brand);
+    background: var(--brand-tint);
+    border: 1px solid var(--brand-stroke);
+    border-radius: 50%;
+}
+.step p { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
+
+/* ---------- notes / faq ---------- */
+.faq { display: grid; gap: 2px; border: 1px solid var(--stroke); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+details {
+    padding: 0 18px;
+    background: var(--surface);
+}
+details + details { border-top: 1px solid var(--stroke); }
+summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 13px 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+summary::-webkit-details-marker { display: none; }
+summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-right: 1.6px solid var(--text-3);
+    border-bottom: 1.6px solid var(--text-3);
+    transform: rotate(45deg);
+    transition: transform 160ms var(--ease);
+}
+details[open] summary::after { transform: rotate(-135deg); }
+details .body {
+    padding: 0 0 14px;
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.65;
+}
+details .body p + p { margin-top: 8px; }
+
+.tip {
+    display: flex;
+    gap: 10px;
+    padding: 13px 15px;
+    margin-top: 18px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-md);
+}
+.tip svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; color: var(--brand); }
+
+/* ---------- promo (no param) ---------- */
+.promo { margin-bottom: 34px; }
+.promo[hidden] { display: none; }
+.promo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.promo-cell {
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-card);
+}
+.promo-cell .k {
+    font-size: 22px;
+    font-weight: 650;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+.promo-cell .t { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--text); }
+.promo-cell .d { margin-top: 2px; font-size: 12.5px; color: var(--text-3); line-height: 1.55; }
+
+/* ---------- footer ---------- */
+footer {
+    border-top: 1px solid var(--stroke);
+    padding: 22px 0 34px;
+    margin-top: 6px;
+}
+footer .inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-3);
+}
+footer .links { display: flex; flex-wrap: wrap; gap: 14px; }
+footer .links a { color: var(--text-3); }
+footer .links a:hover { color: var(--brand); }
+footer .disclaimer {
+    width: 100%;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--text-3);
+    padding-top: 10px;
+    border-top: 1px solid var(--stroke);
+}
+
+@media (max-width: 760px) {
+    .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tools { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .promo-grid { grid-template-columns: 1fr; }
+    .hero { padding: 30px 0 20px; }
+    .share { padding: 18px; }
+}
+
+@media (max-width: 480px) {
+    .steps { grid-template-columns: 1fr; }
+    .file-head { align-items: flex-start; }
+    .input-group { flex-wrap: wrap; }
+    .input-group input { width: 100%; flex-basis: 100%; }
+    .input-group .btn { width: 100%; }
+    .brand .tag { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+    <div class="container">
+        <a class="brand" href="./">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+                <rect width="32" height="32" rx="8" fill="var(--brand)"/>
+                <g fill="none" stroke="var(--on-brand)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 8v10"/><path d="M12 14l4 4 4-4"/><path d="M10 22h12"/>
+                </g>
+            </svg>
+            <span>文件分块下载</span>
+            <span class="tag">分块下载工具</span>
+        </a>
+        <button class="theme-toggle" type="button" id="themeToggle" aria-label="切换深色模式" title="切换深色模式">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20.5 13.8A8.5 8.5 0 1110.2 3.5a6.8 6.8 0 0010.3 10.3z"/>
+            </svg>
+        </button>
+    </div>
+</header>
+
+<main class="container">
+
+    <section class="hero">
+        <span class="eyebrow" id="eyebrow">分块文件分享</span>
+        <h1 id="pageTitle">正在读取分享信息…</h1>
+        <p class="lead" id="pageLead">请稍候，页面正在解析分享链接中的清单文件。</p>
+    </section>
+
+    <!-- 有 fkx 参数时显示 -->
+    <section class="card share" id="shareCard" hidden aria-labelledby="fileName">
+        <div class="file-head">
+            <span class="file-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/>
+                    <path d="M14 3v5h5"/><path d="M12 12v5"/><path d="M9.8 15l2.2 2.2 2.2-2.2"/>
+                </svg>
+            </span>
+            <div class="file-title">
+                <h2 id="fileName">—</h2>
+                <p id="fileSub">分块文件 · 通过清单链接还原</p>
+            </div>
+        </div>
+
+        <dl class="facts">
+            <div>
+                <dt>文件大小</dt>
+                <dd id="fileSize" class="pending">读取中…</dd>
+            </div>
+            <div>
+                <dt>分片数量</dt>
+                <dd id="chunkCount" class="pending">读取中…</dd>
+            </div>
+            <div>
+                <dt>分片大小</dt>
+                <dd id="chunkSize" class="pending">读取中…</dd>
+            </div>
+            <div>
+                <dt>完整性校验</dt>
+                <dd id="verifyMode" class="pending">读取中…</dd>
+            </div>
+        </dl>
+
+        <div class="link-block">
+            <label for="fkxUrl">.fkx 清单链接</label>
+            <div class="input-group">
+                <input id="fkxUrl" type="text" readonly spellcheck="false" aria-describedby="linkHint">
+                <button class="btn btn-quiet" type="button" id="copyBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2.5 2.5 0 0012.5 3H6a2 2 0 00-2 2v8.5A2.5 2.5 0 006.5 16"/>
+                    </svg>
+                    <span id="copyLabel">复制链接</span>
+                </button>
+            </div>
+            <p id="linkHint" style="margin-top:6px;font-size:12px;color:var(--text-3);">
+                在下载工具中粘贴此链接即可；链接本身不含文件内容，只描述分片位置。
+            </p>
+        </div>
+
+        <p class="status" id="status" hidden role="status" aria-live="polite">
+            <svg class="ico ico-loading" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-opacity="0.25" stroke-width="1.8"/>
+                <path d="M8 2a6 6 0 016 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <svg class="ico ico-ready" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.15 5.36-3.6 3.6a.9.9 0 01-1.27 0L4.86 8.54a.9.9 0 111.27-1.27l.79.79 2.96-2.97a.9.9 0 111.27 1.27z"/>
+            </svg>
+            <svg class="ico ico-warn" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 1.2 15 14H1L8 1.2zm-.9 4.3v4h1.8v-4H7.1zm0 5.2v1.8h1.8v-1.8H7.1z"/>
+            </svg>
+            <svg class="ico ico-error" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.9 3.2h1.8v5.2H7.1V4.2zm.9 8.4a1.05 1.05 0 110-2.1 1.05 1.05 0 010 2.1z"/>
+            </svg>
+            <span id="statusText"></span>
+        </p>
+    </section>
+
+    <!-- 无 fkx 参数时的宣传内容 -->
+    <section class="promo" id="promo" hidden aria-label="工具介绍">
+        <div class="promo-grid">
+            <div class="promo-cell">
+                <div class="k">1–1024<span style="font-size:13px;font-weight:600;"> MB</span></div>
+                <div class="t">按需切片</div>
+                <div class="d">绕开邮箱、论坛、网盘的单文件上限。</div>
+            </div>
+            <div class="promo-cell">
+                <div class="k">1–16</div>
+                <div class="t">并发下载</div>
+                <div class="d">分片级线程池，断点续传，失败自动重试。</div>
+            </div>
+            <div class="promo-cell">
+                <div class="k">4<span style="font-size:13px;font-weight:600;"> 档</span></div>
+                <div class="t">完整性校验</div>
+                <div class="d">每片 SHA-256 与整文件哈希，下完即可判定。</div>
+            </div>
+        </div>
+        <div class="tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.6v.1"/>
+            </svg>
+            <span>当前是工具的下载指引页。若你收到的是形如 <code>?fkx=</code> 加清单地址的分享链接，请直接用那条完整链接打开。</span>
+        </div>
+    </section>
+
+    <!-- 下载工具 -->
+    <section class="block" id="download">
+        <div class="block-head">
+            <h2 class="section-title">下载分块下载工具</h2>
+            <p class="section-sub">Windows 10 / 11，解压即用，无需安装、无需注册。两个版本功能互通，任选其一。</p>
+        </div>
+
+        <div class="tools">
+            <article class="tool primary">
+                <span class="pill">推荐</span>
+                <h3>聚合程序 <span class="file">wjfkxz.exe</span></h3>
+                <p class="desc">分块与下载合并二合一，平时分块、收文件都用它。</p>
+                <ul>
+                    <li>「文件分块」与「文件下载」双界面</li>
+                    <li>并发、断点续传、四档校验齐全</li>
+                    <li>可直接拖入 <code>.fkx</code> 或粘贴链接</li>
+                </ul>
+                <div class="actions">
+                    <a class="btn btn-primary" href="dist/wjfkxz.zip" download rel="noopener">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 3.5v10"/><path d="M8 9.5l4 4 4-4"/><path d="M4.5 16v2.5a2 2 0 002 2h11a2 2 0 002-2V16"/>
+                        </svg>
+                        下载 wjfkxz.zip
+                    </a>
+                    <span class="alt"><a href="https://github.com/zsh-cn/fkxz/releases/latest/download/wjfkxz.zip" target="_blank" rel="noopener noreferrer">GitHub 备用源</a></span>
+                </div>
+            </article>
+
+            <article class="tool">
+                <h3>独立程序 <span class="file">wjxz.exe</span></h3>
+                <p class="desc">只负责下载与合并，体积更小，适合只是来收文件的你。</p>
+                <ul>
+                    <li>只保留下载、合并、校验</li>
+                    <li>启动更快，界面更简单</li>
+                    <li>与聚合版共用同一分片格式</li>
+                </ul>
+                <div class="actions">
+                    <a class="btn btn-outline" href="dist/wjxz.zip" download rel="noopener">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 3.5v10"/><path d="M8 9.5l4 4 4-4"/><path d="M4.5 16v2.5a2 2 0 002 2h11a2 2 0 002-2V16"/>
+                        </svg>
+                        下载 wjxz.zip
+                    </a>
+                    <span class="alt"><a href="https://github.com/zsh-cn/fkxz/releases/latest/download/wjxz.zip" target="_blank" rel="noopener noreferrer">GitHub 备用源</a></span>
+                </div>
+            </article>
+        </div>
+
+        <div class="tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3l7.5 3.2v5.6c0 4.3-3 7.9-7.5 9.2-4.5-1.3-7.5-4.9-7.5-9.2V6.2z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.4"/>
+            </svg>
+            <span>程序只做本地下载与合并，不上传、不中转你的文件。源码以 MPL-2.0 公开，可自行核对。</span>
+        </div>
+    </section>
+
+    <!-- 使用步骤 -->
+    <section class="block">
+        <div class="block-head">
+            <h2 class="section-title">四步拿到文件</h2>
+            <p class="section-sub">不用关心分片在哪、有几块，工具会按清单自动处理。</p>
+        </div>
+        <div class="steps">
+            <div class="step">
+                <h4>下载并解压</h4>
+                <p>把上面的 zip 解压到任意目录，双击 <code>wjfkxz.exe</code> 或 <code>wjxz.exe</code>。</p>
+            </div>
+            <div class="step">
+                <h4>粘贴清单链接</h4>
+                <p>把收到的 <code>.fkx</code> 链接粘贴进程序地址框，或直接把清单文件拖进窗口。</p>
+            </div>
+            <div class="step">
+                <h4>选择保存位置</h4>
+                <p>确认显示的文件名与大小无误，指定输出目录，其余保持默认即可。</p>
+            </div>
+            <div class="step">
+                <h4>开始下载</h4>
+                <p>程序并发拉取分片、自动重试、按清单校验，最后拼回原文件。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 常见问题 -->
+    <section class="block">
+        <div class="block-head">
+            <h2 class="section-title">常见问题</h2>
+        </div>
+        <div class="faq">
+            <details open>
+                <summary>为什么不能直接在浏览器里下载？</summary>
+                <div class="body">
+                    <p>可以，但不是首选。分片通常存放在不同域名下，浏览器要求服务器显式允许跨域才能读取；长连接下载中断后也往往只能从头再来，而且浏览器端不做 SHA-256 校验。</p>
+                    <p>桌面工具走的是普通 HTTP 请求，不受跨域限制，支持分片级断点续传与完整性校验，几十 GB 的文件也能稳定跑完。</p>
+                </div>
+            </details>
+            <details>
+                <summary>提示「无法读取清单」怎么办？</summary>
+                <div class="body">
+                    <p>这通常是清单所在服务器未开启跨域（CORS），只影响本页面的预览展示，不影响下载。把上方的 <code>.fkx</code> 链接复制到工具里，仍然可以正常下载。</p>
+                </div>
+            </details>
+            <details>
+                <summary>需要注册、登录或付费吗？</summary>
+                <div class="body">
+                    <p>不需要。工具完全本地运行，没有账号体系，也不依赖任何后端服务。</p>
+                </div>
+            </details>
+            <details>
+                <summary>分片文件要自己一个个下载吗？</summary>
+                <div class="body">
+                    <p>不用。清单里记录了每个分片的文件名、长度与校验值，工具会据此自动拼出地址并并发拉取。你只需要那一个 <code>.fkx</code> 链接。</p>
+                </div>
+            </details>
+            <details>
+                <summary>文件太大，下载中途断了会重来吗？</summary>
+                <div class="body">
+                    <p>不会。已下载完整的分片会被保留并复用，未完成的分片用 HTTP Range 从断点继续，直接重新点「开始下载」即可。</p>
+                </div>
+            </details>
+            <details>
+                <summary>能在 macOS / Linux 上用吗？</summary>
+                <div class="body">
+                    <p>源码可以在 Python 3.8+ 环境运行（界面基于 Tk）。官方预编译程序面向 Windows 10 / 11。</p>
+                </div>
+            </details>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    <div class="container inner">
+        <span>文件分块下载 · 分块文件分享指引页</span>
+        <span class="links">
+            <a href="https://github.com/zsh-cn/fkxz" target="_blank" rel="noopener noreferrer">开源仓库</a>
+            <a href="https://github.com/zsh-cn/fkxz/issues" target="_blank" rel="noopener noreferrer">问题反馈</a>
+            <a href="https://github.com/zsh-cn/fkxz/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MPL-2.0</a>
+        </span>
+        <p class="disclaimer">
+            本页面仅提供文件传输工具的下载与使用指引，不存储、不中转任何文件内容，也不对分享文件的内容与合法性负责。请自行确认文件来源可信，并遵守所在地区的法律法规与平台服务条款。
+        </p>
+    </div>
+</footer>
+
+<script>
+(function () {
+    'use strict';
+
+    var $ = function (id) { return document.getElementById(id); };
+    var root = document.documentElement;
+
+    /* ---------------- 主题 ---------------- */
+    var themeBtn = $('themeToggle');
+    themeBtn.setAttribute('aria-pressed', String(root.classList.contains('dark')));
+    themeBtn.addEventListener('click', function () {
+        var dark = !root.classList.contains('dark');
+        root.classList.toggle('dark', dark);
+        themeBtn.setAttribute('aria-pressed', String(dark));
+        try { localStorage.setItem('fkxz-share-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    });
+
+    /* ---------------- 工具函数 ---------------- */
+    function formatSize(bytes) {
+        var n = Number(bytes);
+        if (!isFinite(n) || n < 0) return '—';
+        if (n < 1024) return n + ' B';
+        var units = ['KB', 'MB', 'GB', 'TB', 'PB'];
+        var value = n / 1024;
+        var i = 0;
+        while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
+        var text = value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2).replace(/\.0+$/, '');
+        return text + ' ' + units[i];
+    }
+
+    function toInt(value) {
+        var text = String(value === undefined || value === null ? '' : value).trim();
+        if (!/^[+-]?\d+$/.test(text)) return null;
+        var number = parseInt(text, 10);
+        return isFinite(number) ? number : null;
+    }
+
+    function setStatus(text, state) {
+        var box = $('status');
+        if (!text) { box.hidden = true; return; }
+        box.hidden = false;
+        box.dataset.state = state || 'info';
+        $('statusText').textContent = text;
+    }
+
+    function setFacts(pending) {
+        ['fileSize', 'chunkCount', 'chunkSize', 'verifyMode'].forEach(function (id) {
+            var el = $(id);
+            el.className = pending ? 'pending' : '';
+            if (pending) el.textContent = '读取中…';
+        });
+    }
+
+    function clearFacts() {
+        ['fileSize', 'chunkCount', 'chunkSize', 'verifyMode'].forEach(function (id) {
+            var el = $(id);
+            el.textContent = '—';
+            el.className = 'pending';
+        });
+    }
+
+    /* ---------------- 清单解析 ---------------- */
+    function parseManifest(content) {
+        var info = { chunks: [], hasChunkHash: true, hasFileHash: false };
+        var indexed = {};
+        var lines = String(content === null || content === undefined ? '' : content).split(/\r?\n/);
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].replace(/^\uFEFF/, '').trim();
+            if (!line) continue;
+            var eq = line.indexOf('=');
+            if (eq < 0) continue;
+            var key = line.substring(0, eq).trim();
+            var value = line.substring(eq + 1).trim();
+            if (!key) continue;
+
+            var chunkMatch = /^chunk_(\d+)$/.exec(key);
+            if (chunkMatch) {
+                var index = toInt(chunkMatch[1]);
+                if (index === null) continue;
+                if (index < 1) throw new Error('分片编号无效（' + key + '）');
+                if (indexed[index]) throw new Error('分片编号重复（' + key + '）');
+
+                var parts = value.split(',');
+                if (parts.length < 2) throw new Error('分片条目格式不正确（' + key + '）');
+                var size = toInt(parts[1]);
+                if (size === null || size < 0) throw new Error('分片长度无效（' + key + '）');
+                var hash = parts.length >= 3 ? parts[2].trim() : '';
+                if (!hash) info.hasChunkHash = false;
+
+                indexed[index] = {
+                    index: index,
+                    filename: parts[0].trim().replace(/^.*[\\/]/, ''),
+                    size: size,
+                    hash: hash
+                };
+            } else {
+                info[key] = value;
+            }
+        }
+
+        var indexes = Object.keys(indexed).map(Number).sort(function (a, b) { return a - b; });
+        if (!indexes.length) throw new Error('清单中没有分片条目');
+        for (var n = 0; n < indexes.length; n++) {
+            if (indexes[n] !== n + 1) {
+                throw new Error('分片编号不连续（缺少第 ' + (n + 1) + ' 片）');
+            }
+        }
+
+        info.chunks = indexes.map(function (idx) { return indexed[idx]; });
+
+        var total = 0;
+        for (var c = 0; c < info.chunks.length; c++) total += info.chunks[c].size;
+        info.totalSize = total;
+
+        var filename = String(info.filename || '').trim();
+        if (!filename) throw new Error('清单缺少 filename 字段');
+        info.filename = filename;
+
+        if (info.total_size !== undefined && info.total_size !== '') {
+            var declaredTotal = toInt(info.total_size);
+            if (declaredTotal === null) throw new Error('total_size 不是数字');
+            if (declaredTotal !== total) {
+                throw new Error('清单总大小与分片之和不一致（' + declaredTotal + ' ≠ ' + total + '）');
+            }
+        }
+        if (info.num_chunks !== undefined && info.num_chunks !== '') {
+            var declaredCount = toInt(info.num_chunks);
+            if (declaredCount === null) throw new Error('num_chunks 不是数字');
+            if (declaredCount !== info.chunks.length) {
+                throw new Error('清单分片数与条目数不一致（' + declaredCount + ' ≠ ' + info.chunks.length + '）');
+            }
+        }
+
+        var fileHash = String(info.sha256 || '').trim();
+        info.hasFileHash = !!fileHash;
+        info.chunkSize = toInt(info.chunk_size);
+
+        return info;
+    }
+
+    function describeVerify(info) {
+        if (info.hasChunkHash && info.hasFileHash) return { text: '分片 + 整文件', cls: 'ok', note: 'SHA-256 双校验' };
+        if (info.hasChunkHash) return { text: '仅分片校验', cls: '', note: '每片 SHA-256' };
+        if (info.hasFileHash) return { text: '仅整文件', cls: '', note: '整文件 SHA-256' };
+        return { text: '仅核对大小', cls: 'warn', note: '清单未含校验值' };
+    }
+
+    /* ---------------- 渲染 ---------------- */
+    function renderManifest(info, fkxUrl) {
+        $('fileName').textContent = info.filename;
+        $('fileSize').textContent = formatSize(info.totalSize);
+        $('chunkCount').textContent = info.chunks.length + ' 片';
+        $('chunkSize').textContent = info.chunkSize ? formatSize(info.chunkSize) : '—';
+
+        var verify = describeVerify(info);
+        var verifyEl = $('verifyMode');
+        verifyEl.textContent = verify.text;
+        verifyEl.className = verify.cls;
+        verifyEl.title = verify.note;
+
+        var sub = '分块文件 · ' + info.chunks.length + ' 个分片';
+        if (verify.note) sub += ' · ' + verify.note;
+        $('fileSub').textContent = sub;
+
+        $('fkxUrl').value = fkxUrl;
+        $('shareCard').hidden = false;
+
+        setStatus('已识别文件信息。安装下载工具后，把上方清单链接粘贴进去即可开始下载。', 'ready');
+
+        document.title = info.filename + ' · 下载指引';
+        $('pageTitle').textContent = info.filename;
+        $('pageLead').innerHTML = '';
+        $('pageLead').appendChild(document.createTextNode(
+            '这是一个分块分享的文件，共 ' + info.chunks.length + ' 个分片，合计 ' + formatSize(info.totalSize) +
+            '。分片由下载工具自动拉取、校验并合并还原，你不需要手动处理任何一个分片。'
+        ));
+    }
+
+    /* ---------------- 主流程 ---------------- */
+    var copyBtn = $('copyBtn');
+    var fkxInput = $('fkxUrl');
+
+    copyBtn.addEventListener('click', function () {
+        var text = fkxInput.value;
+        if (!text) return;
+        var label = $('copyLabel');
+        var done = function () {
+            label.textContent = '已复制';
+            setTimeout(function () { label.textContent = '复制链接'; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () {
+                fkxInput.select();
+                document.execCommand('copy');
+                done();
+            });
+        } else {
+            fkxInput.select();
+            try { document.execCommand('copy'); done(); } catch (e) {}
+        }
+    });
+
+    fkxInput.addEventListener('focus', function () { fkxInput.select(); });
+
+    function resolveFkxUrl(raw) {
+        var value = String(raw || '').trim();
+        if (!value) return null;
+        // 兼容被二次编码的参数
+        if (/^https?%3A/i.test(value)) {
+            try { value = decodeURIComponent(value); } catch (e) {}
+        }
+        var hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(value);
+        if (hasScheme && !/^https?:/i.test(value)) return { error: 'unsupported' };
+        try {
+            return { url: new URL(value, window.location.href).href };
+        } catch (e) {
+            return { error: 'invalid' };
+        }
+    }
+
+    async function fetchManifest(url) {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, 15000);
+        try {
+            var res = await fetch(url, {
+                method: 'GET',
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-store',
+                signal: controller.signal
+            });
+            if (!res.ok) throw new Error('HTTP_' + res.status);
+            return await res.text();
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    function promoMode() {
+        $('eyebrow').textContent = '大文件传输 · 一条链接';
+        $('pageTitle').textContent = '把 20 GB 塞进 20 MB 的门';
+        $('pageLead').textContent = '分块下载工具把大文件切成规整的小分片，对方只需一条清单链接，就能并发拉取、断点续传、校验还原。下面是工具本身与用法。';
+        $('promo').hidden = false;
+        document.title = '分块下载工具 · 下载指引';
+    }
+
+    async function boot() {
+        var raw;
+        try {
+            raw = new URLSearchParams(window.location.search).get('fkx');
+        } catch (e) {
+            raw = null;
+        }
+
+        if (!raw || !raw.trim()) { promoMode(); return; }
+
+        var resolved = resolveFkxUrl(raw);
+        if (!resolved || resolved.error) {
+            $('shareCard').hidden = false;
+            $('fileName').textContent = '分享链接无效';
+            $('fileSub').textContent = '无法解析链接中的清单地址';
+            $('fkxUrl').value = raw;
+            clearFacts();
+            setStatus(resolved && resolved.error === 'unsupported'
+                ? '该链接类型不受支持，请向分享者索取以 http:// 或 https:// 开头的清单地址。'
+                : '链接格式不正确，请检查是否完整复制了分享链接。', 'error');
+            $('pageTitle').textContent = '无法读取分享信息';
+            $('pageLead').textContent = '链接参数缺失或格式异常。你仍然可以下载工具，但需要向分享者索取正确的清单地址。';
+            return;
+        }
+
+        var fkxUrl = resolved.url;
+        $('shareCard').hidden = false;
+        $('fkxUrl').value = fkxUrl;
+        $('fileName').textContent = '正在读取清单…';
+        $('fileSub').textContent = '解析分片信息中';
+        $('pageTitle').textContent = '正在读取分享信息…';
+        $('pageLead').textContent = '页面正在向清单地址请求文件信息，稍等片刻。';
+        setFacts(true);
+        setStatus('正在获取文件信息…', 'loading');
+
+        try {
+            var text = await fetchManifest(fkxUrl);
+            var info = parseManifest(text);
+            renderManifest(info, fkxUrl);
+            return;
+        } catch (err) {
+            var name = err && err.name;
+            var message = err && err.message ? String(err.message) : '';
+
+            if (name === 'AbortError') {
+                failSoft('读取清单超时', '清单所在服务器响应过慢或不可达。这不影响下载：把链接复制到工具里重试即可。', 'warn');
+            } else if (message.indexOf('HTTP_') === 0) {
+                var code = message.slice(5);
+                if (code === '404' || code === '403' || code === '410') {
+                    failSoft('清单已失效（HTTP ' + code + '）', '文件可能已被移动或删除，请联系分享者重新提供链接。', 'error');
+                } else {
+                    failSoft('清单读取失败（HTTP ' + code + '）', '服务器暂时无法提供清单，稍后重试或改用下载工具直接拉取。', 'warn');
+                }
+            } else if (message && /清单|分片|字段|total_size|num_chunks|长度|编号/.test(message)) {
+                failSoft('清单格式不正确', message + '。请确认链接指向的是 .fkx 清单文件，而不是分片本身。', 'error');
+            } else {
+                // 典型为 TypeError：跨域被拦截或网络不可达
+                failSoft('浏览器无法读取清单', '清单所在服务器未允许跨域访问，因此这里无法预览文件信息。把上方链接粘贴到下载工具中即可正常下载——桌面端不受此限制。', 'warn');
+                $('fileName').textContent = guessNameFromUrl(fkxUrl);
+                $('fileSub').textContent = '文件名与大小需在工具中查看';
+                $('pageTitle').textContent = '收到一个分块文件';
+                $('pageLead').textContent = '受浏览器跨域策略限制，这里无法读出清单详情，但文件本身可以正常下载。下方工具会自动解析并还原它。';
+            }
+        }
+    }
+
+    function failSoft(title, hint, state) {
+        $('shareCard').hidden = false;
+        $('fileName').textContent = title;
+        $('fileSub').textContent = '文件信息暂不可用';
+        clearFacts();
+        $('pageTitle').textContent = title;
+        $('pageLead').textContent = hint;
+        setStatus(hint, state || 'warn');
+    }
+
+    function guessNameFromUrl(url) {
+        try {
+            var path = new URL(url).pathname;
+            var last = decodeURIComponent(path.split('/').pop() || '');
+            return last ? last.replace(/\.fkx$/i, '') : '分块文件';
+        } catch (e) {
+            return '分块文件';
+        }
+    }
+
+    boot();
+})();
+</script>
+</body>
+</html>
