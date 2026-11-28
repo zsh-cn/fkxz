@@ -27,50 +27,76 @@ else:
     PYTHON_EXE = sys.executable
 
 
-def build_wjfk():
-    return [
+# ---------------------------------------------------------------------------
+# 产物体积优化配置
+# ---------------------------------------------------------------------------
+
+# 程序没有用到、但会被 PyInstaller 顺带收集的模块，显式排除以缩小 PYZ/exe 体积。
+EXCLUDE_MODULES = (
+    # 文档 / 测试 / 开发工具链
+    "pydoc", "pydoc_data", "doctest", "unittest", "test", "idlelib", "lib2to3",
+    "distutils", "setuptools", "pkg_resources", "_distutils_hack", "packaging",
+    "ensurepip", "venv", "pdb", "bdb", "cProfile", "pstats", "profile",
+    "timeit", "trace", "tracemalloc",
+    "tkinter.test", "turtle", "turtledemo", "curses",
+    # 未使用的标准库（注意：shlex 被 webbrowser 引用、calendar 被 http.cookiejar 引用，不能排除）
+    "argparse", "xmlrpc", "http.server", "socketserver", "sqlite3", "dbm", "shelve",
+    "smtplib", "imaplib", "poplib", "ftplib", "nntplib", "mailbox",
+    "multiprocessing", "concurrent",
+    "statistics", "fractions", "decimal", "_pydecimal", "_decimal",
+    "csv", "zoneinfo", "gettext", "difflib", "pickle",
+    # 压缩/序列化相关（zipfile 不能排除：PyInstaller 的 runtime hook 依赖它）
+    "compression", "bz2", "lzma", "tarfile", "xml",
+)
+
+# 字节码优化级别：2 = 去掉 docstring / 断言，可让 .pyc 再小一截。
+OPTIMIZE_LEVEL = 2
+
+# 每个程序运行时真正会加载的图标（其余 ico/png 在打包后裁剪掉）。
+APP_ICONS = {
+    "wjfk": {"wjfk.png"},
+    "wjxz": {"wjxz.png"},
+    "wjfkxz": {"wjfkxz.png", "wjfk.png", "wjxz.png"},
+}
+
+# 打包后可安全删除的冗余目录（Tcl/Tk 的本地化、示例与调试数据）。
+PRUNABLE_DIR_NAMES = {"msgs", "tzdata", "demos", "doc", "docs"}
+PRUNABLE_SUFFIXES = (".pdb", ".chm", ".lib", ".exp", ".map")
+
+
+def _common_args(name, icon, entry):
+    cmd = [
         PYTHON_EXE, "-m", "PyInstaller",
         "--onedir",
         "--windowed",
         "--clean",
         "--noconfirm",
-        "--name", "wjfk",
+        "--log-level", "WARN",
+        "--optimize", str(OPTIMIZE_LEVEL),
+        "--name", name,
         "--distpath", DIST_DIR,
-        "--icon", "icon/wjfk.ico",
+        "--icon", icon,
         "--add-data", f"icon{os.pathsep}icon",
-        "wjfk.py",
+        "--noupx",
     ]
+    for module in EXCLUDE_MODULES:
+        cmd += ["--exclude-module", module]
+    cmd.append(entry)
+    return cmd
+
+
+def build_wjfk():
+    return _common_args("wjfk", "icon/wjfk.ico", "wjfk.py")
 
 
 def build_wjxz():
-    return [
-        PYTHON_EXE, "-m", "PyInstaller",
-        "--onedir",
-        "--windowed",
-        "--clean",
-        "--noconfirm",
-        "--name", "wjxz",
-        "--distpath", DIST_DIR,
-        "--icon", "icon/wjxz.ico",
-        "--add-data", f"icon{os.pathsep}icon",
-        "--hidden-import", "curl_cffi",
-        "wjxz.py",
-    ]
+    cmd = _common_args("wjxz", "icon/wjxz.ico", "wjxz.py")
+    cmd[-1:-1] = ["--hidden-import", "curl_cffi"]
+    return cmd
 
 
 def build_wjfkxz():
-    return [
-        PYTHON_EXE, "-m", "PyInstaller",
-        "--onedir",
-        "--windowed",
-        "--clean",
-        "--noconfirm",
-        "--name", "wjfkxz",
-        "--distpath", DIST_DIR,
-        "--icon", "icon/wjfkxz.ico",
-        "--add-data", f"icon{os.pathsep}icon",
-        "main.py",
-    ]
+    return _common_args("wjfkxz", "icon/wjfkxz.ico", "main.py")
 
 
 BUILD_TASKS = [
@@ -125,6 +151,94 @@ def cleanup():
             print(f"已删除 {spec_name}.spec")
 
 
+# ---------------------------------------------------------------------------
+# 产物裁剪：删掉 PyInstaller 带进来但运行时用不到的文件
+# ---------------------------------------------------------------------------
+
+def _dir_size(path):
+    total = 0
+    for root, _, files in os.walk(path):
+        for fname in files:
+            try:
+                total += os.path.getsize(os.path.join(root, fname))
+            except OSError:
+                pass
+    return total
+
+
+def _remove_path(path, counter):
+    try:
+        if os.path.isdir(path):
+            counter[0] += _dir_size(path)
+            shutil.rmtree(path, ignore_errors=True)
+        elif os.path.isfile(path):
+            counter[0] += os.path.getsize(path)
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def prune_output(name, src_dir):
+    """裁剪 onedir 产物：调试符号、冗余图标、多余的包与 Tcl/Tk 数据。"""
+    before = _dir_size(src_dir)
+    removed = [0]
+    internal = os.path.join(src_dir, "_internal")
+    root_dir = internal if os.path.isdir(internal) else src_dir
+
+    # 1) 调试/链接期文件
+    for root, _, files in os.walk(src_dir):
+        for fname in files:
+            if fname.lower().endswith(PRUNABLE_SUFFIXES):
+                _remove_path(os.path.join(root, fname), removed)
+
+    # 2) 图标：只保留该程序运行时真正加载的 png，ico 只在打包阶段用到
+    icon_dir = os.path.join(root_dir, "icon")
+    keep_icons = APP_ICONS.get(name, set())
+    if os.path.isdir(icon_dir):
+        for fname in os.listdir(icon_dir):
+            lower = fname.lower()
+            if lower.endswith(".ico") or (lower.endswith(".png") and fname not in keep_icons):
+                _remove_path(os.path.join(icon_dir, fname), removed)
+
+    # 3) 打包工具残留（即使被排除也可能留下空壳）
+    for pkg in ("setuptools", "pkg_resources", "_distutils_hack", "packaging"):
+        _remove_path(os.path.join(root_dir, pkg), removed)
+
+    # 4) Tcl/Tk 的本地化消息、时区、示例数据
+    for root, dirs, _ in os.walk(root_dir):
+        parent = os.path.basename(root).lower()
+        if "tcl" not in parent and "tk" not in parent:
+            continue
+        for dname in list(dirs):
+            if dname.lower() in PRUNABLE_DIR_NAMES:
+                _remove_path(os.path.join(root, dname), removed)
+                dirs.remove(dname)
+
+    # 5) 清理空目录
+    for root, dirs, files in os.walk(src_dir, topdown=False):
+        if root == src_dir:
+            continue
+        if not dirs and not files:
+            try:
+                os.rmdir(root)
+            except OSError:
+                pass
+
+    after = _dir_size(src_dir)
+    saved = max(0, before - after)
+    pct = saved / before * 100 if before else 0.0
+    print(f"[prune] {name}/ {before} -> {after} bytes, 减少 {saved} bytes ({pct:.1f}%)")
+
+
+def prune_all():
+    for fname in sorted(os.listdir(DIST_DIR)) if os.path.isdir(DIST_DIR) else []:
+        if fname not in APP_NAMES:
+            continue
+        src_dir = os.path.join(DIST_DIR, fname)
+        if os.path.isdir(src_dir):
+            prune_output(fname, src_dir)
+
+
 SOURCE_FILES = [
     "README.md",
     "LICENSE",
@@ -145,6 +259,7 @@ SOURCE_FILES = [
     "web/index.html",
     "web/sw.js",
 ]
+
 
 def _zip_directory(src_dir, zip_path, arc_root):
     """把整个目录压缩到 zip 中，zip 内以 arc_root 作为顶层目录。"""
@@ -216,7 +331,7 @@ def create_source_zip():
     out_path = os.path.join(DOCS_DIR, SOURCE_ZIP_NAME)
     added = 0
     skipped = []
-    with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for rel in SOURCE_FILES:
             src = os.path.join(MAIN_DIR, *rel.split("/"))
             if not os.path.isfile(src):
@@ -265,6 +380,8 @@ def main():
     else:
         print(f"未找到虚拟环境, 使用当前 Python: {PYTHON_EXE}")
 
+    print(f"字节码优化级别: {OPTIMIZE_LEVEL}, 排除模块: {len(EXCLUDE_MODULES)} 个")
+
     max_workers = min(len(BUILD_TASKS), os.cpu_count() or 4)
     print(f"并行打包 {len(BUILD_TASKS)} 个目标, 最大并发数: {max_workers}")
     print("=" * 60)
@@ -289,6 +406,10 @@ def main():
     if all_ok:
         print("全部打包成功!")
         print(f"已放置到: {DIST_DIR}")
+        print("=" * 60)
+        print("裁剪无用文件...")
+        prune_all()
+
         print("=" * 60)
         print("压缩各程序目录为 zip...")
         create_package_zips()
